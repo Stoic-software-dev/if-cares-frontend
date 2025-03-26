@@ -63,7 +63,8 @@ const MealSite = () => {
           );
           if (userSite) {
             setSites([userSite]);
-            handleSiteChange(userSite.name); // Automatically select the site
+            setSelectedSite(userSite.name);
+            // handleSiteChange(userSite.name); // Automatically select the site
           }
         }
       } catch (error) {

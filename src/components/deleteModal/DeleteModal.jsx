@@ -14,15 +14,15 @@ const DeleteModal = ({ onClose, student, fetchAllData }) => {
   const handleDeleteStudent = async () => {
     setLoading(true);
     updateCountsOnStudentDeletion(student.id);
-  
+
     const deleteData = {
       actionType: 'delete',
       values: [student.name, student.site, student.id],
     };
-  
+
     // const PROXY_URL = 'https://happy-mixed-gaura.glitch.me/';
     // const GAS_DELETE_URL = API_BASE_URL;
-  
+
     try {
       // Making the fetch request using async/await
       const response = await fetch(API_BASE_URL, {
@@ -33,7 +33,7 @@ const DeleteModal = ({ onClose, student, fetchAllData }) => {
         },
         body: JSON.stringify(deleteData),
       });
-  
+
       // Checking if the response is OK (status in the range 200-299)
       if (response.ok) {
         // Assuming that we want to set the response to success only if we get a successful status
@@ -46,6 +46,11 @@ const DeleteModal = ({ onClose, student, fetchAllData }) => {
         setToastType('error');
       }
     } catch (error) {
+      await logErrorMonitoring({
+        function_name: 'handleDeleteStudent - DeleteModal',
+        error: error,
+        row_error: error?.stack,
+      });
       // Handle any network or unexpected errors
       // console.error("Error deleting student:", error);
       setToastType('error');
@@ -55,7 +60,6 @@ const DeleteModal = ({ onClose, student, fetchAllData }) => {
       setTimeout(handleCloseModal, 3000);
     }
   };
-  
 
   const handleCloseModal = () => {
     onClose && onClose();

@@ -11,6 +11,7 @@ import useIsMobile from '../../hooks/useIsMobile';
 import MealList from '../mealList/MealList';
 import LoadingSpinner from '../loadingSpinner/LoadingSpinner';
 import dayjs from 'dayjs';
+import { logErrorMonitoring } from '@/utils';
 
 const MealSite = () => {
   const [sites, setSites] = useState([]);
@@ -69,6 +70,11 @@ const MealSite = () => {
         }
       } catch (error) {
         console.error('Error fetching sites:', error);
+        logErrorMonitoring({
+          function_name: 'fetchSites - MealSite',
+          error: error,
+          row_error: error?.stack,
+        });
       }
     };
 
@@ -104,6 +110,11 @@ const MealSite = () => {
       })
       .catch((error) => {
         console.error('Error fetching site data:', error);
+        logErrorMonitoring({
+          function_name: 'fetchDataForSelectedSite - MealSite',
+          error: error,
+          row_error: error?.stack,
+        });
       })
       .finally(() => {
         setIsLoading(false);
@@ -127,6 +138,11 @@ const MealSite = () => {
       })
       .catch((error) => {
         console.error('Error fetching site data:', error);
+        logErrorMonitoring({
+          function_name: 'fetchStudentForSelectedSite - MealSite',
+          error: error,
+          row_error: error?.stack,
+        });
       })
       .finally(() => {
         setIsLoading(false);

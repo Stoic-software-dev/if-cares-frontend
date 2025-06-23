@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '@/constants';
 import LoadingSpinner from '../loadingSpinner/LoadingSpinner';
+import { logErrorMonitoring } from '@/utils';
 
 function FileDownloadButton({ files, loadingFiles }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +54,11 @@ function FileDownloadButton({ files, loadingFiles }) {
         })
         .catch((error) => {
           console.error('Download error:', error);
+          logErrorMonitoring({
+            function_name: 'handleDownloadSelected - FileDownloadButton',
+            error: error,
+            row_error: error?.stack,
+          });
         })
         .finally(() => {
           setIsDownloading(false);

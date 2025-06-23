@@ -3,6 +3,7 @@ import { API_BASE_URL } from '@/constants';
 import axios from 'axios';
 import React, { createContext, useState, useRef, useEffect } from 'react';
 import dayjs from 'dayjs';
+import { logErrorMonitoring } from '@/utils';
 
 export const MealSiteContext = createContext();
 
@@ -90,19 +91,20 @@ export const MealSiteProvider = ({ children }) => {
 
   // como hay una saved Meal en el local Storage updateamos los counts
   const updateCountsForSavedMeal = (data) => {
-  
     Object.keys(data).forEach((studentId) => {
       // Check if the student exists in the studentData array
-      const studentExists = studentData.some(student => student.id === studentId);
-      
+      const studentExists = studentData.some(
+        (student) => student.id === studentId
+      );
+
       // Skip if the student does not exist in studentData
       if (!studentExists) return;
-  
+
       // Pass the relevant data for each student to the function
       updateCountsOnSavedMealCounts(studentId, data[studentId]);
     });
   };
-  
+
   // Modify the function to accept the student's data directly
   const updateCountsOnSavedMealCounts = (studentId, studentData) => {
     // Use the studentData instead of selectedCheckboxData
@@ -244,8 +246,8 @@ export const MealSiteProvider = ({ children }) => {
   // }, []);
 
   const [sitesData, setSitesData] = useState({});
-  const [sitesDataLoading, setSitesDataLoading] = useState(false)
-  
+  const [sitesDataLoading, setSitesDataLoading] = useState(false);
+
   useEffect(() => {
     setSitesDataLoading(true);
     axios
@@ -253,13 +255,18 @@ export const MealSiteProvider = ({ children }) => {
       .then((response) => {
         // console.log('Data received:', response.data);
         setSitesData(response.data);
-        setDatesBySite(response.data)
+        setDatesBySite(response.data);
         // console.log('homeDates')
         // console.log(response.data)
         setSitesDataLoading(false);
       })
       .catch((error) => {
         // console.error('Error fetching data:', error);
+        logErrorMonitoring({
+          function_name: 'fetchAllMeals - MealSiteProvider',
+          error: error,
+          row_error: error?.stack,
+        });
         setSitesDataLoading(false);
       });
   }, []);
@@ -317,7 +324,7 @@ export const MealSiteProvider = ({ children }) => {
         topRef,
         resetAllStates,
         sitesData,
-        sitesDataLoading
+        sitesDataLoading,
       }}
     >
       {children}

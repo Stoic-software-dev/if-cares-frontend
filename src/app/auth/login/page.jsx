@@ -65,16 +65,16 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    
+
     const email = emailRef.current.value;
     const password = passwordRef.current.value;
-  
+
     const body = {
       actionType: 'login',
       email,
       password,
     };
-  
+
     try {
       // Making the fetch request using async/await
       const response = await fetch(API_BASE_URL, {
@@ -85,9 +85,9 @@ export default function Login() {
         },
         body: JSON.stringify(body),
       });
-  
+
       const data = await response.json();
-  
+
       const { result, message, data: responseData } = data;
       if (result === 'success') {
         const currentTime = new Date().getTime();
@@ -103,11 +103,15 @@ export default function Login() {
       }
     } catch (error) {
       // Handle any network or unexpected errors
+      await logErrorMonitoring({
+        function_name: 'handleSubmit - login',
+        error: error,
+        row_error: error?.stack,
+      });
       setError('An error occurred. Please try again.');
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
     emailRef.current.focus();

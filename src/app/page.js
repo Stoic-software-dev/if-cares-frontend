@@ -14,6 +14,7 @@ import SitesDropdown from '@/components/sitesDropdown/SitesDropdown';
 import LoadingSpinner from '@/components/loadingSpinner/LoadingSpinner';
 import FileDownloadButton from '@/components/fileDownloadButton/FileDownloadButton';
 import { MealSiteContext } from '@/components/mealSiteProvider/MealSiteProvider';
+import { logErrorMonitoring } from '@/utils';
 
 const Welcome = () => {
   const { auth } = useAuth();
@@ -38,6 +39,11 @@ const Welcome = () => {
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
+        logErrorMonitoring({
+          function_name: 'fetchSites - Welcome',
+          error: error,
+          row_error: error?.stack,
+        });
       });
   }, []);
 
@@ -51,6 +57,11 @@ const Welcome = () => {
       })
       .catch((error) => {
         console.error('Error fetching files:', error);
+        logErrorMonitoring({
+          function_name: 'fetchListFiles - Welcome',
+          error: error,
+          row_error: error?.stack,
+        });
         setLoadingFiles(false);
       });
   }, []);
@@ -139,7 +150,7 @@ const Welcome = () => {
               </button>
             </Link>
             {role === ROLES.Admin && (
-              <div className='flex items-center'>
+              <div className="flex items-center">
                 <SitesDropdown
                   sites={sites}
                   onSiteSelected={setSelectedSite}

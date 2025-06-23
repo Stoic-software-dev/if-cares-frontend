@@ -10,6 +10,7 @@ import SavingModal from '../savingModal/SavingModal';
 import { useEffect } from 'react';
 import { MealSiteContext } from '../mealSiteProvider/MealSiteProvider';
 import { API_BASE_URL } from '@/constants';
+import { logErrorMonitoring } from '@/utils';
 
 export default function StudentsRow({
   student,
@@ -116,6 +117,11 @@ export default function StudentsRow({
       }
     } catch (error) {
       // Handle network or unexpected errors
+      logErrorMonitoring({
+        function_name: 'handleEditStudent - StudentsRow',
+        error: error,
+        row_error: error?.stack,
+      });
       setToastType('error');
       setToastMessage('An error occurred. Try again later.');
     } finally {

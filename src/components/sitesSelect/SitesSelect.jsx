@@ -9,6 +9,7 @@ import {
 import axios from "axios";
 import useAuth from "../../hooks/useAuth";
 import { API_BASE_URL, ROLES } from "../../constants";
+import { logErrorMonitoring } from "@/utils";
 
 const SitesSelect = ({
   onSiteSelected,
@@ -52,6 +53,11 @@ const SitesSelect = ({
       })
       .catch((error) => {
         console.error("Error fetching sites:", error);
+        logErrorMonitoring({
+          function_name: 'fetchSites - SitesSelect',
+          error: error,
+          row_error: error?.stack,
+        });
       });
   }, []);
 

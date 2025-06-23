@@ -18,6 +18,7 @@ import './StudentsTable.css';
 import Link from 'next/link';
 import DeleteModal from '../deleteModal/DeleteModal';
 import { MealSiteContext } from '../mealSiteProvider/MealSiteProvider';
+import { logErrorMonitoring } from '@/utils';
 
 const StudentsTable = () => {
   const { updateCountsOnStudentDeletion } = useContext(MealSiteContext);
@@ -90,10 +91,10 @@ const StudentsTable = () => {
       // Call function to uncheck checkboxes before transferring the student
       updateCountsOnStudentDeletion(originalStudent.id);
     }
-  
+
     setOpenModal('pop-up');
     setStudentsPerPage(10);
-  
+
     const formattedData = {
       actionType: 'edit',
       values: [
@@ -105,7 +106,7 @@ const StudentsTable = () => {
         editedStudentData.site,
       ],
     };
-  
+
     try {
       // Making the fetch request using async/await
       const response = await fetch(API_BASE_URL, {
@@ -116,11 +117,11 @@ const StudentsTable = () => {
         },
         body: JSON.stringify(formattedData),
       });
-  
+
       // Checking if the response is OK (status in the range 200-299)
       if (response.ok) {
         const responseData = await response.json();
-  
+
         // Check if the response indicates a successful edit
         if (responseData.result === 'success') {
           onSuccess('success');
@@ -131,13 +132,18 @@ const StudentsTable = () => {
         // Handle cases where response is not OK
         onSuccess('error', 'Failed to edit student. Try again later.');
       }
-  
+
       fetchAllData();
     } catch (error) {
+      logErrorMonitoring({
+        function_name: 'handleEdit - StudentsTable',
+        error: error,
+        row_error: error?.stack,
+      });
       // Handle network or unexpected errors
       onSuccess('error', 'Network or unexpected error occurred.');
       setOpenModal('error');
-  
+
       fetchAllData();
     }
   };
@@ -173,6 +179,11 @@ const StudentsTable = () => {
         }
       })
       .catch((error) => {
+        logErrorMonitoring({
+          function_name: 'fetchAllData - StudentsTable',
+          error: error,
+          row_error: error?.stack,
+        });
         console.error('Error:', error);
         setLoading(false);
       });

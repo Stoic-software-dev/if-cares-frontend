@@ -17,6 +17,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import Link from 'next/link';
 import { API_BASE_URL } from '@/constants';
+import { logErrorMonitoring } from '@/utils';
 
 const Form = () => {
   let initialValues = {
@@ -79,6 +80,11 @@ const Form = () => {
       }
     } catch (error) {
       console.error('Error:', error);
+      await logErrorMonitoring({
+        function_name: 'onSubmit - addStudent',
+        error: error,
+        row_error: error?.stack,
+      });
       setToastType('error');
       setShowToast(true); // Show toast message
       setSubmitting(false);

@@ -7,6 +7,7 @@ import ConfirmationToast from '../confirmationToast/ConfirmationToast';
 import './MealTableModal.css';
 import { API_BASE_URL } from '@/constants';
 import dayjs from 'dayjs';
+import { logErrorMonitoring } from '@/utils';
 
 const MealTableModal = ({
   isOpen,
@@ -146,6 +147,11 @@ const MealTableModal = ({
         }
       })
       .catch((error) => {
+        logErrorMonitoring({
+          function_name: 'handleFormSubmit - MealTableModal',
+          error: error,
+          row_error: error?.stack,
+        });
         setIsLoading(false);
         console.error(error);
         setToastType('unknown');

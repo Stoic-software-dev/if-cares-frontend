@@ -4,6 +4,7 @@ import RequestToast from '@/components/requestToast/RequestToast';
 import SitesSelect from '@/components/sitesSelect/SitesSelect';
 import { API_BASE_URL } from '@/constants';
 import withAuth from '@/hoc/hocauth';
+import { logErrorMonitoring } from '@/utils';
 import {
   FormControl,
   FormHelperText,
@@ -36,23 +37,24 @@ const Page = () => {
 
   const handleAmountChange = (event) => {
     let value = event.target.value;
-    
+
     // Automatically set the value to 1 if the input is 0 or less
     if (value !== '' && Number(value) <= 0) {
       value = 1;
     }
-    
+
     setAmount(value);
-    
+
     // Validate and set errors if the value is invalid
-    if (value !== '' && (!Number.isInteger(Number(value)) || Number(value) <= 0)) {
+    if (
+      value !== '' &&
+      (!Number.isInteger(Number(value)) || Number(value) <= 0)
+    ) {
       setErrors({ ...errors, amount: 'Please enter a valid amount' });
     } else {
       setErrors({ ...errors, amount: '' });
     }
   };
-  
-  
 
   const handleTimeChange = (newValue) => {
     setTime(newValue);
@@ -131,6 +133,11 @@ const Page = () => {
           setTime(null);
         })
         .catch((error) => {
+          logErrorMonitoring({
+            function_name: 'onSubmit - addStudent',
+            error: error,
+            row_error: error?.stack,
+          });
           setLoading(false);
           setToastType('error');
           setShowToast(true);
@@ -139,9 +146,15 @@ const Page = () => {
     }
   };
 
-  const showNumberInput = ['Sporks', 'Meal Increase', 'Meal Decrease', 'Condiments', 'Special Meals', 'Dietary Restrictions', 'Amount of milk on hand'].includes(
-    requestType
-  );
+  const showNumberInput = [
+    'Sporks',
+    'Meal Increase',
+    'Meal Decrease',
+    'Condiments',
+    'Special Meals',
+    'Dietary Restrictions',
+    'Amount of milk on hand',
+  ].includes(requestType);
   const showTimePicker = requestType === 'Change approved meal service time';
   return (
     <>
@@ -186,8 +199,12 @@ const Page = () => {
                   </MenuItem>
                   <MenuItem value={'Condiments'}>Condiments</MenuItem>
                   <MenuItem value={'Special Meals'}>Special Meals</MenuItem>
-                  <MenuItem value={'Dietary Restrictions'}>Dietary Restrictions</MenuItem>
-                  <MenuItem value={'Amount of milk on hand'}>Amount of milk on hand</MenuItem>
+                  <MenuItem value={'Dietary Restrictions'}>
+                    Dietary Restrictions
+                  </MenuItem>
+                  <MenuItem value={'Amount of milk on hand'}>
+                    Amount of milk on hand
+                  </MenuItem>
                 </Select>
                 {errors.requestType && (
                   <FormHelperText error>{errors.requestType}</FormHelperText>

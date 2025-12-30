@@ -1,13 +1,11 @@
 'use client';
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import useAuth from '../../hooks/useAuth';
-import { MealSiteContext } from '../mealSiteProvider/MealSiteProvider';
 import './Header.css';
 import Link from 'next/link';
 
 const Header = () => {
-  const { resetAllStates } = useContext(MealSiteContext);
-  const { auth, setAuth } = useAuth();
+  const { auth, logout } = useAuth();
 
   const [authData, setAuthData] = useState(null);
   useEffect(() => {
@@ -15,12 +13,6 @@ const Header = () => {
       setAuthData(auth);
     }
   }, [auth]);
-
-  const handleLogout = () => {
-    resetAllStates();
-    localStorage.removeItem('user');
-    setAuth(null);
-  };
 
   return authData == null ? (
     <></>
@@ -54,7 +46,7 @@ const Header = () => {
 
       <div
         className="ml-4 flex items-center space-x-2 text-lg sm:text-base hover:text-slate-400 hover:cursor-pointer"
-        onClick={handleLogout}
+        onClick={logout}
       >
         <span className="mt-1">Logout</span>
         <svg

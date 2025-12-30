@@ -91,7 +91,7 @@ export default function Login() {
       const { result, message, data: responseData } = data;
       if (result === 'success') {
         const currentTime = new Date().getTime();
-        const expirationTime = currentTime + 2 * 60 * 60 * 1000; // 2 hours
+        const expirationTime = currentTime + 4 * 60 * 60 * 1000; // 4 hours
         responseData.expirationTime = expirationTime;
         setLoading(false);
         setAuth(responseData);

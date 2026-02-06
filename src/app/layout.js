@@ -2,6 +2,7 @@
  
 import { usePathname } from 'next/navigation';
 import { Inter } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '../context/AuthProvider'
 import { MealSiteProvider } from '@/components/mealSiteProvider/MealSiteProvider'
@@ -25,7 +26,15 @@ export default function RootLayout({ children }) {
                 <Header />
               </Then>
             </If>
-            {children}
+              {children}
+            <Script
+              src="https://clients-button-widget-production.up.railway.app/widget/feedback-widget.js"
+              data-api-url="https://clients-button-widget-production.up.railway.app"
+              data-project="STOIC"
+              data-epic="STOIC-8"
+              data-client-email="kenya@ifcares.org"
+              strategy="lazyOnload"
+            />
           </body>
         </AuthProvider>
       </MealSiteProvider>

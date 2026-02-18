@@ -2,11 +2,11 @@
  
 import { usePathname } from 'next/navigation';
 import { Inter } from 'next/font/google'
-import Script from 'next/script'
 import './globals.css'
 import { AuthProvider } from '../context/AuthProvider'
 import { MealSiteProvider } from '@/components/mealSiteProvider/MealSiteProvider'
 import Header from '../components/header/Header'
+import FeedbackWidget from '../components/feedbackWidget/FeedbackWidget'
 import { If, Then } from 'react-if';
 
 
@@ -27,14 +27,7 @@ export default function RootLayout({ children }) {
               </Then>
             </If>
               {children}
-            <Script
-              src="https://clients-button-widget-production.up.railway.app/widget/feedback-widget.js"
-              data-api-url="https://clients-button-widget-production.up.railway.app"
-              data-project="STOIC"
-              data-epic="STOIC-8"
-              data-client-email="kenya@ifcares.org"
-              strategy="lazyOnload"
-            />
+            <FeedbackWidget />
           </body>
         </AuthProvider>
       </MealSiteProvider>

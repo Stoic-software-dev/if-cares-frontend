@@ -137,7 +137,7 @@ export default function EditModal({ student, isOpen, onClose, onSave, sites }) {
                         disabled={student.birthdate != ''}
                         classes={'mt-5'}
                       ></Input>
-                      {auth.role === ROLES.Admin && (
+                      {(auth.role === ROLES.Admin || sites.length > 1) && (
                         <SelectInput
                           label="Site"
                           id="site"

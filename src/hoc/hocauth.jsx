@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import useAuth from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import LoadingSpinner from '@/components/loadingSpinner/LoadingSpinner';
@@ -7,14 +7,19 @@ const withAuth = (WrappedComponent) => {
   const ComponentWithAuth = (props) => {
     const { auth } = useAuth();
     const router = useRouter();
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-      if (!auth) {
+      setMounted(true);
+    }, []);
+
+    useEffect(() => {
+      if (mounted && !auth) {
         router.push('/auth/login');
       }
-    }, [auth]);
+    }, [auth, mounted]);
 
-    if (!auth) {
+    if (!mounted || !auth) {
       return (
         <div className="flex flex-col justify-center items-center h-screen">
           <LoadingSpinner />

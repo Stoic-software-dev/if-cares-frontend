@@ -59,13 +59,13 @@ const MealSite = () => {
         if (auth.role === ROLES.Admin) {
           setSites(sitesData);
         } else {
-          const userSite = sitesData.find(
-            (site) => site.name === auth.assignedSite
-          );
-          if (userSite) {
-            setSites([userSite]);
-            setSelectedSite(userSite.name);
-            // handleSiteChange(userSite.name); // Automatically select the site
+          const assignedSites = String(auth.assignedSite).split(',').map(s => s.trim());
+          const userSites = assignedSites.includes('all')
+            ? sitesData
+            : sitesData.filter((site) => assignedSites.includes(site.name));
+          setSites(userSites);
+          if (userSites.length === 1) {
+            setSelectedSite(userSites[0].name);
           }
         }
       } catch (error) {
@@ -158,7 +158,12 @@ const MealSite = () => {
   const [dropdownDisabled, setdropdownDisabled] = useState(null);
   useEffect(() => {
     if (auth != null) {
-      setdropdownDisabled(auth.role !== ROLES.Admin);
+      if (auth.role === ROLES.Admin) {
+        setdropdownDisabled(false);
+      } else {
+        const assignedSites = String(auth.assignedSite).split(',').map(s => s.trim());
+        setdropdownDisabled(assignedSites.length <= 1 && !assignedSites.includes('all'));
+      }
     }
   }, [auth]);
 

@@ -161,14 +161,15 @@ const StudentsTable = () => {
       axios.get(GAS_URL + '?type=sites'),
     ])
       .then(([studentsResponse, sitesResponse]) => {
-        // console.log("Students data:", studentsResponse.data);
         if (auth.role !== ROLES.Admin) {
-          const students = studentsResponse.data.filter(
-            (item) => item.site === auth.assignedSite
-          );
-          const sites = sitesResponse.data.filter(
-            (item) => item.name === auth.assignedSite
-          );
+          const assignedSites = String(auth.assignedSite).split(',').map(s => s.trim());
+          const isAll = assignedSites.includes('all');
+          const students = isAll
+            ? studentsResponse.data
+            : studentsResponse.data.filter((item) => assignedSites.includes(item.site));
+          const sites = isAll
+            ? sitesResponse.data
+            : sitesResponse.data.filter((item) => assignedSites.includes(item.name));
           setStudents(students);
           setSites(sites);
           setLoading(false);
@@ -215,17 +216,12 @@ const StudentsTable = () => {
           </div>
           {/* This div will center the dropdown and button below the Meal Count button on mobile */}
           <div className="flex flex-row justify-between m-auto px-4 sm:px-0 items-center w-full mt-4 md:justify-end md:mt-0 md:flex-row md:items-center text-base gap-4">
-            {auth.role !== ROLES.Admin && (
-              <h2 className="title pr-4">{auth.assignedSite}</h2>
-            )}
-            {auth.role === ROLES.Admin && (
-              <SitesDropdown
-                sites={sites}
-                onSiteSelected={setSelectedSite}
-                selectedSite={selectedSite}
-                className="mb-4 md:mb-0 md:mr-4 text-base md:text-2xl h-auto md:h-28"
-              />
-            )}
+            <SitesDropdown
+              sites={sites}
+              onSiteSelected={setSelectedSite}
+              selectedSite={selectedSite}
+              className="mb-4 md:mb-0 md:mr-4 text-base md:text-2xl h-auto md:h-28"
+            />
             <Link href="/addStudent">
               <Button
                 className=" font-bold bg-[#5D24FF] rounded-[13px] min-w-[140px] min-h-[40px] shadow-none"

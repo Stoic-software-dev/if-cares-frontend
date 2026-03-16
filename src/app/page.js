@@ -22,9 +22,7 @@ const Welcome = () => {
   const { sitesData, sitesDataLoading } = useContext(MealSiteContext);
 
   const [sites, setSites] = useState([]);
-  const [selectedSite, setSelectedSite] = useState(
-    role === ROLES.Admin ? '' : assignedSite
-  );
+  const [selectedSite, setSelectedSite] = useState('');
 
   const [files, setFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -35,7 +33,19 @@ const Welcome = () => {
     axios
       .get(GAS_URL + '?type=sites')
       .then((response) => {
-        setSites(response.data);
+        if (role === ROLES.Admin) {
+          setSites(response.data);
+        } else {
+          const assignedSites = String(assignedSite).split(',').map(s => s.trim());
+          const isAll = assignedSites.includes('all');
+          const filtered = isAll
+            ? response.data
+            : response.data.filter((site) => assignedSites.includes(site.name));
+          setSites(filtered);
+          if (filtered.length === 1) {
+            setSelectedSite(filtered[0].name);
+          }
+        }
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
@@ -125,7 +135,7 @@ const Welcome = () => {
             <Link
               href="/request"
               className={`flex items-center justify-center gap-1 text-black text-sm text-transform[capitalize] font-bold bg-[#FACA1F] rounded-[13px] min-w-[70px] md:min-w-[140px] min-h-[40px] shadow-none ${
-                role === ROLES.Admin ? 'mr-4' : ''
+                (role === ROLES.Admin || sites.length > 1) ? 'mr-4' : ''
               }`}
             >
               <button
@@ -149,7 +159,7 @@ const Welcome = () => {
                 <span className="text-xs md:text-sm">Request</span>
               </button>
             </Link>
-            {role === ROLES.Admin && (
+            {(role === ROLES.Admin || sites.length > 1) && (
               <div className="flex items-center">
                 <SitesDropdown
                   sites={sites}
@@ -170,9 +180,12 @@ const Welcome = () => {
           <>
             <div className="welcome-calendar-container">
               {Object.keys(sitesData)
-                .filter(
-                  (siteName) => !selectedSite || siteName === selectedSite
-                )
+                .filter((siteName) => {
+                  if (selectedSite) return siteName === selectedSite;
+                  if (role === ROLES.Admin) return true;
+                  const assignedList = String(assignedSite).split(',').map(s => s.trim());
+                  return assignedList.includes('all') || assignedList.includes(siteName);
+                })
                 .map((siteName) => (
                   <WelcomeCalendar
                     key={siteName}

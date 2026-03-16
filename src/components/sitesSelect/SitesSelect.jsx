@@ -27,10 +27,13 @@ const SitesSelect = ({
   // console.log(isUser)
 
   useEffect(() => {
-    // Set default site for normal users
+    // Set default site for normal users with a single assigned site
     if (auth.role !== ROLES.Admin && auth.assignedSite) {
-      setSelectedSite(auth.assignedSite);
-      if (onSiteSelected) onSiteSelected(auth.assignedSite);
+      const assignedSites = String(auth.assignedSite).split(',').map(s => s.trim());
+      if (assignedSites.length === 1 && !assignedSites.includes('all')) {
+        setSelectedSite(assignedSites[0]);
+        if (onSiteSelected) onSiteSelected(assignedSites[0]);
+      }
     }
   }, [auth]);
 
@@ -45,8 +48,12 @@ const SitesSelect = ({
       )
       .then((response) => {
         if (auth.role !== ROLES.Admin) {
-          const sites = response.data.filter(item => item.name === auth.assignedSite)
-          setSites(sites);
+          const assignedSites = String(auth.assignedSite).split(',').map(s => s.trim());
+          const isAll = assignedSites.includes('all');
+          const filtered = isAll
+            ? response.data
+            : response.data.filter(item => assignedSites.includes(item.name));
+          setSites(filtered);
         } else {
           setSites(response.data)
         }
@@ -84,7 +91,7 @@ const SitesSelect = ({
         value={selectedSite}
         label="site"
         onChange={handleChange}
-        disabled={isUser}
+        disabled={isUser && String(auth.assignedSite).split(',').map(s => s.trim()).length <= 1}
         style={{
           // conditional styling based on the page
           backgroundColor: isStudentsRow ? "#FFFFFF" : "inherit",

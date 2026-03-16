@@ -12,8 +12,6 @@ const SitesDropdown = ({
   disableAllSites = false,
 }) => {
   const [dropdownHeight, setDropdownHeight] = useState(getDropdownHeight());
-  const [allSitesSelected, setAllSitesSelected] = useState(false);
-
   function getDropdownHeight() {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 640 ? '40px' : '40px'; // Assuming 640px as the breakpoint for phone devices
@@ -36,13 +34,12 @@ const SitesDropdown = ({
 
   const handleSiteSelection = (siteName) => {
     onSiteSelected(siteName);
-    setAllSitesSelected(siteName === ''); // Set to true when "All Sites" is selected, otherwise false
   };
 
   return (
     <Dropdown
       dismissOnClick={true}
-      label={selectedSite || 'Select Site'}
+      label={selectedSite || 'All Sites'}
       size="xlg"
       style={{
         minWidth: '185px',
@@ -57,7 +54,7 @@ const SitesDropdown = ({
       className="dropdown-label h-16 md:h-10"
     >
       <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {!disableAllSites && !allSitesSelected && (
+        {!disableAllSites && selectedSite && (
           <Dropdown.Item
             className="meal-count-btn"
             onClick={() => handleSiteSelection('')}

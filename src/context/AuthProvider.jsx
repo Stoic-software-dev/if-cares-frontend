@@ -4,6 +4,7 @@ import { useEffect, useCallback, useContext } from 'react'
 import { createContext, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MealSiteContext } from '@/components/mealSiteProvider/MealSiteProvider'
+import { API_BASE_URL } from '@/constants'
 
 const AuthContext = createContext({})
 
@@ -11,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const storedUserJson = typeof window !== 'undefined' ? window.localStorage.getItem("user"): ""
   const localStorageValue = storedUserJson ? JSON.parse(storedUserJson) : null;
   const [auth, setAuth] = useState(localStorageValue)
+  const [authReady, setAuthReady] = useState(!localStorageValue)
   const router  = useRouter()
   const { resetAllStates } = useContext(MealSiteContext)
 
@@ -19,6 +21,7 @@ export const AuthProvider = ({ children }) => {
     resetAllStates(); // Clear all MealSite state first
     localStorage.removeItem('user');
     setAuth(null);
+    setAuthReady(true);
     router.push('/auth/login');
   }, [resetAllStates, router])
 
@@ -46,17 +49,43 @@ export const AuthProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [logout])
 
+  // Refresh user data from backend on mount
   useEffect(() => {
-    if (!auth) {
+    if (!localStorageValue || !localStorageValue.email) {
+      setAuthReady(true);
+      return;
+    }
+
+    const refreshUserData = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}?type=refreshUser&email=${encodeURIComponent(localStorageValue.email)}`);
+        const data = await response.json();
+        if (data.result === 'success' && data.data) {
+          const updatedUser = { ...localStorageValue, assignedSite: data.data.assignedSite, role: data.data.role };
+          setAuth(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      } catch (error) {
+        // Silent fail - keep using cached data
+      } finally {
+        setAuthReady(true);
+      }
+    };
+
+    refreshUserData();
+  }, [])
+
+  useEffect(() => {
+    if (authReady && !auth) {
       router.push('/auth/login');
     }
 
-  }, [auth, router])
+  }, [auth, authReady, router])
 
 
   return (
     <AuthContext.Provider value={{ auth, setAuth, logout }}>
-      {children}
+      {authReady ? children : null}
     </AuthContext.Provider>
   )
 }

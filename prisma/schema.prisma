@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum RequestStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum MealCountSource {
+  APP
+  GAS_IMPORT
+}
+
+model Site {
+  id                  String   @id @default(cuid())
+  // Full legacy name including the school-year prefix (e.g. "2025/2026 TX COD CHURCHILL REC CENTER").
+  // It is the identity the frontend matches against everywhere (dropdowns, assignedSite).
+  name                String   @unique
+  active              Boolean  @default(true)
+  ceName              String   @default("")
+  ceId                String   @default("")
+  siteName            String   @default("")
+  siteNumber          String   @default("")
+  legacySpreadsheetId String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  students    Student[]
+  serviceDays ServiceDay[]
+  mealCounts  MealCount[]
+  userSites   UserSite[]
+  requests    Request[]
+}
+
+model Student {
+  id        String    @id @default(cuid()) // imported rows keep their GAS id verbatim ("AMA_1759327671710")
+  number    Int
+  name      String
+  age       Int?
+  birthdate DateTime? @db.Date
+  active    Boolean   @default(true)
+  siteId    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  site    Site             @relation(fields: [siteId], references: [id])
+  entries MealCountEntry[]
+
+  @@unique([siteId, name])
+  @@unique([siteId, number])
+  @@index([siteId, active])
+}
+
+model ServiceDay {
+  id     String   @id @default(cuid())
+  siteId String
+  date   DateTime @db.Date
+  brk    Boolean  @default(false)
+  lunch  Boolean  @default(false)
+  snk    Boolean  @default(false)
+  sup    Boolean  @default(false)
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, date])
+}
+
+model MealCount {
+  id               String          @id @default(cuid())
+  siteId           String
+  date             DateTime        @db.Date
+  timeIn           String          @default("") // canonical zero-padded 24h "HH:MM:SS"
+  timeOut          String          @default("")
+  signature        String          @default("") @db.Text
+  source           MealCountSource @default(APP)
+  submittedById    String?
+  submittedByEmail String          @default("")
+  createdAt        DateTime        @default(now())
+
+  site        Site             @relation(fields: [siteId], references: [id])
+  submittedBy User?            @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  entries     MealCountEntry[]
+
+  @@unique([siteId, date])
+  @@index([siteId, date])
+}
+
+model MealCountEntry {
+  id          String  @id @default(cuid())
+  mealCountId String
+  studentId   String?
+  // Snapshot of the roster row exactly as submitted
+  number      Int
+  name        String
+  age         Int?
+  attendance  Boolean @default(false)
+  breakfast   Boolean @default(false)
+  lunch       Boolean @default(false)
+  snack       Boolean @default(false)
+  supper      Boolean @default(false)
+
+  mealCount MealCount @relation(fields: [mealCountId], references: [id], onDelete: Cascade)
+  student   Student?  @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([mealCountId])
+  @@index([studentId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique // stored lowercased at the app layer
+  name         String
+  lastname     String
+  passwordHash String? // null = migrated user that must reset before first login
+  role         Role     @default(USER)
+  allSites     Boolean  @default(false) // legacy assignedSite === 'all'
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sites       UserSite[]
+  mealCounts  MealCount[]
+  requests    Request[]
+  auditLogs   AuditLog[]
+  resetTokens PasswordResetToken[]
+}
+
+model UserSite {
+  userId String
+  siteId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, siteId])
+}
+
+model Request {
+  id               String        @id @default(cuid())
+  type             String // one of the 8 UI literals, zod-validated
+  amount           Int?
+  time             String? // canonical "HH:MM:SS", null when not applicable
+  status           RequestStatus @default(NEW)
+  siteId           String
+  requestedById    String?
+  requestedByEmail String        @default("")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  site        Site  @relation(fields: [siteId], references: [id])
+  requestedBy User? @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([siteId, status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String   @default("")
+  action     String // "student.create" | "student.update" | "student.delete" | "mealcount.create" | ...
+  entity     String
+  entityId   String   @default("")
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique // sha256(token); the raw token is never stored
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

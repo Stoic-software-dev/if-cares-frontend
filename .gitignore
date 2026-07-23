@@ -27,6 +27,10 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+
+# v2 import artifacts
+/import-snapshots/
 
 # vercel
 .vercel

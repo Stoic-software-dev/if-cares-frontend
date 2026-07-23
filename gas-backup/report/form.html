@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#1a1a1a',
+              'border-gray': '#e2e8f0'
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-white p-6">
+    <div class="max-w-md mx-auto">
+      <form id="consolidatedForm" class="space-y-6">
+        <!-- State Dropdown -->
+        <div class="space-y-2">
+          <label for="stateSelect" class="block text-sm font-medium text-primary">
+            State
+          </label>
+          <select 
+            id="stateSelect" 
+            name="state"
+            class="w-full px-3 py-2 border border-border-gray rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-primary bg-white"
+            onchange="handleStateChange()"
+          >
+            <option value="">Select a state</option>
+            <option value="TX">TX</option>
+            <option value="OK">OK</option>
+          </select>
+          <div id="stateError" class="hidden text-xs text-red-600 mt-1"></div>
+        </div>
+
+        <!-- Claimed Period Section -->
+        <div class="space-y-2">
+          <label class="block text-sm font-medium text-primary">
+            Claimed Period
+          </label>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <select 
+                id="monthSelect" 
+                name="month"
+                class="w-full px-3 py-2 border border-border-gray rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-primary bg-white"
+              >
+                <option value="">Select month</option>
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+              <div id="monthError" class="hidden text-xs text-red-600 mt-1"></div>
+            </div>
+            <div>
+              <select 
+                id="yearSelect" 
+                name="year"
+                class="w-full px-3 py-2 border border-border-gray rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-primary bg-white"
+              >
+                <option value="">Select year</option>
+                <!-- Years will be populated dynamically -->
+              </select>
+              <div id="yearError" class="hidden text-xs text-red-600 mt-1"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="hidden text-center">
+          <div class="inline-flex items-center px-4 py-2 text-sm text-primary">
+            <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading sites...
+          </div>
+        </div>
+
+        <!-- Excluded Sites Section -->
+        <div id="excludedSection" class="hidden space-y-4">
+          <!-- Excluded Sites Dropdown and Add Button -->
+          <div class="space-y-2">
+            <label for="sitesSelect" class="block text-sm font-medium text-primary">
+              Excluded Sites
+            </label>
+            <div class="flex gap-2">
+              <select 
+                id="sitesSelect" 
+                name="sites"
+                class="flex-1 px-3 py-2 border border-border-gray rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-primary bg-white"
+              >
+                <option value="">Select a site to exclude</option>
+              </select>
+              <button 
+                type="button"
+                id="addSiteBtn"
+                onclick="addExcludedSite()"
+                class="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            <div id="sitesError" class="hidden text-xs text-red-600"></div>
+          </div>
+
+          <!-- Excluded Sites List -->
+          <div id="excludedSitesList" class="flex flex-wrap gap-2">
+            <!-- Excluded sites will be displayed here as badges -->
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="pt-4 border-t border-border-gray">
+          <button 
+            type="button"
+            id="submitBtn"
+            onclick="submitForm()"
+            class="w-full px-4 py-3 bg-primary text-white font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Generate Consolidated Report
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      // Global variables to store sites and excluded sites
+      let allSites = [];
+      let excludedSites = [];
+
+      // Initialize the form when page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        populateYearDropdown();
+        
+        // Add event listeners to clear errors when user interacts with fields
+        document.getElementById('monthSelect').addEventListener('change', function() {
+          if (this.value) hideError('monthError');
+        });
+        
+        document.getElementById('yearSelect').addEventListener('change', function() {
+          if (this.value) hideError('yearError');
+        });
+      });
+
+      function populateYearDropdown() {
+        const yearSelect = document.getElementById('yearSelect');
+        const currentYear = new Date().getFullYear();
+        const startYear = 2020;
+        
+        // Clear existing options except placeholder
+        yearSelect.innerHTML = '<option value="">Select year</option>';
+        
+        // Add years from 2020 to current year
+        for (let year = startYear; year <= currentYear; year++) {
+          const option = document.createElement('option');
+          option.value = year;
+          option.textContent = year;
+          yearSelect.appendChild(option);
+        }
+      }
+
+      function handleStateChange() {
+        const stateSelect = document.getElementById('stateSelect');
+        const selectedState = stateSelect.value;
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const excludedSection = document.getElementById('excludedSection');
+        
+        // Clear state error when user selects a state
+        if (selectedState) {
+          hideError('stateError');
+        }
+        
+        if (selectedState) {
+          // Show loading indicator
+          loadingIndicator.classList.remove('hidden');
+          excludedSection.classList.add('hidden');
+          
+          // Reset excluded sites when state changes
+          excludedSites = [];
+          updateExcludedSitesList();
+          hideError('sitesError');
+          
+          // Call Apps Script function to get filtered sites
+          google.script.run
+            .withSuccessHandler(onSitesLoaded)
+            .withFailureHandler(onError)
+            .getSitesByState(selectedState);
+        } else {
+          // Hide loading and excluded section if no state selected
+          loadingIndicator.classList.add('hidden');
+          excludedSection.classList.add('hidden');
+          allSites = [];
+          excludedSites = [];
+        }
+      }
+
+      function onSitesLoaded(sites) {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const excludedSection = document.getElementById('excludedSection');
+        
+        // Hide loading indicator
+        loadingIndicator.classList.add('hidden');
+        
+        // Store sites globally
+        allSites = sites;
+        
+        // Log the results to console
+        console.log('Filtered sites:', sites);
+        
+        // Show excluded section and populate dropdown
+        if (sites && sites.length > 0) {
+          updateSitesDropdown();
+          excludedSection.classList.remove('hidden');
+        } else {
+          // No sites found
+          const sitesSelect = document.getElementById('sitesSelect');
+          sitesSelect.innerHTML = '<option value="">No sites available</option>';
+          excludedSection.classList.remove('hidden');
+        }
+      }
+
+      function updateSitesDropdown() {
+        const sitesSelect = document.getElementById('sitesSelect');
+        
+        // Clear existing options
+        sitesSelect.innerHTML = '<option value="">Select a site to exclude</option>';
+        
+        // Filter out already excluded sites
+        const availableSites = allSites.filter(site => 
+          !excludedSites.some(excluded => excluded.siteName === site.siteName)
+        );
+        
+        // Add available site options
+        availableSites.forEach((site) => {
+          const option = document.createElement('option');
+          option.value = allSites.findIndex(s => s.siteName === site.siteName);
+          option.textContent = site.siteName;
+          sitesSelect.appendChild(option);
+        });
+      }
+
+      function addExcludedSite() {
+        const sitesSelect = document.getElementById('sitesSelect');
+        const selectedIndex = sitesSelect.value;
+        
+        // Clear any existing error
+        hideError('sitesError');
+        
+        // If no site selected, do nothing (no alert)
+        if (selectedIndex === '') {
+          return;
+        }
+        
+        const siteIndex = parseInt(selectedIndex);
+        const selectedSite = allSites[siteIndex];
+        
+        // Check if site is already excluded
+        if (excludedSites.some(site => site.siteName === selectedSite.siteName)) {
+          showError('sitesError', 'This site is already excluded');
+          return;
+        }
+        
+        // Check if this would exclude all sites
+        if (excludedSites.length + 1 >= allSites.length) {
+          showError('sitesError', 'At least one site must remain available');
+          return;
+        }
+        
+        // Add to excluded sites
+        excludedSites.push(selectedSite);
+        
+        // Update both the excluded sites display and the dropdown
+        updateExcludedSitesList();
+        updateSitesDropdown();
+        
+        console.log('Excluded sites:', excludedSites);
+      }
+
+      function removeExcludedSite(siteName) {
+        // Remove site from excluded list
+        excludedSites = excludedSites.filter(site => site.siteName !== siteName);
+        
+        // Clear error when removing sites (as this would free up space)
+        hideError('sitesError');
+        
+        // Update both the excluded sites display and the dropdown
+        updateExcludedSitesList();
+        updateSitesDropdown();
+        
+        console.log('Excluded sites:', excludedSites);
+      }
+
+      // Error handling functions
+      function showError(errorId, message) {
+        const errorElement = document.getElementById(errorId);
+        errorElement.textContent = message;
+        errorElement.classList.remove('hidden');
+      }
+
+      function hideError(errorId) {
+        const errorElement = document.getElementById(errorId);
+        errorElement.classList.add('hidden');
+        errorElement.textContent = '';
+      }
+
+      function clearAllErrors() {
+        hideError('stateError');
+        hideError('monthError');
+        hideError('yearError');
+        hideError('sitesError');
+      }
+
+      function updateExcludedSitesList() {
+        const excludedSitesList = document.getElementById('excludedSitesList');
+        
+        if (excludedSites.length === 0) {
+          excludedSitesList.innerHTML = '';
+          return;
+        }
+        
+        // Create small badges for excluded sites
+        excludedSitesList.innerHTML = excludedSites.map(site => `
+          <div class="inline-flex items-center bg-gray-100 border border-border-gray rounded-full px-3 py-1 text-xs text-primary">
+            <span class="mr-2">${site.siteName}</span>
+            <button 
+              type="button"
+              onclick="removeExcludedSite('${site.siteName.replace(/'/g, "\\'")}')"
+              class="text-gray-500 hover:text-red-600 focus:outline-none transition-colors flex-shrink-0"
+              title="Remove from excluded list"
+            >
+              <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
+          </div>
+        `).join('');
+      }
+
+      function onError(error) {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        loadingIndicator.classList.add('hidden');
+        
+        console.error('Error loading sites:', error);
+        alert('Error loading sites: ' + error.message);
+      }
+
+      function submitForm() {
+        const stateSelect = document.getElementById('stateSelect');
+        const monthSelect = document.getElementById('monthSelect');
+        const yearSelect = document.getElementById('yearSelect');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Clear all previous errors
+        clearAllErrors();
+        
+        // Get form values
+        const selectedState = stateSelect.value;
+        const selectedMonth = monthSelect.value;
+        const selectedYear = yearSelect.value;
+        
+        // Validate required fields and show specific errors
+        let hasErrors = false;
+        
+        if (!selectedState) {
+          showError('stateError', 'State is required');
+          hasErrors = true;
+        }
+        
+        if (!selectedMonth) {
+          showError('monthError', 'Month is required');
+          hasErrors = true;
+        }
+        
+        if (!selectedYear) {
+          showError('yearError', 'Year is required');
+          hasErrors = true;
+        }
+        
+        // If there are validation errors, stop here
+        if (hasErrors) {
+          return;
+        }
+        
+        // Calculate included sites (all sites minus excluded sites)
+        const includedSites = allSites.filter(site => 
+          !excludedSites.some(excluded => excluded.siteName === site.siteName)
+        );
+        
+        // Prepare data to send to backend
+        const formData = {
+          state: selectedState,
+          claimedPeriod: {
+            month: parseInt(selectedMonth),
+            year: parseInt(selectedYear),
+            monthName: monthSelect.options[monthSelect.selectedIndex].text
+          },
+          includedSites: includedSites,
+          excludedSites: excludedSites
+        };
+        
+        // Disable submit button and show loading state with spinner
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+          <div class="inline-flex items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Generating Report...
+          </div>
+        `;
+        
+        // Call Apps Script backend function
+        google.script.run
+          .withSuccessHandler(onSubmitSuccess)
+          .withFailureHandler(onSubmitError)
+          .processConsolidatedReport(formData);
+      }
+
+      function onSubmitSuccess(result) {
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Re-enable submit button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Generate Consolidated Report';
+        
+        console.log('Report generated successfully:', result);
+        
+        // Extract PDF ID from the first part PDF URL
+        const firstPartPdfUrl = result.pdfUrls.firstPartPdfUrl;
+        const pdfId = extractPdfIdFromUrl(firstPartPdfUrl);
+        
+        if (pdfId) {
+          // Show success message with link
+          showSuccessMessage(pdfId);
+        } else {
+          // Fallback to simple alert if ID extraction fails
+          alert('Consolidated report generated successfully!');
+        }
+      }
+      
+      function extractPdfIdFromUrl(url) {
+        // Extract ID from Google Drive URL format: https://drive.google.com/file/d/[ID]/view
+        const match = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+        return match ? match[1] : null;
+      }
+      
+      function showSuccessMessage(pdfId) {
+        const form = document.getElementById('consolidatedForm');
+        
+        // Create success message HTML
+        const successHtml = `
+          <div class="text-center space-y-4">
+            <div class="flex items-center justify-center mb-4">
+              <div class="flex-shrink-0">
+                <svg class="h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-lg font-medium text-green-800">Success!</h3>
+              </div>
+            </div>
+            
+            <p class="text-sm text-gray-600">
+              You can view and sign the consolidated report 
+              <a href="https://ifcares-sign-app-production.up.railway.app/sign/${pdfId}" 
+                 target="_blank" 
+                 class="text-blue-600 hover:text-blue-800 underline font-medium">here</a>.
+            </p>
+          </div>
+        `;
+        
+        // Replace form content with success message
+        form.innerHTML = successHtml;
+      }
+
+      function onSubmitError(error) {
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Re-enable submit button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Generate Consolidated Report';
+        
+        console.error('Error generating report:', error);
+        alert('Error generating report: ' + error.message);
+      }
+    </script>
+  </body>
+</html>

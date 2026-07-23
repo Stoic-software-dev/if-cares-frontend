@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js"></script>
+</head>
+
+<body class="m-2 bg-gray-100 rounded-full">
+    <form class="flex flex-col gap-4 rounded-full">
+        <button id="btn-hide-datepicker" type="button"
+            class="bg-red-400 p-2 rounded-lg font-semibold text-gray-900 hover:bg-red-500 hover:text-gray-50 transition-all">
+            Hide Datepickers
+        </button>
+        <section id="date-range-picker" date-rangepicker class="flex items-center gap-2">
+            <div class="relative">
+                <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                    <svg class="w-4 h-4 text-gray-500" aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                            d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z" />
+                    </svg>
+                </div>
+                <input id="datepicker-range-start" name="start" type="text"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5"
+                    placeholder="Select date">
+            </div>
+            <span class="mx-4 text-gray-500">to</span>
+            <div class="relative">
+                <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                    <svg class="w-4 h-4 text-gray-500" aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                            d="M20 4a2 2 0 0 0-2-2h-2V1a1 1 0 0 0-2 0v1h-3V1a1 1 0 0 0-2 0v1H6V1a1 1 0 0 0-2 0v1H2a2 2 0 0 0-2 2v2h20V4ZM0 18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8H0v10Zm5-8h10a1 1 0 0 1 0 2H5a1 1 0 0 1 0-2Z" />
+                    </svg>
+                </div>
+                <input id="datepicker-range-end" name="end" type="text"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5"
+                    placeholder="Select date end">
+            </div>
+        </section>
+
+        <fieldset class="p-2 flex gap-4 border border-gray-300">
+            <legend>Choose an option:</legend>
+            <div class="flex items-center">
+                <input checked id="radio-all" type="radio" value="1" name="select-sites"
+                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500">
+                <label for="radio-all" class="ms-2 text-sm font-medium text-gray-900">All</label>
+            </div>
+            <div class="flex items-center">
+                <input id="radio-select" type="radio" value="0" name="select-sites"
+                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500">
+                <label for="radio-select" class="ms-2 text-sm font-medium text-gray-900">Select sites</label>
+            </div>
+        </fieldset>
+        <fieldset id="page-selection" class="m-2 flex flex-col gap-2 hidden">
+            <legend class="my-2">Choose pages:</legend>
+            <? for(let i = 0; i < sites.length ; i++) { ?>
+            <div class="flex items-center">
+                <input id="<?= sites[i][1] ?>" type="checkbox" name="sites" value="<?= sites[i][1] ?>"
+                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                <label for="<?= sites[i][1] ?>" class="ms-2 text-sm font-medium text-gray-900"><?= sites[i][0] ?></label>
+            </div>
+            <? } ?>
+        </fieldset>
+
+      <button id="btn-submit" type="button" class="bg-indigo-400 p-4 rounded-lg font-semibold text-gray-900 hover:bg-indigo-600 hover:text-gray-50 transition-all disabled:bg-gray-200 disabled:hover:text-gray-900">Submit</button>
+    </form>
+
+    <section id="success" class="flex flex-row items-center justify-center w-full hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="3em" height="3em" viewBox="0 0 48 48">
+            <defs>
+                <mask id="IconifyId192a0630e405684e90">
+                    <g fill="none" stroke="#fff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4">
+                        <path fill="#555" d="m24 4l5.253 3.832l6.503-.012l1.997 6.188l5.268 3.812L41 24l2.021 6.18l-5.268 3.812l-1.997 6.188l-6.503-.012L24 44l-5.253-3.832l-6.503.012l-1.997-6.188l-5.268-3.812L7 24l-2.021-6.18l5.268-3.812l1.997-6.188l6.503.012z"/>
+                        <path d="m17 24l5 5l10-10"/>
+                    </g>
+                </mask>
+            </defs>
+            <path fill="green" d="M0 0h48v48H0z" mask="url(#IconifyId192a0630e405684e90)"/>
+        </svg>
+        <p class="font-semibold text-lime-800">Dates deleted successfully</p>
+    </section>
+
+    <section id="fail" class="flex flex-row items-center justify-center w-full gap-4 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="2em" height="2em" viewBox="0 0 17 17">
+            <path fill="red" fillRule="evenodd" d="m12.566 8l3.045-3.044c.42-.421.42-1.103 0-1.522L12.566.389a1.08 1.08 0 0 0-1.523 0L7.999 3.433L4.955.389a1.08 1.08 0 0 0-1.523 0L.388 3.434a1.074 1.074 0 0 0-.001 1.522L3.431 8L.387 11.044a1.075 1.075 0 0 0 .001 1.523l3.044 3.044c.42.421 1.102.421 1.523 0l3.044-3.044l3.044 3.044a1.076 1.076 0 0 0 1.523 0l3.045-3.044c.42-.421.42-1.103 0-1.523z"/>
+        </svg>
+        <p class="font-semibold text-rose-800">Fail on delete rows</p>
+    </section>
+    
+    <section id="load" class="flex flex-col gap-4 items-center justify-center hidden">
+        <div role="status">
+            <svg aria-hidden="true" class="w-8 h-8 text-gray-200 animate-spin fill-blue-600" viewBox="0 0 100 101"
+                fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                    d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z"
+                    fill="currentColor" />
+                <path
+                    d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z"
+                    fill="currentFill" />
+            </svg>
+        </div>
+        <div class="px-3 py-1 text-xl font-medium leading-none text-center text-blue-800 rounded-full animate-pulse">
+            Loading...</div>
+    </section>
+
+
+    <script>
+        const radioAll = document.getElementById('radio-all');
+        const radioSelect = document.getElementById('radio-select');
+        const pageSelectionFieldset = document.getElementById('page-selection');
+        const btnSubmit = document.getElementById('btn-submit');
+        const form = document.forms[0]
+        const load = document.getElementById('load');
+        const successSection = document.getElementById('success');
+        const failSection = document.getElementById('fail');
+    </script>
+
+    <script>
+        // Script para alternar la visibilidad del fieldset
+        function toggleFieldset() {
+            if (radioSelect.checked) {
+                pageSelectionFieldset.classList.remove('hidden');
+            } else {
+                pageSelectionFieldset.classList.add('hidden');
+            }
+        }
+
+        radioAll.addEventListener('change', toggleFieldset);
+        radioSelect.addEventListener('change', toggleFieldset);
+
+    </script>
+    <script>
+        // Script para enable/disabled del submit
+        function toggleSubmitButton() {
+            const startDate = document.getElementById('datepicker-range-start').value;
+            const submitButton = document.getElementById('btn-submit');
+
+            submitButton.disabled = true;
+            if (startDate) {
+                submitButton.disabled = false;
+            }
+        }
+
+        document.getElementById('datepicker-range-start').addEventListener('changeDate', toggleSubmitButton);
+
+        window.onload = function() {
+            toggleFieldset(); // Para el campo de selección de páginas
+            toggleSubmitButton(); // Para habilitar/deshabilitar el botón de submit según las fechas
+        };
+    </script>
+    <script>
+        const datepickerElStart = document.getElementById('datepicker-range-start');
+        const datepickerElEnd = document.getElementById('datepicker-range-end');
+
+        const datepickerStart = new Datepicker(datepickerElStart);
+        const datepickerEnd = new Datepicker(datepickerElEnd);
+
+        document.getElementById('btn-hide-datepicker').addEventListener('click', function () {
+            datepickerStart.hide();
+            datepickerEnd.hide();
+        });
+    </script>
+    <script>
+        // Script para manejar la submit
+        const handleHoliday = (e) => {
+            const formData = new FormData(form)
+
+            const dateStart =  formData.get('start');
+            const dateEnd =  formData.get('end');
+            const isForAllSheets =  formData.get('select-sites') == 1;
+            const sheetsId =  formData.getAll('sites');
+
+            if (dateStart) {
+                load.classList.remove('hidden')
+                form.classList.add('hidden')
+                google.script.run
+                 .withSuccessHandler(function (response) {
+                    load.classList.add('hidden');
+                    successSection.classList.remove('hidden');
+                })
+                .withFailureHandler(function (error) {
+                    console.error('Error:', error);
+                    load.classList.add('hidden');
+                    failSection.classList.remove('hidden');
+                    setTimeOut(()=>{
+                        failSection.classList.add('hidden');
+                        form.classList.remove('hidden')
+                    }, 5000)
+                })
+                .deleteHolidays(isForAllSheets, sheetsId, dateStart, dateEnd )
+            }
+        }
+
+        btnSubmit.addEventListener('click', handleHoliday)
+    </script>
+</body>
+
+</html>

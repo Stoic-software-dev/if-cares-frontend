@@ -25,18 +25,23 @@ enum MealCountSource {
 }
 
 model Site {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   // Full legacy name including the school-year prefix (e.g. "2025/2026 TX COD CHURCHILL REC CENTER").
   // It is the identity the frontend matches against everywhere (dropdowns, assignedSite).
-  name                String   @unique
-  active              Boolean  @default(true)
-  ceName              String   @default("")
-  ceId                String   @default("")
-  siteName            String   @default("")
-  siteNumber          String   @default("")
-  legacySpreadsheetId String?  @unique
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  name                String    @unique
+  active              Boolean   @default(true)
+  state               String    @default("") // "TX" | "OK" (master Sites col C; drives consolidated reports)
+  ceName              String    @default("")
+  ceId                String    @default("")
+  siteName            String    @default("")
+  siteNumber          String    @default("")
+  legacySpreadsheetId String?   @unique
+  // Reminder window from the master Reminders tab: overdue emails are sent only
+  // while today falls inside [reminderStart, reminderEnd].
+  reminderStart       DateTime? @db.Date
+  reminderEnd         DateTime? @db.Date
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   students    Student[]
   serviceDays ServiceDay[]
@@ -180,6 +185,14 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// Small key-value config store (e.g. foundationId.TX / foundationId.OK for the
+// consolidated claim reports).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model PasswordResetToken {

@@ -18,11 +18,15 @@ export const GET = handle(async (req) => {
 
   const students = await prisma.student.findMany({
     where: { siteId: site.id, active: true },
-    orderBy: { number: 'asc' },
-    select: { id: true, number: true, name: true, age: true },
+    select: { id: true, name: true, age: true },
   });
 
+  // Legacy parity: the sheet re-sorts alphabetically on every mutation and the
+  // roster "number" is simply the row position (GAS returns index + 1). The
+  // stored Student.number is only an import-time snapshot for history linking.
+  students.sort((a, b) => a.name.localeCompare(b.name));
+
   return legacyJson(
-    students.map((s) => ({ id: s.id, number: s.number, name: s.name, age: s.age ?? '' }))
+    students.map((s, i) => ({ id: s.id, number: i + 1, name: s.name, age: s.age ?? '' }))
   );
 });

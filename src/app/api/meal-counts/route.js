@@ -36,13 +36,14 @@ export const POST = handle(async (req) => {
   if (!timeIn) throw new ApiError(422, 'Time In is required.');
   if (!timeOut) throw new ApiError(422, 'Time Out is required.');
 
-  // Best-effort link of each submitted row back to a roster student by number
-  // (the legacy payload carries no student ids).
+  // Best-effort link of each submitted row back to a roster student. The legacy
+  // payload carries no student ids and its "number" is just the alphabetical
+  // position at submission time, so the name is the strongest key.
   const roster = await prisma.student.findMany({
     where: { siteId: site.id },
-    select: { id: true, number: true },
+    select: { id: true, name: true },
   });
-  const byNumber = new Map(roster.map((s) => [s.number, s.id]));
+  const byName = new Map(roster.map((s) => [s.name.trim().toLowerCase(), s.id]));
 
   let mealCount;
   try {
@@ -62,7 +63,7 @@ export const POST = handle(async (req) => {
       await tx.mealCountEntry.createMany({
         data: values.data.map(([number, name, age, attendance, breakfast, lunch, snack, supper]) => ({
           mealCountId: created.id,
-          studentId: byNumber.get(number) ?? null,
+          studentId: byName.get(String(name).trim().toLowerCase()) ?? null,
           number,
           name: String(name),
           age: age === '' || age === null ? null : Number(age),

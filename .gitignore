@@ -31,6 +31,8 @@ yarn-error.log*
 
 # v2 import artifacts
 /import-snapshots/
+# local data snapshots for the Sheets migration (PII + credentials — never commit)
+/migration-data/
 
 # vercel
 .vercel

@@ -27,6 +27,9 @@ const DateTimePickerMobile = () => {
     setTime1Error,
     time2Error,
     setTime2Error,
+    sitesDataError,
+    sitesDataLoading,
+    refetchAllMeals,
   } = useContext(MealSiteContext);
   const datePickerRef = useRef(null);
   const timePickerInRef = useRef(null);
@@ -117,6 +120,19 @@ const DateTimePickerMobile = () => {
               {dateError && (
                 <span className="text-red-500 text-sm mt-1">
                   Date is required
+                </span>
+              )}
+              {sitesDataError && (
+                <span className="text-red-500 text-sm mt-1">
+                  Available dates could not be loaded.{' '}
+                  <button
+                    type="button"
+                    onClick={refetchAllMeals}
+                    disabled={sitesDataLoading}
+                    className="underline font-semibold"
+                  >
+                    Retry
+                  </button>
                 </span>
               )}
             </div>

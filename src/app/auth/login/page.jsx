@@ -10,6 +10,7 @@ import LoadingSpinner from '../../../components/loadingSpinner/LoadingSpinner';
 import { useRouter } from 'next/navigation';
 import { API_BASE_URL } from '@/constants';
 import Image from 'next/image';
+import { logErrorMonitoring } from '@/utils';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -75,6 +76,11 @@ export default function Login() {
       password,
     };
 
+    // Abort the request if the backend takes too long, so the user
+    // gets feedback instead of an endless spinner
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45 * 1000);
+
     try {
       // Making the fetch request using async/await
       const response = await fetch(API_BASE_URL, {
@@ -84,6 +90,7 @@ export default function Login() {
           'Content-Type': 'text/plain;charset=utf-8',
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       const data = await response.json();
@@ -103,13 +110,25 @@ export default function Login() {
       }
     } catch (error) {
       // Handle any network or unexpected errors
-      await logErrorMonitoring({
-        function_name: 'handleSubmit - login',
-        error: error,
-        row_error: error?.stack,
-      });
-      setError('An error occurred. Please try again.');
+      try {
+        await logErrorMonitoring({
+          function_name: 'handleSubmit - login',
+          error: error,
+          row_error: error?.stack,
+        });
+      } catch (logErr) {
+        // Never let logging break the error feedback below
+      }
+      if (error?.name === 'AbortError') {
+        setError(
+          'The server is taking too long to respond. Please try again in a minute.'
+        );
+      } else {
+        setError('An error occurred. Please try again.');
+      }
       setLoading(false);
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 

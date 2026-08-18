@@ -11,7 +11,7 @@ export default function AppNavbar({ items = [], active, user }) {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-[54px] max-w-screen-xl items-center justify-between px-3 md:h-[58px] md:px-8">
+      <div className="mx-auto flex h-[54px] max-w-screen-2xl items-center justify-between px-3 md:h-[58px] md:px-8">
         <div className="flex items-center gap-8">
           <BrandMark className="px-1 md:px-0" />
           <nav className="hidden h-[58px] items-center gap-0.5 md:flex">

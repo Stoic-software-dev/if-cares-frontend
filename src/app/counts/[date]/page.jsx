@@ -42,7 +42,7 @@ export default function CountDetailPage() {
         <MobileHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
       </div>
 
-      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-3xl md:px-8 md:pt-7">
+      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-5xl md:px-8 md:pt-7">
         <PageHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
         <section className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">

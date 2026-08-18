@@ -29,7 +29,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       <AppNavbar items={STAFF_NAV} active="Dashboard" user={MOCK_USER} />
 
-      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-6 pt-5 md:max-w-screen-lg md:gap-5 md:px-8 md:pt-7">
+      <main className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-6 pt-5 md:max-w-screen-2xl md:gap-5 md:px-8 md:pt-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col gap-4 md:gap-2">
             <button

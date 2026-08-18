@@ -50,7 +50,7 @@ export default function MonthCalendar({ month }) {
       </div>
       <div className="grid grid-cols-7 gap-1 p-1.5 tabular-nums md:gap-1.5 md:p-2">
         {cells.map((day, index) => {
-          if (day === null) return <div key={`blank-${index}`} className="h-12 md:h-[84px]" />;
+          if (day === null) return <div key={`blank-${index}`} className="h-12 md:h-[104px]" />;
           const status = month.days[day] ?? 'none';
           const label = DAY_LABELS[status];
           const clickable = status === 'submitted' || status === 'missing' || status === 'today';
@@ -62,7 +62,7 @@ export default function MonthCalendar({ month }) {
               onClick={() => openDay(day, status)}
               className={cn(
                 'flex h-12 items-center justify-center rounded-lg text-sm',
-                'md:h-[84px] md:flex-col md:items-start md:justify-between md:p-2 md:text-[15px]',
+                'md:h-[104px] md:flex-col md:items-start md:justify-between md:p-2 md:text-[15px]',
                 DAY_STYLES[status],
                 clickable && 'cursor-pointer'
               )}

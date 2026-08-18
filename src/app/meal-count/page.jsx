@@ -103,7 +103,7 @@ function MealCountScreen() {
         <MobileHeader title={dateLabel(iso)} subtitle={MOCK_SITE.name} />
       </div>
 
-      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-3xl md:px-8 md:pt-7">
+      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-5xl md:px-8 md:pt-7">
         <PageHeader title={dateLabel(iso)} subtitle={MOCK_SITE.name} />
         <section className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Service time</span>
@@ -176,7 +176,7 @@ function MealCountScreen() {
                     attention && 'border-l-[3px] border-l-red-600'
                   )}
                 >
-                  <div className="flex items-baseline gap-2 md:w-64 md:flex-none">
+                  <div className="flex items-baseline gap-2 md:w-80 md:flex-none">
                     <span className="text-xs font-semibold tabular-nums text-slate-400">{student.number}</span>
                     <span className="text-sm font-semibold text-slate-900">{student.name}</span>
                     {attention ? (
@@ -185,7 +185,7 @@ function MealCountScreen() {
                       <span className="ml-auto text-[11px] text-slate-400">{student.age}</span>
                     )}
                   </div>
-                  <div className="flex gap-1.5 md:max-w-[420px] md:flex-1">
+                  <div className="flex gap-1.5 md:ml-auto md:max-w-[560px] md:flex-1">
                     {MEALS.map((meal) => (
                       <MealToggle
                         key={meal.key}

@@ -57,7 +57,7 @@ export default function AdminUsersPage() {
     <div className="min-h-screen bg-background">
       <AppNavbar items={ADMIN_NAV} active="Users" user={ADMIN_USER} />
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-8 py-7">
+      <main className="mx-auto flex max-w-screen-xl flex-col gap-4 px-8 py-7">
         <div className="flex items-end justify-between gap-4">
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Users</h1>

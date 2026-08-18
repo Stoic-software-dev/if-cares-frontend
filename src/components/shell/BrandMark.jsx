@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 // The official IF Cares wordmark (public/web-logo.png) plus the program badge
 // that tells the Regular Year app apart from Summer.
-export default function BrandMark({ size = 'sm', withProgram = true, className }) {
+export default function BrandMark({ size = 'sm', withProgram = false, className }) {
   const logo = size === 'lg' ? 'h-16 w-auto' : 'h-8 w-auto';
 
   return (

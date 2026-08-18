@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import BrandMark from '@/components/shell/BrandMark';
 import { cn } from '@/lib/utils';
@@ -16,7 +17,7 @@ export default function AppNavbar({ items = [], active, user }) {
           <BrandMark className="px-1 md:px-0" />
           <nav className="hidden h-[58px] items-center gap-0.5 md:flex">
             {items.map((item) => (
-              <a
+              <Link
                 key={item.label}
                 href={item.href}
                 className={cn(
@@ -27,7 +28,7 @@ export default function AppNavbar({ items = [], active, user }) {
                 )}
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
           </nav>
         </div>

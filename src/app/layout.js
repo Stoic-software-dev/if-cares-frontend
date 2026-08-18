@@ -1,36 +1,21 @@
-'use client'
- 
-import { usePathname } from 'next/navigation';
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { AuthProvider } from '../context/AuthProvider'
-import { MealSiteProvider } from '@/components/mealSiteProvider/MealSiteProvider'
-import Header from '../components/header/Header'
-import FeedbackWidget from '../components/feedbackWidget/FeedbackWidget'
-import { If, Then } from 'react-if';
+import { Inter } from 'next/font/google';
+import { Toaster } from '@/components/ui/sonner';
+import './globals.css';
 
+const inter = Inter({ subsets: ['latin'] });
 
-
-const inter = Inter({ subsets: ['latin'] })
+export const metadata = {
+  title: 'IF Cares Regular Year',
+  description: 'Daily meal counts for the IF Cares Regular Year program',
+};
 
 export default function RootLayout({ children }) {
-  const pathname = usePathname();
-
   return (
-    <html lang="en" suppressHydrationWarning={true}>
-      <MealSiteProvider>
-        <AuthProvider>
-          <body className={inter.className} suppressHydrationWarning={true}>
-            <If condition={!pathname.includes('login')}>
-              <Then>
-                <Header />
-              </Then>
-            </If>
-              {children}
-            <FeedbackWidget />
-          </body>
-        </AuthProvider>
-      </MealSiteProvider>
+    <html lang="en">
+      <body className={inter.className}>
+        {children}
+        <Toaster position="top-center" richColors />
+      </body>
     </html>
   );
 }

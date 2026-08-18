@@ -13,8 +13,15 @@ const DAY_STYLES = {
   none: 'text-slate-300 font-medium',
 };
 
+const DAY_LABELS = {
+  submitted: { text: 'Submitted', className: 'text-emerald-600' },
+  missing: { text: 'Missing', className: 'text-red-600' },
+  today: { text: 'Today', className: 'text-primary' },
+};
+
 // A tap on a submitted day opens its count; a missing day or today opens the
-// form. Other days do not navigate.
+// form. Other days do not navigate. Phones show the tinted number cell alone;
+// from md up the cells grow and carry a status label.
 export default function MonthCalendar({ month }) {
   const router = useRouter();
 
@@ -41,10 +48,11 @@ export default function MonthCalendar({ month }) {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1 p-1.5 tabular-nums">
+      <div className="grid grid-cols-7 gap-1 p-1.5 tabular-nums md:gap-1.5 md:p-2">
         {cells.map((day, index) => {
-          if (day === null) return <div key={`blank-${index}`} className="h-12" />;
+          if (day === null) return <div key={`blank-${index}`} className="h-12 md:h-[84px]" />;
           const status = month.days[day] ?? 'none';
+          const label = DAY_LABELS[status];
           const clickable = status === 'submitted' || status === 'missing' || status === 'today';
           return (
             <button
@@ -54,11 +62,15 @@ export default function MonthCalendar({ month }) {
               onClick={() => openDay(day, status)}
               className={cn(
                 'flex h-12 items-center justify-center rounded-lg text-sm',
+                'md:h-[84px] md:flex-col md:items-start md:justify-between md:p-2 md:text-[15px]',
                 DAY_STYLES[status],
                 clickable && 'cursor-pointer'
               )}
             >
-              {day}
+              <span>{day}</span>
+              {label && (
+                <span className={cn('hidden text-[10px] font-medium md:block', label.className)}>{label.text}</span>
+              )}
             </button>
           );
         })}

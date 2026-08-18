@@ -5,10 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertCircle, Check, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import AppNavbar from '@/components/shell/AppNavbar';
 import MobileHeader from '@/components/shell/MobileHeader';
+import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { MOCK_SITE, MOCK_STUDENTS } from '@/lib/mock-data';
+import { MOCK_SITE, MOCK_STUDENTS, MOCK_USER } from '@/lib/mock-data';
+
+const STAFF_NAV = ['Dashboard', 'Menus', 'Requests'];
 
 const MEALS = [
   { key: 'att', label: 'Att' },
@@ -92,12 +96,18 @@ function MealCountScreen() {
 
   return (
     <div className="min-h-screen bg-background">
-      <MobileHeader title={dateLabel(iso)} subtitle={MOCK_SITE.name} />
+      <div className="hidden md:block">
+        <AppNavbar items={STAFF_NAV} active="Dashboard" user={MOCK_USER} />
+      </div>
+      <div className="md:hidden">
+        <MobileHeader title={dateLabel(iso)} subtitle={MOCK_SITE.name} />
+      </div>
 
-      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4">
+      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-3xl md:px-8 md:pt-7">
+        <PageHeader title={dateLabel(iso)} subtitle={MOCK_SITE.name} />
         <section className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Service time</span>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5 md:max-w-md">
             <label
               className="flex h-12 items-center justify-between rounded-[10px] border border-slate-300 bg-white px-3.5"
             >
@@ -161,12 +171,12 @@ function MealCountScreen() {
                 <div
                   key={student.id}
                   className={cn(
-                    'flex flex-col gap-2 px-3.5 py-3',
+                    'flex flex-col gap-2 px-3.5 py-3 md:flex-row md:items-center md:gap-6 md:px-5',
                     index < MOCK_STUDENTS.length - 1 && 'border-b border-slate-100',
                     attention && 'border-l-[3px] border-l-red-600'
                   )}
                 >
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 md:w-64 md:flex-none">
                     <span className="text-xs font-semibold tabular-nums text-slate-400">{student.number}</span>
                     <span className="text-sm font-semibold text-slate-900">{student.name}</span>
                     {attention ? (
@@ -175,7 +185,7 @@ function MealCountScreen() {
                       <span className="ml-auto text-[11px] text-slate-400">{student.age}</span>
                     )}
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1.5 md:max-w-[420px] md:flex-1">
                     {MEALS.map((meal) => (
                       <MealToggle
                         key={meal.key}
@@ -220,19 +230,21 @@ function MealCountScreen() {
           </div>
         </section>
 
-        <section className="flex flex-col gap-2">
-          {missing.length > 0 && attempted && (
+        <section className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          {missing.length > 0 && attempted ? (
             <div className="flex items-start gap-2 px-0.5">
               <AlertCircle className="mt-0.5 h-[15px] w-[15px] shrink-0 text-red-600" />
               <span className="text-[13px] font-medium leading-snug text-red-700">
                 {missing.length} {missing.length === 1 ? 'thing' : 'things'} missing: {missing.join(', ')}
               </span>
             </div>
+          ) : (
+            <span className="hidden md:block" />
           )}
           <Button
             onClick={submit}
             className={cn(
-              'h-[52px] rounded-xl text-[15px] font-semibold',
+              'h-[52px] rounded-xl text-[15px] font-semibold md:w-72',
               !canSubmit && 'cursor-not-allowed bg-slate-200 text-slate-400 hover:bg-slate-200'
             )}
           >

@@ -2,10 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { Check, Download, Pencil } from 'lucide-react';
+import AppNavbar from '@/components/shell/AppNavbar';
 import MobileHeader from '@/components/shell/MobileHeader';
+import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { MOCK_COUNT_DETAIL, MOCK_SITE } from '@/lib/mock-data';
+import { MOCK_COUNT_DETAIL, MOCK_SITE, MOCK_USER } from '@/lib/mock-data';
+
+const STAFF_NAV = ['Dashboard', 'Menus', 'Requests'];
 
 const TOTAL_COLUMNS = [
   { key: 'att', label: 'Att' },
@@ -31,9 +35,15 @@ export default function CountDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <MobileHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
+      <div className="hidden md:block">
+        <AppNavbar items={STAFF_NAV} active="Dashboard" user={MOCK_USER} />
+      </div>
+      <div className="md:hidden">
+        <MobileHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
+      </div>
 
-      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4">
+      <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-3xl md:px-8 md:pt-7">
+        <PageHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
         <section className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -86,7 +96,7 @@ export default function CountDetailPage() {
             Students · {count.entries.length}
           </span>
           <div className="overflow-hidden rounded-[14px] border border-slate-200 bg-white tabular-nums">
-            <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px_42px] border-b border-slate-200 px-3.5 py-2.5">
+            <div className="grid grid-cols-[minmax(0,1fr)_42px_42px_42px_42px] md:grid-cols-[minmax(0,1fr)_64px_64px_64px_64px] border-b border-slate-200 px-3.5 py-2.5">
               <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Name</span>
               <span className="text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Att</span>
               <span className="text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">Lun</span>
@@ -97,7 +107,7 @@ export default function CountDetailPage() {
               <div
                 key={entry.id}
                 className={cn(
-                  'grid grid-cols-[minmax(0,1fr)_42px_42px_42px_42px] items-center px-3.5 py-3',
+                  'grid grid-cols-[minmax(0,1fr)_42px_42px_42px_42px] md:grid-cols-[minmax(0,1fr)_64px_64px_64px_64px] items-center px-3.5 py-3',
                   index < count.entries.length - 1 && 'border-b border-slate-100',
                   entry.corrected && 'bg-amber-50'
                 )}
@@ -129,17 +139,17 @@ export default function CountDetailPage() {
           </div>
         </section>
 
-        <div className="flex gap-2.5">
-          <Button variant="outline" className="h-12 flex-1 rounded-[10px] border-slate-300 font-semibold text-slate-700">
+        <div className="flex gap-2.5 md:justify-end">
+          <Button variant="outline" className="h-12 flex-1 rounded-[10px] border-slate-300 font-semibold text-slate-700 md:flex-none md:px-6">
             <Download className="h-4 w-4" />
             PDF
           </Button>
-          <Button onClick={() => router.push('/meal-count?date=2026-09-08')} className="h-12 flex-[1.6] rounded-[10px] font-semibold">
+          <Button onClick={() => router.push('/meal-count?date=2026-09-08')} className="h-12 flex-[1.6] rounded-[10px] font-semibold md:flex-none md:px-8">
             <Pencil className="h-4 w-4" />
             Edit count
           </Button>
         </div>
-        <span className="-mt-2 text-center text-[11px] text-slate-400">
+        <span className="-mt-2 text-center text-[11px] text-slate-400 md:text-right">
           Editing a submitted count is available to administrators only
         </span>
       </main>

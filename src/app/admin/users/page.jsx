@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, MoreVertical, Plus, Search, X } from 'lucide-react';
-import BrandMark from '@/components/shell/BrandMark';
+import AppNavbar from '@/components/shell/AppNavbar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MOCK_ADMIN_USERS } from '@/lib/mock-data';
 
-const NAV_ITEMS = ['Dashboard', 'Sites', 'Users', 'Requests', 'Reports'];
+const ADMIN_NAV = ['Dashboard', 'Sites', 'Users', 'Requests', 'Reports'];
+const ADMIN_USER = { name: 'Dana', lastname: 'Whitfield' };
 
 function RoleBadge({ role }) {
   const admin = role === 'ADMIN';
@@ -54,33 +55,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="flex h-[58px] items-center justify-between border-b border-slate-200 bg-white px-8">
-        <div className="flex items-center gap-8">
-          <BrandMark />
-          <nav className="flex h-[58px] items-center gap-0.5">
-            {NAV_ITEMS.map((item) => (
-              <a
-                key={item}
-                href="#"
-                className={cn(
-                  'flex h-[58px] items-center px-3.5 text-[13px]',
-                  item === 'Users'
-                    ? 'border-b-2 border-primary font-semibold text-primary'
-                    : 'font-medium text-slate-500'
-                )}
-              >
-                {item}
-              </a>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-[13px] font-medium text-slate-700">Dana Whitfield</span>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-            DW
-          </span>
-        </div>
-      </header>
+      <AppNavbar items={ADMIN_NAV} active="Users" user={ADMIN_USER} />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-4 px-8 py-7">
         <div className="flex items-end justify-between gap-4">

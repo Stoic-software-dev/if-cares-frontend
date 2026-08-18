@@ -1,40 +1,37 @@
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
-export function BowlIcon({ className }) {
+// The official IF Cares wordmark (public/web-logo.png) plus the program badge
+// that tells the Regular Year app apart from Summer.
+export default function BrandMark({ size = 'sm', withProgram = true, className }) {
+  const logo = size === 'lg' ? 'h-16 w-auto' : 'h-8 w-auto';
+
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <div
+      className={cn(
+        'flex items-center gap-2.5',
+        size === 'lg' && 'flex-col items-start gap-2',
+        className
+      )}
     >
-      <path d="M3 11h18" />
-      <path d="M4 11a8 8 0 0 1 16 0" />
-      <path d="M5 11v2a7 7 0 0 0 14 0v-2" />
-    </svg>
-  );
-}
-
-export default function BrandMark({ size = 'sm', withProgram = false, className }) {
-  const tile = size === 'lg' ? 'h-11 w-11 rounded-xl' : 'h-[30px] w-[30px] rounded-lg';
-  const icon = size === 'lg' ? 'h-6 w-6' : 'h-4 w-4';
-
-  return (
-    <div className={cn('flex items-center gap-2.5', className)}>
-      <div className={cn('flex items-center justify-center bg-primary text-primary-foreground', tile)}>
-        <BowlIcon className={icon} />
-      </div>
-      <div className="flex flex-col">
-        <span className="text-[15px] font-bold tracking-tight text-slate-900 leading-tight">IF Cares</span>
-        {withProgram && (
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-primary leading-tight">
-            Regular Year
-          </span>
-        )}
-      </div>
+      <Image
+        src="/web-logo.png"
+        alt="IF Cares — Intrinsic Foundation"
+        width={1000}
+        height={400}
+        priority
+        className={logo}
+      />
+      {withProgram && (
+        <span
+          className={cn(
+            'inline-flex items-center rounded-full bg-teal-50 font-semibold uppercase tracking-[0.07em] text-primary',
+            size === 'lg' ? 'px-3 py-1 text-[11px]' : 'px-2 py-0.5 text-[9px]'
+          )}
+        >
+          Regular Year
+        </span>
+      )}
     </div>
   );
 }

@@ -106,9 +106,12 @@ async function importSites() {
     seen.add(name);
 
     // Year-prefixed sites are active only for the configured school year;
-    // non-prefixed sites stay active by default.
+    // non-prefixed sites stay active by default. "Copy of …" sheets are manual
+    // backups living in the same Drive folder — never active, and their rosters
+    // share student ids with the original sheet.
     const hasSyPrefix = SY_PREFIX_RE.test(name);
-    const active = hasSyPrefix ? name.startsWith(ACTIVE_SY) : true;
+    const isCopy = /^copy of /i.test(name);
+    const active = isCopy ? false : hasSyPrefix ? name.startsWith(ACTIVE_SY) : true;
     if (active) activeCount++;
 
     if (!DRY) {
@@ -148,58 +151,123 @@ async function importStudents() {
   const raw = await gasGet('students');
   await snapshot('students', raw);
 
+  // The master Students tab aggregates every sheet in the Drive folder, so
+  // "Copy of …" backups and renamed sheets pollute it (and share student ids
+  // with the original sheet). Membership of ACTIVE sites therefore comes from
+  // each site's own roster (studentData); the master only contributes
+  // birthdates and the membership of inactive sites.
+  const masterById = new Map();
+  for (const row of raw) {
+    const id = String(row.id ?? '').trim();
+    if (id && !masterById.has(id)) masterById.set(id, row);
+  }
+
   const sites = await prisma.site.findMany();
   const siteByName = new Map(sites.map((s) => [s.name, s]));
+  let imported = 0;
+  let skipped = 0;
+  let deactivated = 0;
+  let masterOnly = 0;
 
-  // Roster numbers per active site, exactly as GAS reports them today.
-  const numberById = new Map();
-  const maxNumberBySite = new Map();
-  for (const site of sites.filter((s) => s.active)) {
+  // Canonical (current-year prefixed) sites claim their roster ids first.
+  const activeSites = sites
+    .filter((s) => s.active)
+    .sort(
+      (a, b) =>
+        Number(b.name.startsWith(ACTIVE_SY)) - Number(a.name.startsWith(ACTIVE_SY)) ||
+        a.name.localeCompare(b.name)
+    );
+  const claimedBy = new Map(); // student id -> site name
+
+  for (const site of activeSites) {
     const roster = await gasGet('studentData', { site: site.name });
     if (!Array.isArray(roster)) {
       warn(`studentData missing for ${site.name}`);
       continue;
     }
     await snapshot(`studentData-${site.id}`, roster);
-    const used = new Set();
+
+    const seenNames = new Set();
+    const rosterIds = [];
+
     for (const row of roster) {
-      const num = Number(row.number);
-      if (!row.id || !Number.isInteger(num)) continue;
-      if (used.has(num)) {
-        warn(`${site.name}: duplicate roster number ${num} (id ${row.id}) — will renumber`);
+      const id = String(row.id ?? '').trim() ? String(row.id) : null;
+      const name = cleanName(row.name); // keeps "ZZ " / "0PK " prefixes verbatim
+      const number = Number(row.number);
+      if (!id || !name || !Number.isInteger(number)) {
+        warn(`${site.name}: roster row skipped (bad id/name/number): ${JSON.stringify(row).slice(0, 120)}`);
+        skipped++;
         continue;
       }
-      used.add(num);
-      numberById.set(String(row.id), num);
-      maxNumberBySite.set(site.id, Math.max(maxNumberBySite.get(site.id) ?? 0, num));
+      if (claimedBy.has(id)) {
+        warn(`${site.name}: id ${id} ("${name}") already claimed by "${claimedBy.get(id)}" — kept there`);
+        skipped++;
+        continue;
+      }
+      const nameKey = name.toLowerCase();
+      if (seenNames.has(nameKey)) {
+        warn(`${site.name}: duplicate student name "${name}" — first occurrence kept (id ${id} skipped)`);
+        skipped++;
+        continue;
+      }
+      seenNames.add(nameKey);
+      claimedBy.set(id, site.name);
+      rosterIds.push(id);
+
+      if (!DRY) {
+        const master = masterById.get(id);
+        const data = {
+          name,
+          number,
+          age: cleanAge(row.age),
+          birthdate: cleanBirthdate(master?.birthdate),
+          siteId: site.id,
+          active: true,
+        };
+        await prisma.student.upsert({
+          where: { id }, // GAS id preserved verbatim — keys localStorage drafts
+          create: { id, ...data },
+          update: data,
+        });
+      }
+      imported++;
+    }
+
+    // Students that dropped off the site roster are withdrawals: keep the row
+    // (history entries link to it) but take it out of the working roster.
+    if (!DRY && rosterIds.length) {
+      const res = await prisma.student.updateMany({
+        where: { siteId: site.id, active: true, id: { notIn: rosterIds } },
+        data: { active: false },
+      });
+      deactivated += res.count;
     }
   }
 
-  const seenNamesBySite = new Map(); // siteId -> Set(lowercased names)
-  const usedNumbersBySite = new Map(); // siteId -> Set(numbers)
-  let imported = 0;
-  let skipped = 0;
-
-  const nextNumber = (siteId) => {
-    const next = (maxNumberBySite.get(siteId) ?? 0) + 1;
-    maxNumberBySite.set(siteId, next);
-    return next;
-  };
-
+  // Inactive sites: master rows are the only membership source. Ids already
+  // claimed by an active roster stay where they are (copies never steal).
+  const seenNamesBySite = new Map();
+  const nextNumberBySite = new Map();
   for (const row of raw) {
     const id = String(row.id ?? '').trim() ? String(row.id) : null;
-    const name = cleanName(row.name); // keeps "0 " / "0PK " prefixes verbatim
+    const name = cleanName(row.name);
     const siteName = cleanName(row.site);
-    const site = siteByName.get(siteName);
 
     if (!id || !name) {
       warn(`student skipped (missing id or name): ${JSON.stringify(row).slice(0, 120)}`);
       skipped++;
       continue;
     }
+    if (claimedBy.has(id)) continue; // active roster (or earlier master row) won
+    const site = siteByName.get(siteName);
     if (!site) {
       warn(`student "${name}" skipped — unknown site "${siteName}"`);
       skipped++;
+      continue;
+    }
+    if (site.active) {
+      // Master row an active site's roster does not list: stale aggregate data.
+      masterOnly++;
       continue;
     }
 
@@ -211,20 +279,16 @@ async function importStudents() {
       continue;
     }
     seenNamesBySite.get(site.id).add(nameKey);
+    claimedBy.set(id, site.name);
 
-    if (!usedNumbersBySite.has(site.id)) usedNumbersBySite.set(site.id, new Set());
-    let number = numberById.get(id);
-    if (!Number.isInteger(number) || usedNumbersBySite.get(site.id).has(number)) {
-      number = nextNumber(site.id);
-      while (usedNumbersBySite.get(site.id).has(number)) number = nextNumber(site.id);
-    }
-    usedNumbersBySite.get(site.id).add(number);
+    const number = (nextNumberBySite.get(site.id) ?? 0) + 1;
+    nextNumberBySite.set(site.id, number);
 
     if (!DRY) {
       await prisma.student.upsert({
         where: { id },
         create: {
-          id, // GAS id preserved verbatim — keys localStorage drafts
+          id,
           name,
           number,
           age: cleanAge(row.age),
@@ -233,7 +297,6 @@ async function importStudents() {
         },
         update: {
           name,
-          number,
           age: cleanAge(row.age),
           birthdate: cleanBirthdate(row.birthdate),
           siteId: site.id,
@@ -242,7 +305,11 @@ async function importStudents() {
     }
     imported++;
   }
-  console.log(`  students: ${imported} imported, ${skipped} skipped`);
+
+  console.log(
+    `  students: ${imported} imported, ${skipped} skipped, ${deactivated} deactivated, ` +
+      `${masterOnly} stale master rows ignored`
+  );
 }
 
 async function importMeals() {

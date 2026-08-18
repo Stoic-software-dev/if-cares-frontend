@@ -64,8 +64,9 @@ model Student {
   site    Site             @relation(fields: [siteId], references: [id])
   entries MealCountEntry[]
 
+  // number is positional (GAS reindexes the roster alphabetically on every
+  // change) — display data, deliberately NOT unique per site.
   @@unique([siteId, name])
-  @@unique([siteId, number])
   @@index([siteId, active])
 }
 

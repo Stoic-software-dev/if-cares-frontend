@@ -14,7 +14,12 @@
  * value in the app's .env as GAS_EXPORT_KEY. Requests without the key are
  * rejected. Read-only: this never writes to any sheet.
  *
- * Usage from the importer:  ?type=exportHistory&key=...&site=<site name>
+ * Usage from the importer:
+ *   ?type=exportHistory&key=...&site=<site name>&list=1      → dated tab names only (fast)
+ *   ?type=exportHistory&key=...&site=<site name>&month=M/YYYY → data for that month's tabs
+ *   ?type=exportHistory&key=...&site=<site name>              → data for ALL tabs (small sites only:
+ *                                                               a full-year site exceeds the ~6 min
+ *                                                               Apps Script execution limit)
  */
 
 var MIGRATION_EXPORT_KEY = 'CHANGE-ME-to-a-long-random-string';
@@ -46,6 +51,20 @@ function handleExportHistory(e) {
 
   var ss = SpreadsheetApp.openById(spreadsheetId);
   var tz = Session.getScriptTimeZone();
+  // Both "M/D/YYYY" (current) and "MMDDYYYY" (some older tabs / renames)
+  var datePattern = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{8})$/;
+
+  // Listing mode: tab names only, so the importer can batch big sites by month.
+  if (e.parameter.list === '1') {
+    var tabs = [];
+    ss.getSheets().forEach(function (sheet) {
+      var n = sheet.getName().trim();
+      if (datePattern.test(n)) tabs.push(n);
+    });
+    return json({ result: 'success', site: siteName, spreadsheetId: spreadsheetId, tabs: tabs });
+  }
+
+  var monthFilter = e.parameter.month || ''; // "M/YYYY"
 
   // Submission log: Dates tab rows are [date, timeIn, timeOut]
   var datesLog = {};
@@ -60,13 +79,12 @@ function handleExportHistory(e) {
   }
 
   var out = { result: 'success', site: siteName, spreadsheetId: spreadsheetId, dates: {} };
-  // Both "M/D/YYYY" (current) and "MMDDYYYY" (some older tabs / renames)
-  var datePattern = /^(\d{1,2}\/\d{1,2}\/\d{4}|\d{8})$/;
   var MAX_ROW = 156; // covers the 150-row BGC COOKE layout; extra rows are empty elsewhere
 
   ss.getSheets().forEach(function (sheet) {
     var name = sheet.getName().trim();
     if (!datePattern.test(name)) return;
+    if (monthFilter && tabMonthKey_(name) !== monthFilter) return;
 
     // Single read B7:T{MAX_ROW}. Left block: B name, C age, D att, E/F times,
     // G brk, H lunch, I snk, J sup. Right block: L,M,N,O/P,Q,R,S,T.
@@ -120,6 +138,13 @@ function handleExportHistory(e) {
   });
 
   return json(out);
+}
+
+function tabMonthKey_(name) {
+  var slashed = name.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})$/);
+  if (slashed) return Number(slashed[1]) + '/' + slashed[2];
+  if (/^\d{8}$/.test(name)) return Number(name.slice(0, 2)) + '/' + name.slice(4);
+  return '';
 }
 
 function formatTimeCell_(value, tz) {

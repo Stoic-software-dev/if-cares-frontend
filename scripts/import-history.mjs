@@ -50,21 +50,62 @@ function tabNameToYmd(tabName) {
   return null;
 }
 
-async function fetchSiteHistory(siteName) {
-  const url = `${GAS}?${new URLSearchParams({ type: 'exportHistory', key: KEY, site: siteName })}`;
+async function gasExportGet(params) {
+  const url = `${GAS}?${new URLSearchParams({ type: 'exportHistory', key: KEY, ...params })}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await fetch(url, { redirect: 'follow' });
-      const data = JSON.parse(await res.text());
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`non-JSON response: ${text.replace(/\s+/g, ' ').slice(0, 80)}`);
+      }
       if (data.result !== 'success') throw new Error(data.message || 'export failed');
       await sleep(500);
       return data;
     } catch (error) {
-      if (attempt === 3) throw new Error(`exportHistory failed for "${siteName}": ${error.message}`);
+      if (attempt === 3) throw error;
       await sleep(2000 * attempt);
     }
   }
   return null;
+}
+
+function tabMonthKey(tabName) {
+  const ymd = tabNameToYmd(tabName);
+  return ymd ? `${Number(ymd.slice(5, 7))}/${ymd.slice(0, 4)}` : null;
+}
+
+// GAS caps one execution at ~6 minutes and a full-year site exceeds it, so:
+// list the dated tabs first, then pull the data one month at a time.
+async function fetchSiteHistory(siteName) {
+  let listing;
+  try {
+    listing = await gasExportGet({ site: siteName, list: '1' });
+  } catch (error) {
+    throw new Error(`exportHistory listing failed for "${siteName}": ${error.message}`);
+  }
+  const months = [...new Set((listing.tabs || []).map(tabMonthKey).filter(Boolean))];
+
+  const merged = {
+    result: 'success',
+    site: listing.site,
+    spreadsheetId: listing.spreadsheetId,
+    dates: {},
+  };
+  for (const month of months) {
+    console.log(`    month ${month} (${months.indexOf(month) + 1}/${months.length})…`);
+    let part;
+    try {
+      part = await gasExportGet({ site: siteName, month });
+    } catch (error) {
+      throw new Error(`exportHistory failed for "${siteName}" month ${month}: ${error.message}`);
+    }
+    Object.assign(merged.dates, part.dates || {});
+  }
+  return merged;
 }
 
 function summarizeSite(data) {

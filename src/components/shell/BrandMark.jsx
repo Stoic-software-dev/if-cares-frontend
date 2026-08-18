@@ -10,7 +10,12 @@ export default function BrandMark({ size = 'sm', className }) {
       width={1000}
       height={400}
       priority
-      className={cn(size === 'lg' ? 'h-16 w-auto' : 'h-8 w-auto', className)}
+      className={cn(
+        // self-start keeps stretch-aligned flex parents from distorting it.
+        'self-start object-contain',
+        size === 'lg' ? 'h-16 w-auto' : 'h-8 w-auto',
+        className
+      )}
     />
   );
 }

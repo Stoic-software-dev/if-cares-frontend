@@ -69,6 +69,16 @@
     @apply bg-background text-foreground;
     margin: 0;
     padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Keyboard focus is always visible; elements that draw their own ring opt
+     out with outline-none. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: #ccfbf1;
   }
 }
 

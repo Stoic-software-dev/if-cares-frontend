@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertCircle, Check } from 'lucide-react';
@@ -34,10 +34,10 @@ function MealToggle({ label, active, attention, onToggle }) {
       type="button"
       onClick={onToggle}
       className={cn(
-        'flex h-11 flex-1 items-center justify-center gap-1 rounded-[9px] text-xs',
-        active && 'bg-primary font-semibold text-primary-foreground',
-        !active && !attention && 'border border-slate-300 bg-white font-medium text-slate-500',
-        !active && attention && 'border-[1.5px] border-dashed border-red-400 bg-white font-semibold text-red-700'
+        'flex h-11 flex-1 items-center justify-center gap-1 rounded-[9px] text-xs transition-[background-color,border-color,transform] active:scale-95',
+        active && 'bg-primary font-semibold text-primary-foreground hover:bg-teal-800',
+        !active && !attention && 'border border-slate-300 bg-white font-medium text-slate-500 hover:border-slate-400 hover:text-slate-700',
+        !active && attention && 'border-[1.5px] border-dashed border-red-400 bg-white font-semibold text-red-700 hover:border-red-500'
       )}
     >
       {active && <Check className="h-[11px] w-[11px]" strokeWidth={3.5} />}
@@ -57,6 +57,17 @@ function MealCountScreen() {
   const [signed, setSigned] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const sigPad = useRef(null);
+  const sigWrap = useRef(null);
+  const [sigWidth, setSigWidth] = useState(0);
+
+  useEffect(() => {
+    // The canvas element needs real width/height attributes; sizing it with
+    // CSS alone offsets every stroke from the pen.
+    const measure = () => setSigWidth(sigWrap.current?.clientWidth ?? 0);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   const toggle = (studentId, meal) => {
     setMarks((prev) => {
@@ -107,7 +118,7 @@ function MealCountScreen() {
         <section className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Service time</span>
           <div className="grid grid-cols-2 gap-2.5 md:max-w-md">
-            <label className="flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border border-slate-300 bg-white px-3.5">
+            <label className="flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border border-slate-300 bg-white px-3.5 transition-shadow focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15">
               <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400">In</span>
               <input
                 type="time"
@@ -118,7 +129,7 @@ function MealCountScreen() {
             </label>
             <label
               className={cn(
-                'flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border bg-white px-3.5',
+                'flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border bg-white px-3.5 transition-shadow focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15',
                 !timeOut && attempted ? 'border-[1.5px] border-red-600' : 'border-slate-300'
               )}
             >
@@ -206,13 +217,17 @@ function MealCountScreen() {
                 'overflow-hidden rounded-[10px] border-[1.5px] border-dashed',
                 signed ? 'border-slate-300' : attempted ? 'border-red-400' : 'border-slate-300'
               )}
+              ref={sigWrap}
             >
-              <SignatureCanvas
-                ref={sigPad}
-                penColor="#1e293b"
-                onEnd={() => setSigned(true)}
-                canvasProps={{ className: 'w-full', style: { height: 110, width: '100%' } }}
-              />
+              {sigWidth > 0 && (
+                <SignatureCanvas
+                  ref={sigPad}
+                  penColor="#1e293b"
+                  onEnd={() => setSigned(true)}
+                  clearOnResize={false}
+                  canvasProps={{ width: sigWidth, height: 120, style: { display: 'block' } }}
+                />
+              )}
             </div>
             <p className="text-[11px] leading-relaxed text-slate-500">
               I certify that the information on this form is true and correct to the best of my knowledge, and that

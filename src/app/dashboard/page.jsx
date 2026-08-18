@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import AppNavbar from '@/components/shell/AppNavbar';
 import { STAFF_NAV } from '@/components/shell/nav';
 import MonthCalendar from '@/components/dashboard/MonthCalendar';
 import { Button } from '@/components/ui/button';
-import { MOCK_MONTH, MOCK_SITE, MOCK_USER } from '@/lib/mock-data';
+import { cn } from '@/lib/utils';
+import { MOCK_MONTH, MOCK_MONTHS, MOCK_SITE, MOCK_USER } from '@/lib/mock-data';
 
 const LEGEND = [
   { label: 'Submitted', swatch: 'bg-emerald-50 border border-emerald-200' },
@@ -17,7 +19,12 @@ const LEGEND = [
 
 export default function DashboardPage() {
   const router = useRouter();
-  const statuses = Object.values(MOCK_MONTH.days);
+  const [monthIndex, setMonthIndex] = useState(MOCK_MONTHS.length - 1);
+  const month = MOCK_MONTHS[monthIndex];
+  const hasPrev = monthIndex > 0;
+  const hasNext = monthIndex < MOCK_MONTHS.length - 1;
+
+  const statuses = Object.values(month.days);
   const submitted = statuses.filter((s) => s === 'submitted').length;
   const missing = statuses.filter((s) => s === 'missing').length;
   const upcoming = statuses.filter((s) => s === 'upcoming' || s === 'today').length;
@@ -42,15 +49,33 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between md:justify-start md:gap-5">
               <div className="flex flex-col md:flex-row md:items-baseline md:gap-2">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 leading-tight md:text-3xl">
-                  {MOCK_MONTH.label}
+                  {month.label}
                 </h1>
-                <span className="text-[13px] font-medium text-slate-500 md:text-base">{MOCK_MONTH.year}</span>
+                <span className="text-[13px] font-medium text-slate-500 md:text-base">{month.year}</span>
               </div>
               <div className="flex gap-2">
-                <button type="button" aria-label="Previous month" className="flex h-11 w-11 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-700 md:h-9 md:w-9">
+                <button
+                  type="button"
+                  aria-label="Previous month"
+                  disabled={!hasPrev}
+                  onClick={() => setMonthIndex((i) => i - 1)}
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-700 transition-colors md:h-9 md:w-9',
+                    hasPrev ? 'hover:border-slate-300 hover:bg-slate-50' : 'cursor-default text-slate-300'
+                  )}
+                >
                   <ChevronLeft className="h-[18px] w-[18px]" />
                 </button>
-                <button type="button" aria-label="Next month" className="flex h-11 w-11 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-700 md:h-9 md:w-9">
+                <button
+                  type="button"
+                  aria-label="Next month"
+                  disabled={!hasNext}
+                  onClick={() => setMonthIndex((i) => i + 1)}
+                  className={cn(
+                    'flex h-11 w-11 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-700 transition-colors md:h-9 md:w-9',
+                    hasNext ? 'hover:border-slate-300 hover:bg-slate-50' : 'cursor-default text-slate-300'
+                  )}
+                >
                   <ChevronRight className="h-[18px] w-[18px]" />
                 </button>
               </div>
@@ -78,7 +103,7 @@ export default function DashboardPage() {
           </span>
         </div>
 
-        <MonthCalendar month={MOCK_MONTH} />
+        <MonthCalendar month={month} />
 
         <div className="flex items-center gap-4 px-0.5">
           {LEGEND.map((item) => (

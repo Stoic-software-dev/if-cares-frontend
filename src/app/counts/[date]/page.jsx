@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Check, Download, Pencil } from 'lucide-react';
 import AppNavbar from '@/components/shell/AppNavbar';
 import { STAFF_NAV } from '@/components/shell/nav';
@@ -29,8 +29,14 @@ function Mark({ value }) {
 
 export default function CountDetailPage() {
   const router = useRouter();
-  // Mock build: every date renders the same submitted-count fixture.
+  const { date } = useParams();
+  // Mock build: every date renders the same submitted-count fixture, but the
+  // header honors the date that was opened.
   const count = MOCK_COUNT_DETAIL;
+  const parsed = new Date(`${date}T00:00:00`);
+  const dateLabel = Number.isNaN(parsed.getTime())
+    ? count.dateLabel
+    : parsed.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
     <div className="min-h-screen bg-background">
@@ -38,11 +44,11 @@ export default function CountDetailPage() {
         <AppNavbar items={STAFF_NAV} active="Dashboard" user={MOCK_USER} />
       </div>
       <div className="md:hidden">
-        <MobileHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
+        <MobileHeader title={dateLabel} subtitle={MOCK_SITE.name} />
       </div>
 
       <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-5xl md:px-8 md:pt-7">
-        <PageHeader title={count.dateLabel} subtitle={MOCK_SITE.name} />
+        <PageHeader title={dateLabel} subtitle={MOCK_SITE.name} />
         <section className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -143,7 +149,7 @@ export default function CountDetailPage() {
             <Download className="h-4 w-4" />
             PDF
           </Button>
-          <Button onClick={() => router.push('/meal-count?date=2026-09-08')} className="h-12 flex-[1.6] rounded-[10px] font-semibold md:flex-none md:px-8">
+          <Button onClick={() => router.push(`/meal-count?date=${date}`)} className="h-12 flex-[1.6] rounded-[10px] font-semibold md:flex-none md:px-8">
             <Pencil className="h-4 w-4" />
             Edit count
           </Button>

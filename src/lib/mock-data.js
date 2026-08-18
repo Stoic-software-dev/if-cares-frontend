@@ -35,11 +35,36 @@ export const MOCK_STUDENTS = [
   { id: 's24', number: 24, name: 'Yusuf Kamara', age: 9 },
 ];
 
-// September 2026: Tuesday the 1st, service Monday to Friday, today = the 17th.
 // Day statuses: submitted | missing | today | upcoming | none (no service).
-export const MOCK_MONTH = {
+// August 2026: program starts Monday the 17th; the 1st is a Saturday.
+const AUGUST_2026 = {
+  key: 'aug',
+  label: 'August',
+  year: 2026,
+  monthNumber: 8,
+  leadingBlanks: 5,
+  daysInMonth: 31,
+  days: {
+    17: 'submitted',
+    18: 'submitted',
+    19: 'submitted',
+    20: 'submitted',
+    21: 'submitted',
+    24: 'submitted',
+    25: 'submitted',
+    26: 'submitted',
+    27: 'submitted',
+    28: 'submitted',
+    31: 'submitted',
+  },
+};
+
+// September 2026: Tuesday the 1st, service Monday to Friday, today = the 17th.
+const SEPTEMBER_2026 = {
+  key: 'sep',
   label: 'September',
   year: 2026,
+  monthNumber: 9,
   todayDate: '2026-09-17',
   // Monday-first offset of September 1, 2026 (a Tuesday).
   leadingBlanks: 1,
@@ -69,6 +94,9 @@ export const MOCK_MONTH = {
     30: 'upcoming',
   },
 };
+
+export const MOCK_MONTHS = [AUGUST_2026, SEPTEMBER_2026];
+export const MOCK_MONTH = SEPTEMBER_2026;
 
 export const MOCK_COUNT_DETAIL = {
   date: '2026-09-08',

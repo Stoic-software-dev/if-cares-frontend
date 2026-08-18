@@ -1,10 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { MoreVertical } from 'lucide-react';
+import { Check, Loader, MoreVertical, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
 import AppNavbar from '@/components/shell/AppNavbar';
 import { ADMIN_NAV } from '@/components/shell/nav';
 import StatusBadge from '@/components/requests/StatusBadge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { MOCK_INBOX_REQUESTS } from '@/lib/mock-data';
 
@@ -19,13 +26,19 @@ const FILTERS = [
 
 export default function AdminRequestsPage() {
   const [filter, setFilter] = useState('ALL');
+  const [inbox, setInbox] = useState(MOCK_INBOX_REQUESTS);
 
   const requests = useMemo(
-    () => (filter === 'ALL' ? MOCK_INBOX_REQUESTS : MOCK_INBOX_REQUESTS.filter((r) => r.status === filter)),
-    [filter]
+    () => (filter === 'ALL' ? inbox : inbox.filter((r) => r.status === filter)),
+    [filter, inbox]
   );
 
-  const newCount = MOCK_INBOX_REQUESTS.filter((r) => r.status === 'NEW').length;
+  const newCount = inbox.filter((r) => r.status === 'NEW').length;
+
+  const setStatus = (id, status, message) => {
+    setInbox((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+    toast.success(message);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,7 +48,7 @@ export default function AdminRequestsPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Requests</h1>
           <p className="text-[13px] tabular-nums text-slate-500">
-            {MOCK_INBOX_REQUESTS.length} total · {newCount} new
+            {inbox.length} total · {newCount} new
           </p>
         </div>
 
@@ -49,7 +62,7 @@ export default function AdminRequestsPage() {
                 'h-9 rounded-full border px-3.5 text-[13px] font-medium',
                 filter === f.key
                   ? 'border-teal-200 bg-teal-50 font-semibold text-primary'
-                  : 'border-slate-300 bg-white text-slate-600'
+                  : 'border-slate-300 bg-white text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900'
               )}
             >
               {f.label}
@@ -72,7 +85,7 @@ export default function AdminRequestsPage() {
               <div
                 key={request.id}
                 className={cn(
-                  'grid grid-cols-[170px_minmax(0,1fr)_130px_130px_90px_120px_52px] items-center px-5 py-3',
+                  'grid grid-cols-[170px_minmax(0,1fr)_130px_130px_90px_120px_52px] items-center px-5 py-3 transition-colors hover:bg-slate-50/70',
                   index < requests.length - 1 && 'border-b border-slate-100'
                 )}
               >
@@ -83,9 +96,46 @@ export default function AdminRequestsPage() {
                 <span className="text-[13px] text-slate-500">{request.date}</span>
                 <StatusBadge status={request.status} />
                 <span className="flex justify-end">
-                  <button type="button" aria-label="Row actions" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500">
-                    <MoreVertical className="h-[15px] w-[15px]" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Row actions"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <MoreVertical className="h-[15px] w-[15px]" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      {request.status === 'NEW' && (
+                        <DropdownMenuItem
+                          onClick={() => setStatus(request.id, 'IN_PROGRESS', `${request.type} marked as in progress`)}
+                          className="gap-2 text-[13px]"
+                        >
+                          <Loader className="h-4 w-4 text-amber-600" />
+                          Mark as in progress
+                        </DropdownMenuItem>
+                      )}
+                      {request.status !== 'RESOLVED' && (
+                        <DropdownMenuItem
+                          onClick={() => setStatus(request.id, 'RESOLVED', `${request.type} resolved`)}
+                          className="gap-2 text-[13px]"
+                        >
+                          <Check className="h-4 w-4 text-emerald-600" />
+                          Mark as resolved
+                        </DropdownMenuItem>
+                      )}
+                      {request.status === 'RESOLVED' && (
+                        <DropdownMenuItem
+                          onClick={() => setStatus(request.id, 'NEW', `${request.type} reopened`)}
+                          className="gap-2 text-[13px]"
+                        >
+                          <RotateCcw className="h-4 w-4 text-slate-500" />
+                          Reopen
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </span>
               </div>
             ))}

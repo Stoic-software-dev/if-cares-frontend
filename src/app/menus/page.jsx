@@ -24,7 +24,7 @@ export default function MenusPage() {
           {MOCK_MENUS.map((menu) => (
             <div
               key={menu.id}
-              className="flex items-center gap-4 rounded-[14px] border border-slate-200 bg-white p-4 md:p-5"
+              className="flex items-center gap-4 rounded-[14px] border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 md:p-5"
             >
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-primary md:h-14 md:w-14">
                 <FileText className="h-5 w-5 md:h-7 md:w-7" strokeWidth={1.6} />

@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils';
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 const DAY_STYLES = {
-  submitted: 'bg-emerald-50 text-emerald-700 font-semibold',
-  missing: 'bg-red-50 text-red-700 font-bold',
-  today: 'border-2 border-primary text-primary font-bold',
+  submitted: 'bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100',
+  missing: 'bg-red-50 text-red-700 font-bold hover:bg-red-100',
+  today: 'border-2 border-primary text-primary font-bold hover:bg-teal-50',
   upcoming: 'text-slate-600 font-medium',
   none: 'text-slate-300 font-medium',
 };
@@ -26,7 +26,7 @@ export default function MonthCalendar({ month }) {
   const router = useRouter();
 
   const openDay = (day, status) => {
-    const iso = `${month.year}-09-${String(day).padStart(2, '0')}`;
+    const iso = `${month.year}-${String(month.monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     if (status === 'submitted') router.push(`/counts/${iso}`);
     if (status === 'missing' || status === 'today') router.push(`/meal-count?date=${iso}`);
   };
@@ -64,7 +64,7 @@ export default function MonthCalendar({ month }) {
                 'flex h-12 items-center justify-center rounded-lg text-sm',
                 'md:h-[104px] md:flex-col md:items-start md:justify-between md:p-2 md:text-[15px]',
                 DAY_STYLES[status],
-                clickable && 'cursor-pointer'
+                clickable && 'cursor-pointer transition-[background-color,transform] active:scale-[0.97]'
               )}
             >
               <span>{day}</span>

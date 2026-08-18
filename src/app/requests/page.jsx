@@ -66,7 +66,8 @@ export default function RequestsPage() {
                   value={type}
                   onChange={(e) => setType(e.target.value)}
                   className={cn(
-                    'h-12 w-full appearance-none rounded-[10px] border bg-white px-3.5 pr-10 text-sm font-medium text-slate-900 outline-none',
+                    'h-12 w-full appearance-none rounded-[10px] border bg-white px-3.5 pr-10 text-sm font-medium outline-none transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
+                    type === '' ? 'text-slate-400' : 'text-slate-900',
                     attempted && type === '' ? 'border-[1.5px] border-red-600' : 'border-slate-300'
                   )}
                 >
@@ -93,7 +94,7 @@ export default function RequestsPage() {
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="e.g. 10"
                   className={cn(
-                    'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400',
+                    'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
                     attempted && !needsTime && (amount === '' || Number(amount) <= 0)
                       ? 'border-[1.5px] border-red-600'
                       : 'border-slate-300'
@@ -111,7 +112,7 @@ export default function RequestsPage() {
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                   className={cn(
-                    'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm tabular-nums text-slate-900 outline-none',
+                    'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm tabular-nums text-slate-900 outline-none transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
                     attempted && time === '' ? 'border-[1.5px] border-red-600' : 'border-slate-300'
                   )}
                 />

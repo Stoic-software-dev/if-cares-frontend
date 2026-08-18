@@ -1,8 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, MoreVertical, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, KeyRound, MoreVertical, Pencil, Plus, Search, UserX, X } from 'lucide-react';
+import { toast } from 'sonner';
 import AppNavbar from '@/components/shell/AppNavbar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ADMIN_NAV } from '@/components/shell/nav';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -53,6 +61,8 @@ export default function AdminUsersPage() {
 
   const adminCount = MOCK_ADMIN_USERS.filter((u) => u.role === 'ADMIN').length;
 
+  const notWired = () => toast.info('Not wired in this preview yet');
+
   return (
     <div className="min-h-screen bg-background">
       <AppNavbar items={ADMIN_NAV} active="Users" user={ADMIN_USER} />
@@ -72,7 +82,7 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <label className="flex h-10 w-80 items-center gap-2 rounded-[9px] border border-slate-300 bg-white px-3">
+          <label className="flex h-10 w-80 items-center gap-2 rounded-[9px] border border-slate-300 bg-white px-3 transition-shadow focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15">
             <Search className="h-[15px] w-[15px] text-slate-400" />
             <input
               type="text"
@@ -115,7 +125,7 @@ export default function AdminUsersPage() {
             <div
               key={user.id}
               className={cn(
-                'grid grid-cols-[230px_260px_110px_minmax(0,1fr)_110px_56px] items-center px-5 py-3',
+                'grid grid-cols-[230px_260px_110px_minmax(0,1fr)_110px_56px] items-center px-5 py-3 transition-colors hover:bg-slate-50/70',
                 index < users.length - 1 && 'border-b border-slate-100',
                 !user.active && 'text-slate-400'
               )}
@@ -130,9 +140,32 @@ export default function AdminUsersPage() {
               </span>
               <StatusDot active={user.active} />
               <span className="flex justify-end">
-                <button type="button" aria-label="Row actions" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500">
-                  <MoreVertical className="h-[15px] w-[15px]" />
-                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Row actions"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <MoreVertical className="h-[15px] w-[15px]" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={notWired} className="gap-2 text-[13px]">
+                      <Pencil className="h-4 w-4 text-slate-500" />
+                      Edit user
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={notWired} className="gap-2 text-[13px]">
+                      <KeyRound className="h-4 w-4 text-slate-500" />
+                      Send password reset
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={notWired} className="gap-2 text-[13px] text-red-700">
+                      <UserX className="h-4 w-4" />
+                      {user.active ? 'Deactivate' : 'Reactivate'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </span>
             </div>
           ))}

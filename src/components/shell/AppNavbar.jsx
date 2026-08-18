@@ -25,7 +25,9 @@ export default function AppNavbar({ items = [], active, user }) {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex h-[54px] max-w-screen-2xl items-center justify-between px-3 md:h-[58px] md:px-8">
         <div className="flex items-center gap-8">
-          <BrandMark className="px-1 md:px-0" />
+          <Link href="/dashboard" aria-label="Go to dashboard" className="rounded-lg">
+            <BrandMark className="px-1 md:px-0" />
+          </Link>
           <nav className="hidden h-[58px] items-center gap-0.5 md:flex">
             {items.map((item) => (
               <Link
@@ -35,7 +37,7 @@ export default function AppNavbar({ items = [], active, user }) {
                   'flex h-[58px] items-center px-3.5 text-[13px]',
                   item.label === active
                     ? 'border-b-2 border-primary font-semibold text-primary'
-                    : 'font-medium text-slate-500'
+                    : 'font-medium text-slate-500 transition-colors hover:text-slate-900'
                 )}
               >
                 {item.label}
@@ -48,7 +50,7 @@ export default function AppNavbar({ items = [], active, user }) {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="hidden items-center gap-2.5 rounded-lg px-2 py-1.5 md:flex"
+              className="hidden items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 md:flex"
             >
               <span className="text-[13px] font-medium text-slate-700">
                 {user ? `${user.name} ${user.lastname}` : ''}
@@ -72,7 +74,7 @@ export default function AppNavbar({ items = [], active, user }) {
             <button
               type="button"
               aria-label="Menu"
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 md:hidden"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-700 transition-colors hover:bg-slate-100 md:hidden"
             >
               <Menu className="h-[22px] w-[22px]" />
             </button>

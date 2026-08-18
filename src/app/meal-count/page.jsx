@@ -3,16 +3,15 @@
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SignatureCanvas from 'react-signature-canvas';
-import { AlertCircle, Check, Clock } from 'lucide-react';
+import { AlertCircle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import AppNavbar from '@/components/shell/AppNavbar';
+import { STAFF_NAV } from '@/components/shell/nav';
 import MobileHeader from '@/components/shell/MobileHeader';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MOCK_SITE, MOCK_STUDENTS, MOCK_USER } from '@/lib/mock-data';
-
-const STAFF_NAV = ['Dashboard', 'Menus', 'Requests'];
 
 const MEALS = [
   { key: 'att', label: 'Att' },
@@ -108,43 +107,35 @@ function MealCountScreen() {
         <section className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Service time</span>
           <div className="grid grid-cols-2 gap-2.5 md:max-w-md">
-            <label
-              className="flex h-12 items-center justify-between rounded-[10px] border border-slate-300 bg-white px-3.5"
-            >
-              <span className="flex flex-col justify-center">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400">In</span>
-                <input
-                  type="time"
-                  value={timeIn}
-                  onChange={(e) => setTimeIn(e.target.value)}
-                  className="w-24 bg-transparent text-[15px] font-semibold tabular-nums text-slate-900 outline-none"
-                />
-              </span>
-              <Clock className="h-4 w-4 text-slate-400" />
+            <label className="flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border border-slate-300 bg-white px-3.5">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-slate-400">In</span>
+              <input
+                type="time"
+                value={timeIn}
+                onChange={(e) => setTimeIn(e.target.value)}
+                className="w-full bg-transparent text-[15px] font-semibold tabular-nums text-slate-900 outline-none"
+              />
             </label>
             <label
               className={cn(
-                'flex h-12 items-center justify-between rounded-[10px] border bg-white px-3.5',
+                'flex h-14 flex-col justify-center gap-0.5 rounded-[10px] border bg-white px-3.5',
                 !timeOut && attempted ? 'border-[1.5px] border-red-600' : 'border-slate-300'
               )}
             >
-              <span className="flex flex-col justify-center">
-                <span
-                  className={cn(
-                    'text-[9px] font-semibold uppercase tracking-[0.06em]',
-                    !timeOut && attempted ? 'text-red-700' : 'text-slate-400'
-                  )}
-                >
-                  Out · required
-                </span>
-                <input
-                  type="time"
-                  value={timeOut}
-                  onChange={(e) => setTimeOut(e.target.value)}
-                  className="w-24 bg-transparent text-[15px] font-semibold tabular-nums text-slate-900 outline-none"
-                />
+              <span
+                className={cn(
+                  'text-[9px] font-semibold uppercase tracking-[0.06em]',
+                  !timeOut && attempted ? 'text-red-700' : 'text-slate-400'
+                )}
+              >
+                Out · required
               </span>
-              <Clock className={cn('h-4 w-4', !timeOut && attempted ? 'text-red-600' : 'text-slate-400')} />
+              <input
+                type="time"
+                value={timeOut}
+                onChange={(e) => setTimeOut(e.target.value)}
+                className="w-full bg-transparent text-[15px] font-semibold tabular-nums text-slate-900 outline-none"
+              />
             </label>
           </div>
         </section>

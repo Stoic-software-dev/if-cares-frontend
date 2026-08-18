@@ -3,11 +3,11 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, MoreVertical, Plus, Search, X } from 'lucide-react';
 import AppNavbar from '@/components/shell/AppNavbar';
+import { ADMIN_NAV } from '@/components/shell/nav';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MOCK_ADMIN_USERS } from '@/lib/mock-data';
 
-const ADMIN_NAV = ['Dashboard', 'Sites', 'Users', 'Requests', 'Reports'];
 const ADMIN_USER = { name: 'Dana', lastname: 'Whitfield' };
 
 function RoleBadge({ role }) {

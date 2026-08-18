@@ -3,11 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import AppNavbar from '@/components/shell/AppNavbar';
+import { STAFF_NAV } from '@/components/shell/nav';
 import MonthCalendar from '@/components/dashboard/MonthCalendar';
 import { Button } from '@/components/ui/button';
 import { MOCK_MONTH, MOCK_SITE, MOCK_USER } from '@/lib/mock-data';
-
-const STAFF_NAV = ['Dashboard', 'Menus', 'Requests'];
 
 const LEGEND = [
   { label: 'Submitted', swatch: 'bg-emerald-50 border border-emerald-200' },

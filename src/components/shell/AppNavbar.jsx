@@ -17,16 +17,16 @@ export default function AppNavbar({ items = [], active, user }) {
           <nav className="hidden h-[58px] items-center gap-0.5 md:flex">
             {items.map((item) => (
               <a
-                key={item}
-                href={item === 'Dashboard' ? '/dashboard' : '#'}
+                key={item.label}
+                href={item.href}
                 className={cn(
                   'flex h-[58px] items-center px-3.5 text-[13px]',
-                  item === active
+                  item.label === active
                     ? 'border-b-2 border-primary font-semibold text-primary'
                     : 'font-medium text-slate-500'
                 )}
               >
-                {item}
+                {item.label}
               </a>
             ))}
           </nav>

@@ -3,13 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { Check, Download, Pencil } from 'lucide-react';
 import AppNavbar from '@/components/shell/AppNavbar';
+import { STAFF_NAV } from '@/components/shell/nav';
 import MobileHeader from '@/components/shell/MobileHeader';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MOCK_COUNT_DETAIL, MOCK_SITE, MOCK_USER } from '@/lib/mock-data';
-
-const STAFF_NAV = ['Dashboard', 'Menus', 'Requests'];
 
 const TOTAL_COLUMNS = [
   { key: 'att', label: 'Att' },

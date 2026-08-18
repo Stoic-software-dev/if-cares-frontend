@@ -94,6 +94,44 @@ export const MOCK_COUNT_DETAIL = {
   })),
 };
 
+// The eight request types of the current app, verbatim.
+export const REQUEST_TYPES = [
+  'Sporks',
+  'Meal Increase',
+  'Meal Decrease',
+  'Change approved meal service time',
+  'Condiments',
+  'Special Meals',
+  'Dietary Restrictions',
+  'Amount of milk on hand',
+];
+
+export const REQUEST_TYPE_WITH_TIME = 'Change approved meal service time';
+
+export const MOCK_MENUS = [
+  { id: 'm1', name: 'September 2026 Menu.pdf', updated: 'Aug 28, 2026', size: '1.2 MB' },
+  { id: 'm2', name: 'August 2026 Menu.pdf', updated: 'Jul 30, 2026', size: '1.1 MB' },
+  { id: 'm3', name: 'Snack Cycle Menu Fall 2026.pdf', updated: 'Aug 28, 2026', size: '840 KB' },
+  { id: 'm4', name: 'Supper Cycle Menu Fall 2026.pdf', updated: 'Aug 28, 2026', size: '910 KB' },
+];
+
+export const MOCK_MY_REQUESTS = [
+  { id: 'r1', type: 'Meal Increase', detail: '10 meals', status: 'IN_PROGRESS', date: 'Sep 15' },
+  { id: 'r2', type: 'Sporks', detail: '200 units', status: 'RESOLVED', date: 'Sep 9' },
+  { id: 'r3', type: 'Change approved meal service time', detail: '4:00 PM', status: 'RESOLVED', date: 'Aug 31' },
+];
+
+export const MOCK_INBOX_REQUESTS = [
+  { id: 'q1', site: 'Janie C. Turner', type: 'Meal Increase', detail: '10 meals', by: 'M. Alvarez', date: 'Sep 15', status: 'NEW' },
+  { id: 'q2', site: 'BGC Cooke', type: 'Special Meals', detail: '2 meals', by: 'D. Price', date: 'Sep 15', status: 'NEW' },
+  { id: 'q3', site: 'Pleasant Oaks', type: 'Amount of milk on hand', detail: '30 units', by: 'T. Reed', date: 'Sep 14', status: 'NEW' },
+  { id: 'q4', site: 'Fields Rec Center', type: 'Sporks', detail: '150 units', by: 'P. Raman', date: 'Sep 14', status: 'IN_PROGRESS' },
+  { id: 'q5', site: 'Reverchon', type: 'Meal Decrease', detail: '5 meals', by: 'T. Reed', date: 'Sep 11', status: 'IN_PROGRESS' },
+  { id: 'q6', site: 'Anita Martinez', type: 'Condiments', detail: '40 units', by: 'J. Ellis', date: 'Sep 10', status: 'RESOLVED' },
+  { id: 'q7', site: 'Janie C. Turner', type: 'Sporks', detail: '200 units', by: 'M. Alvarez', date: 'Sep 9', status: 'RESOLVED' },
+  { id: 'q8', site: 'Kleberg Rylie', type: 'Dietary Restrictions', detail: '1 student', by: 'R. Nguyen', date: 'Sep 8', status: 'RESOLVED' },
+];
+
 export const MOCK_ADMIN_USERS = [
   { id: 'u1', name: 'Dana Whitfield', email: 'd.whitfield@example.org', role: 'ADMIN', sites: 'All sites', active: true },
   { id: 'u2', name: 'Maria Alvarez', email: 'm.alvarez@example.org', role: 'STAFF', sites: 'Janie C. Turner · Fields Rec Center', active: true },

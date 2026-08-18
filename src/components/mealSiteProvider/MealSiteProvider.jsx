@@ -247,28 +247,46 @@ export const MealSiteProvider = ({ children }) => {
 
   const [sitesData, setSitesData] = useState({});
   const [sitesDataLoading, setSitesDataLoading] = useState(false);
+  const [sitesDataError, setSitesDataError] = useState(false);
 
-  useEffect(() => {
+  // Fetch the valid/submitted dates for every site, retrying on failure so a
+  // single slow/failed backend response doesn't leave the calendar unusable
+  const fetchAllMeals = async () => {
+    const MAX_ATTEMPTS = 3;
+    const RETRY_DELAYS = [2000, 5000];
+
     setSitesDataLoading(true);
-    axios
-      .get(API_BASE_URL + '?type=allMeals')
-      .then((response) => {
-        // console.log('Data received:', response.data);
+    setSitesDataError(false);
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await axios.get(API_BASE_URL + '?type=allMeals', {
+          timeout: 60 * 1000,
+        });
         setSitesData(response.data);
         setDatesBySite(response.data);
-        // console.log('homeDates')
-        // console.log(response.data)
         setSitesDataLoading(false);
-      })
-      .catch((error) => {
-        // console.error('Error fetching data:', error);
-        logErrorMonitoring({
-          function_name: 'fetchAllMeals - MealSiteProvider',
-          error: error,
-          row_error: error?.stack,
-        });
-        setSitesDataLoading(false);
-      });
+        return;
+      } catch (error) {
+        if (attempt === MAX_ATTEMPTS) {
+          logErrorMonitoring({
+            function_name: 'fetchAllMeals - MealSiteProvider',
+            error: error,
+            row_error: error?.stack,
+          });
+          setSitesDataError(true);
+          setSitesDataLoading(false);
+          return;
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAYS[attempt - 1])
+        );
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchAllMeals();
   }, []);
 
   return (
@@ -325,6 +343,8 @@ export const MealSiteProvider = ({ children }) => {
         resetAllStates,
         sitesData,
         sitesDataLoading,
+        sitesDataError,
+        refetchAllMeals: fetchAllMeals,
       }}
     >
       {children}

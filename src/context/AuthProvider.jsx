@@ -49,6 +49,39 @@ export const AuthProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, [logout])
 
+  // Sliding session: user activity renews the expiration, so people are
+  // only logged out after 4 hours of INACTIVITY, never mid-work
+  useEffect(() => {
+    let lastRenewal = 0;
+
+    const renewSession = () => {
+      const now = Date.now();
+      // Throttle: renew at most once per minute
+      if (now - lastRenewal < 60 * 1000) return;
+
+      const storedUserJson = window.localStorage.getItem('user');
+      if (!storedUserJson) return;
+
+      const user = JSON.parse(storedUserJson);
+      // Only renew sessions that are still alive
+      if (user && user.expirationTime && now < user.expirationTime) {
+        lastRenewal = now;
+        user.expirationTime = now + 4 * 60 * 60 * 1000; // +4 hours
+        window.localStorage.setItem('user', JSON.stringify(user));
+      }
+    };
+
+    window.addEventListener('click', renewSession);
+    window.addEventListener('keydown', renewSession);
+    window.addEventListener('touchstart', renewSession);
+
+    return () => {
+      window.removeEventListener('click', renewSession);
+      window.removeEventListener('keydown', renewSession);
+      window.removeEventListener('touchstart', renewSession);
+    };
+  }, [])
+
   // Refresh user data from backend on mount
   useEffect(() => {
     if (!localStorageValue || !localStorageValue.email) {

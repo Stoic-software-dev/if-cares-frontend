@@ -39,6 +39,9 @@ const MealTable = () => {
     handleNextClick,
     dateValidationError,
     topRef,
+    sitesDataError,
+    sitesDataLoading,
+    refetchAllMeals,
   } = useContext(MealSiteContext);
 
   const validStudentData = Array.isArray(studentData) ? studentData : [];
@@ -243,6 +246,19 @@ const MealTable = () => {
                       {(dateError || dateValidationError) && (
                         <span className="text-xs text-red-600 ml-3 mt-1">
                           {dateValidationError || 'Date is required'}
+                        </span>
+                      )}
+                      {sitesDataError && (
+                        <span className="text-xs text-red-600 ml-3 mt-1">
+                          Available dates could not be loaded.{' '}
+                          <button
+                            type="button"
+                            onClick={refetchAllMeals}
+                            disabled={sitesDataLoading}
+                            className="underline font-semibold"
+                          >
+                            Retry
+                          </button>
                         </span>
                       )}
                     </div>

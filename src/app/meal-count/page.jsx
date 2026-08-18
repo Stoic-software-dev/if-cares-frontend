@@ -223,7 +223,11 @@ function MealCountScreen() {
                 <SignatureCanvas
                   ref={sigPad}
                   penColor="#1e293b"
-                  onEnd={() => setSigned(true)}
+                  onEnd={() => {
+                    // An accidental tap leaves a dot; only a real stroke counts.
+                    const points = sigPad.current.toData().reduce((n, stroke) => n + stroke.length, 0);
+                    setSigned(points >= 8);
+                  }}
                   clearOnResize={false}
                   canvasProps={{ width: sigWidth, height: 120, style: { display: 'block' } }}
                 />

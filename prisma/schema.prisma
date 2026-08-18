@@ -96,9 +96,10 @@ model MealCount {
   submittedByEmail String          @default("")
   createdAt        DateTime        @default(now())
 
-  site        Site             @relation(fields: [siteId], references: [id])
-  submittedBy User?            @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  site        Site                  @relation(fields: [siteId], references: [id])
+  submittedBy User?                 @relation(fields: [submittedById], references: [id], onDelete: SetNull)
   entries     MealCountEntry[]
+  corrections MealCountCorrection[]
 
   @@unique([siteId, date])
   @@index([siteId, date])
@@ -137,11 +138,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sites       UserSite[]
-  mealCounts  MealCount[]
-  requests    Request[]
-  auditLogs   AuditLog[]
-  resetTokens PasswordResetToken[]
+  sites            UserSite[]
+  mealCounts       MealCount[]
+  requests         Request[]
+  auditLogs        AuditLog[]
+  resetTokens      PasswordResetToken[]
+  corrections      MealCountCorrection[]
+  generatedReports GeneratedReport[]
 }
 
 model UserSite {
@@ -207,4 +210,43 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// Admin edit of a submitted count (STOIC-2201). The CURRENT values live on
+// MealCount/MealCountEntry; each correction stores the full prior snapshot,
+// so originals are never overwritten. A count with corrections is "corrected".
+model MealCountCorrection {
+  id               String   @id @default(cuid())
+  mealCountId      String
+  correctedById    String?
+  correctedByEmail String   @default("")
+  note             String   @default("")
+  // { timeIn, timeOut, entries: [{ number, name, age, attendance, ... }] }
+  previous         Json
+  createdAt        DateTime @default(now())
+
+  mealCount   MealCount @relation(fields: [mealCountId], references: [id], onDelete: Cascade)
+  correctedBy User?     @relation(fields: [correctedById], references: [id], onDelete: SetNull)
+
+  @@index([mealCountId])
+}
+
+// Consolidated claim PDFs (STOIC-2204): stored on generation, recoverable
+// without regenerating. File bytes live in object storage under storageKey.
+model GeneratedReport {
+  id             String   @id @default(cuid())
+  year           Int
+  month          Int // 1-12
+  state          String // "TX" | "OK"
+  kind           String // e.g. "claim-part1" | "claim-part2"
+  fileName       String
+  storageKey     String   @default("")
+  signedBy       String   @default("")
+  createdById    String?
+  createdByEmail String   @default("")
+  createdAt      DateTime @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([year, month, state])
 }

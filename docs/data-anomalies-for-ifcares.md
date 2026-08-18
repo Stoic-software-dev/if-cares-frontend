@@ -21,8 +21,8 @@ included for each one, so if you agree with everything you can simply reply "app
 It looks like an accidental copy rather than a real site.
 Our suggestion: leave it out of the migration.
 
-**2. Five students that appear twice with the same name in the same site.**
-Our suggestion: keep a single record for each of them. We will send you the five
+**2. Six students that appear twice with the same name in the same site.**
+Our suggestion: keep a single record for each of them. We will send you the six
 names separately so you can confirm.
 
 **3. Two students whose birthdate is in the year 2027.**

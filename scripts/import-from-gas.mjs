@@ -169,6 +169,34 @@ async function importStudents() {
   let deactivated = 0;
   let masterOnly = 0;
 
+  // A previous import may hold this (site, name) under a different GAS id
+  // (stale master-variant ids vs the roster's). The incoming id wins: entries
+  // are relinked to it and the stale row is removed.
+  async function upsertStudent(id, data) {
+    const payload = { where: { id }, create: { id, ...data }, update: data };
+    try {
+      await prisma.student.upsert(payload);
+    } catch (error) {
+      if (error?.code !== 'P2002') throw error;
+      const clash = await prisma.student.findFirst({
+        where: { siteId: data.siteId, name: data.name, NOT: { id } },
+        select: { id: true },
+      });
+      if (!clash) throw error;
+      warn(`${data.name}: stale id ${clash.id} superseded by ${id}`);
+      await prisma.student.update({
+        where: { id: clash.id },
+        data: { name: `${data.name} [superseded ${clash.id}]`, active: false },
+      });
+      await prisma.student.upsert(payload);
+      await prisma.mealCountEntry.updateMany({
+        where: { studentId: clash.id },
+        data: { studentId: id },
+      });
+      await prisma.student.delete({ where: { id: clash.id } });
+    }
+  }
+
   // Canonical (current-year prefixed) sites claim their roster ids first.
   const activeSites = sites
     .filter((s) => s.active)
@@ -224,11 +252,8 @@ async function importStudents() {
           siteId: site.id,
           active: true,
         };
-        await prisma.student.upsert({
-          where: { id }, // GAS id preserved verbatim — keys localStorage drafts
-          create: { id, ...data },
-          update: data,
-        });
+        // GAS id preserved verbatim — keys localStorage drafts
+        await upsertStudent(id, data);
       }
       imported++;
     }
@@ -285,22 +310,12 @@ async function importStudents() {
     nextNumberBySite.set(site.id, number);
 
     if (!DRY) {
-      await prisma.student.upsert({
-        where: { id },
-        create: {
-          id,
-          name,
-          number,
-          age: cleanAge(row.age),
-          birthdate: cleanBirthdate(row.birthdate),
-          siteId: site.id,
-        },
-        update: {
-          name,
-          age: cleanAge(row.age),
-          birthdate: cleanBirthdate(row.birthdate),
-          siteId: site.id,
-        },
+      await upsertStudent(id, {
+        name,
+        number,
+        age: cleanAge(row.age),
+        birthdate: cleanBirthdate(row.birthdate),
+        siteId: site.id,
       });
     }
     imported++;

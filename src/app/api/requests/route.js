@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
-import { requireUser, requireAdmin, requireSiteAccess } from '@/lib/auth';
+import { requireUser, requireSiteAccess, visibleSites } from '@/lib/auth';
 import { requestSchema } from '@/lib/validation';
 import { toCanonicalTime } from '@/lib/dates';
 import { logAudit } from '@/lib/audit';
@@ -39,12 +39,20 @@ export const POST = handle(async (req) => {
   return legacySuccess();
 });
 
+// Admins read everything; site staff read the requests of their own sites —
+// in 2.0 a request has a visible status instead of vanishing into an email.
 export const GET = handle(async (req) => {
-  await requireAdmin();
+  const session = await requireUser();
   const status = new URL(req.url).searchParams.get('status');
 
+  const where = status ? { status } : {};
+  if (session.user.role !== 'ADMIN') {
+    const sites = await visibleSites(session);
+    where.siteId = { in: sites.map((s) => s.id) };
+  }
+
   const requests = await prisma.request.findMany({
-    where: status ? { status } : undefined,
+    where,
     include: { site: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
   });

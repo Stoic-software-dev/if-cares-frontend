@@ -22,13 +22,14 @@ const DAY_LABELS = {
 // A tap on a submitted day opens its count; a missing day or today opens the
 // form. Other days do not navigate. Phones show the tinted number cell alone;
 // from md up the cells grow and carry a status label.
-export default function MonthCalendar({ month }) {
+export default function MonthCalendar({ month, site }) {
   const router = useRouter();
 
   const openDay = (day, status) => {
     const iso = `${month.year}-${String(month.monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    if (status === 'submitted') router.push(`/counts/${iso}`);
-    if (status === 'missing' || status === 'today') router.push(`/meal-count?date=${iso}`);
+    const siteQuery = `site=${encodeURIComponent(site ?? '')}`;
+    if (status === 'submitted') router.push(`/counts/${iso}?${siteQuery}`);
+    if (status === 'missing' || status === 'today') router.push(`/meal-count?date=${iso}&${siteQuery}`);
   };
 
   const cells = [

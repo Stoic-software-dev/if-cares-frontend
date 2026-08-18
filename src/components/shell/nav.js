@@ -1,13 +1,15 @@
-export const STAFF_NAV = [
+const STAFF_ITEMS = [
   { label: 'Dashboard', href: '/dashboard' },
   { label: 'Menus', href: '/menus' },
   { label: 'Requests', href: '/requests' },
 ];
 
-export const ADMIN_NAV = [
-  { label: 'Dashboard', href: '#' },
-  { label: 'Sites', href: '#' },
+const ADMIN_ITEMS = [
+  ...STAFF_ITEMS,
   { label: 'Users', href: '/admin/users' },
-  { label: 'Requests', href: '/admin/requests' },
-  { label: 'Reports', href: '#' },
+  { label: 'Inbox', href: '/admin/requests' },
 ];
+
+export function navItemsFor(admin) {
+  return admin ? ADMIN_ITEMS : STAFF_ITEMS;
+}

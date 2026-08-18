@@ -1,4 +1,5 @@
 import { Inter } from 'next/font/google';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
@@ -13,7 +14,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
         <Toaster position="top-center" />
       </body>
     </html>

@@ -1,21 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
 import BrandMark from '@/components/shell/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiPost } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, loading, setUser } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const signIn = (event) => {
+  useEffect(() => {
+    if (!loading && user) router.replace('/dashboard');
+  }, [loading, user, router]);
+
+  const signIn = async (event) => {
     event.preventDefault();
+    setError('');
     setSubmitting(true);
-    // Mock build: no credentials are checked.
-    router.push('/dashboard');
+    try {
+      const res = await apiPost('/api/auth/login', { email: email.trim(), password });
+      setUser(res.data);
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err.message);
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -34,6 +52,9 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.org"
               autoComplete="email"
               className="h-12 rounded-[10px] border-slate-300 text-base"
@@ -45,11 +66,21 @@ export default function LoginPage() {
             <Input
               id="password"
               type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
               className="h-12 rounded-[10px] border-slate-300 text-base"
             />
           </div>
+
+          {error && (
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-[15px] w-[15px] shrink-0 text-red-600" />
+              <span className="text-[13px] font-medium leading-snug text-red-700">{error}</span>
+            </div>
+          )}
 
           <Button type="submit" disabled={submitting} className="mt-1 h-[50px] rounded-[10px] text-[15px] font-semibold">
             {submitting ? 'Signing in…' : 'Sign in'}

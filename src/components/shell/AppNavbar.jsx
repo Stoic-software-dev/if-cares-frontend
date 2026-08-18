@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { useAuth, isAdmin } from '@/components/auth/AuthProvider';
 import BrandMark from '@/components/shell/BrandMark';
+import { navItemsFor } from '@/components/shell/nav';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,13 +14,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
-// Responsive top navigation. Phones get the brand and a menu button; from md
-// up it becomes the full navbar with section links and the signed-in user.
-export default function AppNavbar({ items = [], active, user }) {
-  const router = useRouter();
-  const initials = user ? `${user.name[0]}${user.lastname[0]}` : '';
-
-  const logOut = () => router.push('/login');
+// Responsive top navigation bound to the signed-in session. Phones get the
+// brand and a menu button; from md up it becomes the full navbar with section
+// links and the user menu.
+export default function AppNavbar({ active }) {
+  const { user, logOut } = useAuth();
+  const items = navItemsFor(isAdmin(user));
+  const fullName = user ? `${user.name} ${user.lastname}`.trim() : '';
+  const initials = user ? `${user.name?.[0] ?? ''}${user.lastname?.[0] ?? ''}`.toUpperCase() : '';
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -52,9 +54,7 @@ export default function AppNavbar({ items = [], active, user }) {
               type="button"
               className="hidden items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-slate-50 md:flex"
             >
-              <span className="text-[13px] font-medium text-slate-700">
-                {user ? `${user.name} ${user.lastname}` : ''}
-              </span>
+              <span className="text-[13px] font-medium text-slate-700">{fullName}</span>
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
                 {initials}
               </span>

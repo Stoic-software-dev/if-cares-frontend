@@ -11,12 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ADMIN_NAV } from '@/components/shell/nav';
+import Protected from '@/components/auth/Protected';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MOCK_ADMIN_USERS } from '@/lib/mock-data';
-
-const ADMIN_USER = { name: 'Dana', lastname: 'Whitfield' };
 
 function RoleBadge({ role }) {
   const admin = role === 'ADMIN';
@@ -46,7 +44,7 @@ function StatusDot({ active }) {
   );
 }
 
-export default function AdminUsersPage() {
+function AdminUsersScreen() {
   const [query, setQuery] = useState('');
   const [activeOnly, setActiveOnly] = useState(true);
 
@@ -65,7 +63,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppNavbar items={ADMIN_NAV} active="Users" user={ADMIN_USER} />
+      <AppNavbar active="Users" />
 
       <main className="mx-auto flex max-w-screen-xl flex-col gap-4 px-8 py-7">
         <div className="flex items-end justify-between gap-4">
@@ -192,5 +190,13 @@ export default function AdminUsersPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function AdminUsersPage() {
+  return (
+    <Protected adminOnly>
+      <AdminUsersScreen />
+    </Protected>
   );
 }

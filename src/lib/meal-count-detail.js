@@ -17,7 +17,10 @@ export async function loadMealCountDetail(session, siteName, ymd) {
 
   const count = await prisma.mealCount.findUnique({
     where: { siteId_date: { siteId: site.id, date } },
-    include: { entries: { orderBy: { number: 'asc' } } },
+    include: {
+      entries: { orderBy: { number: 'asc' } },
+      corrections: { orderBy: { createdAt: 'desc' } },
+    },
   });
   if (!count) throw new ApiError(404, 'No meal count was submitted for this date.');
 
@@ -38,6 +41,12 @@ export async function loadMealCountDetail(session, siteName, ymd) {
     signature: count.signature,
     source: count.source,
     submittedBy: count.submittedByEmail,
+    corrected: count.corrections.length > 0,
+    corrections: count.corrections.map((c) => ({
+      by: c.correctedByEmail,
+      at: c.createdAt.toISOString(),
+      note: c.note,
+    })),
     totals,
     entries: count.entries.map((entry) => ({
       number: entry.number,

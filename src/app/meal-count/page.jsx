@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import SignatureCanvas from 'react-signature-canvas';
 import { AlertCircle, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
+import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppNavbar from '@/components/shell/AppNavbar';
 import MobileHeader from '@/components/shell/MobileHeader';
@@ -54,12 +54,16 @@ function MealCountScreen() {
   const { user } = useAuth();
   const iso = searchParams.get('date') ?? todayYmd();
   const site = searchParams.get('site') ?? assignedSiteNames(user)?.[0] ?? '';
+  // Admin correction of an already-submitted count (STOIC-2201): the rows come
+  // from the submitted entries, prefilled, and saving records a correction.
+  const correcting = searchParams.get('correct') === '1' && isAdmin(user);
 
   const [roster, setRoster] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [marks, setMarks] = useState(new Map());
   const [timeIn, setTimeIn] = useState('15:30');
   const [timeOut, setTimeOut] = useState('');
+  const [note, setNote] = useState('');
   const [signed, setSigned] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -70,6 +74,36 @@ function MealCountScreen() {
   const loadRoster = () => {
     setLoadError('');
     setRoster(null);
+    if (correcting) {
+      apiGet(`/api/meal-counts/detail?site=${encodeURIComponent(site)}&date=${iso}`)
+        .then(({ data }) => {
+          const rows = data.entries.map((entry, index) => ({
+            id: `entry-${index}`,
+            number: entry.number,
+            name: entry.name,
+            age: entry.age ?? '',
+          }));
+          setRoster(rows);
+          setMarks(
+            new Map(
+              data.entries.map((entry, index) => [
+                `entry-${index}`,
+                {
+                  att: entry.attendance,
+                  brk: entry.breakfast,
+                  lun: entry.lunch,
+                  snk: entry.snack,
+                  sup: entry.supper,
+                },
+              ])
+            )
+          );
+          setTimeIn(data.timeIn ? data.timeIn.slice(0, 5) : '');
+          setTimeOut(data.timeOut ? data.timeOut.slice(0, 5) : '');
+        })
+        .catch((err) => setLoadError(err.message));
+      return;
+    }
     apiGet(`/api/students/roster?site=${encodeURIComponent(site)}`)
       .then((rows) => {
         setRoster(rows);
@@ -78,7 +112,7 @@ function MealCountScreen() {
       .catch((err) => setLoadError(err.message));
   };
 
-  useEffect(loadRoster, [site]);
+  useEffect(loadRoster, [site, correcting]);
 
   useEffect(() => {
     // The canvas element needs real width/height attributes; sizing it with
@@ -107,7 +141,7 @@ function MealCountScreen() {
   if (!timeIn) missing.push('time in');
   if (!timeOut) missing.push('time out');
   if (markedCount === 0) missing.push('attendance');
-  if (!signed) missing.push('signature');
+  if (!signed && !correcting) missing.push('signature');
   const canSubmit = missing.length === 0 && !submitting;
 
   const clearSignature = () => {
@@ -121,7 +155,24 @@ function MealCountScreen() {
       return;
     }
     setSubmitting(true);
+    const rows = roster.map((s) => {
+      const m = marks.get(s.id);
+      return [s.number, s.name, s.age, m.att, m.brk, m.lun, m.snk, m.sup];
+    });
     try {
+      if (correcting) {
+        await apiPost('/api/meal-counts/correct', {
+          site,
+          date: iso,
+          timeIn,
+          timeOut,
+          note: note.trim(),
+          data: rows,
+        });
+        toast.success(`Correction saved for ${dateLabel(iso)}`);
+        router.push(`/counts/${iso}?site=${encodeURIComponent(site)}`);
+        return;
+      }
       await apiPost('/api/meal-counts', {
         actionType: 'mealCount',
         values: {
@@ -132,10 +183,7 @@ function MealCountScreen() {
           timeIn,
           timeOut,
           signature: sigPad.current.toDataURL('image/png'),
-          data: roster.map((s) => {
-            const m = marks.get(s.id);
-            return [s.number, s.name, s.age, m.att, m.brk, m.lun, m.snk, m.sup];
-          }),
+          data: rows,
         },
       });
       toast.success(`Meal count submitted for ${dateLabel(iso)}`);
@@ -152,11 +200,16 @@ function MealCountScreen() {
         <AppNavbar active="Dashboard" />
       </div>
       <div className="md:hidden">
-        <MobileHeader title={dateLabel(iso)} subtitle={site} />
+        <MobileHeader title={correcting ? `Correcting - ${dateLabel(iso)}` : dateLabel(iso)} subtitle={site} />
       </div>
 
       <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-4 md:max-w-5xl md:px-8 md:pt-7">
-        <PageHeader title={dateLabel(iso)} subtitle={site} />
+        <PageHeader title={correcting ? `Correcting - ${dateLabel(iso)}` : dateLabel(iso)} subtitle={site} />
+        {correcting && (
+          <div className="rounded-[10px] bg-amber-50 px-3.5 py-2.5 text-xs leading-relaxed text-amber-800 md:text-[13px]">
+            You are editing a submitted count. The original values stay on record as a correction history.
+          </div>
+        )}
 
         <section className="flex flex-col gap-2.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Service time</span>
@@ -270,6 +323,7 @@ function MealCountScreen() {
           )}
         </section>
 
+        {!correcting && (
         <section className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Certification</span>
@@ -310,6 +364,23 @@ function MealCountScreen() {
             </p>
           </div>
         </section>
+        )}
+
+        {correcting && (
+          <section className="flex flex-col gap-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+              Correction note - optional
+            </span>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Why is this count being corrected?"
+              maxLength={500}
+              className="h-12 w-full rounded-[10px] border border-slate-300 bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+            />
+          </section>
+        )}
 
         <section className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           {missing.length > 0 && attempted ? (
@@ -330,7 +401,7 @@ function MealCountScreen() {
               !canSubmit && 'cursor-not-allowed bg-slate-200 text-slate-400 hover:bg-slate-200'
             )}
           >
-            {submitting ? 'Submitting…' : 'Submit meal count'}
+            {submitting ? 'Saving…' : correcting ? 'Save correction' : 'Submit meal count'}
           </Button>
         </section>
       </main>

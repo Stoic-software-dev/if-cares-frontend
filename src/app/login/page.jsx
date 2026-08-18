@@ -8,6 +8,13 @@ import BrandMark from '@/components/shell/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { apiPost } from '@/lib/api-client';
 
 export default function LoginPage() {
@@ -17,6 +24,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
@@ -87,9 +95,13 @@ export default function LoginPage() {
           </Button>
 
           <div className="flex justify-center">
-            <a href="#" className="flex items-center px-2 py-3 text-sm font-medium text-primary">
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              className="flex items-center px-2 py-3 text-sm font-medium text-primary"
+            >
               Forgot your password?
-            </a>
+            </button>
           </div>
         </form>
 
@@ -97,6 +109,18 @@ export default function LoginPage() {
           <p className="text-xs text-slate-400">Trouble signing in? Contact your administrator.</p>
         </div>
       </div>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              Ask your administrator for a password link — they can send you one from the Users screen,
+              and it lets you set a new password right away.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

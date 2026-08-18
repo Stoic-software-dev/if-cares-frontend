@@ -1,10 +1,10 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, Download, Loader2 } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { AlertCircle, Check, Download, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
+import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppNavbar from '@/components/shell/AppNavbar';
 import MobileHeader from '@/components/shell/MobileHeader';
@@ -47,6 +47,7 @@ function Mark({ value }) {
 }
 
 function CountDetailScreen() {
+  const router = useRouter();
   const { date } = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -133,12 +134,45 @@ function CountDetailScreen() {
                     Imported
                   </span>
                 )}
+                {count.corrected && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700">
+                    <Pencil className="h-[11px] w-[11px]" strokeWidth={2.5} />
+                    Corrected
+                  </span>
+                )}
                 <span className="ml-auto text-[13px] font-semibold tabular-nums text-slate-700">
                   {timeLabel(count.timeIn)} – {timeLabel(count.timeOut)}
                 </span>
               </div>
               {count.submittedBy && count.submittedBy !== 'gas-import' && (
                 <span className="text-xs text-slate-400">Submitted by {count.submittedBy}</span>
+              )}
+              {count.corrected && (
+                <div className="rounded-[10px] bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+                  <strong className="font-semibold">Corrected by {count.corrections[0].by}</strong> ·{' '}
+                  {new Date(count.corrections[0].at).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                  {count.corrections[0].note && (
+                    <>
+                      <br />
+                      {count.corrections[0].note}
+                    </>
+                  )}
+                  {count.corrections.length > 1 && (
+                    <>
+                      <br />
+                      <span className="text-amber-600">
+                        {count.corrections.length - 1} earlier correction{count.corrections.length > 2 ? 's' : ''} on record
+                      </span>
+                    </>
+                  )}
+                  <br />
+                  <span className="text-amber-600">Original values are kept.</span>
+                </div>
               )}
             </section>
 
@@ -224,10 +258,21 @@ function CountDetailScreen() {
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 {downloading ? 'Preparing…' : 'Download PDF'}
               </Button>
+              {isAdmin(user) && (
+                <Button
+                  onClick={() => router.push(`/meal-count?date=${date}&site=${encodeURIComponent(site)}&correct=1`)}
+                  className="h-12 flex-[1.4] rounded-[10px] font-semibold md:flex-none md:px-7"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit count
+                </Button>
+              )}
             </div>
-            <span className="-mt-2 text-center text-[11px] text-slate-400 md:text-right">
-              Admin corrections arrive with the next build phase
-            </span>
+            {isAdmin(user) && (
+              <span className="-mt-2 text-center text-[11px] text-slate-400 md:text-right">
+                Edits are saved as corrections — the original values are always kept
+              </span>
+            )}
           </>
         )}
       </main>

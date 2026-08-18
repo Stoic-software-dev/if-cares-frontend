@@ -44,18 +44,28 @@ function StatusDot({ active }) {
   );
 }
 
+const SITE_OPTIONS = [
+  ...new Set(
+    MOCK_ADMIN_USERS.flatMap((u) => u.sites.split(' · ')).filter((s) => s !== 'All sites')
+  ),
+].sort();
+
 function AdminUsersScreen() {
   const [query, setQuery] = useState('');
   const [activeOnly, setActiveOnly] = useState(true);
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [siteFilter, setSiteFilter] = useState('ALL');
 
   const users = useMemo(() => {
     const q = query.trim().toLowerCase();
     return MOCK_ADMIN_USERS.filter((user) => {
       if (activeOnly && !user.active) return false;
+      if (roleFilter !== 'ALL' && user.role !== roleFilter) return false;
+      if (siteFilter !== 'ALL' && user.sites !== 'All sites' && !user.sites.includes(siteFilter)) return false;
       if (!q) return true;
       return user.name.toLowerCase().includes(q) || user.email.toLowerCase().includes(q);
     });
-  }, [query, activeOnly]);
+  }, [query, activeOnly, roleFilter, siteFilter]);
 
   const adminCount = MOCK_ADMIN_USERS.filter((u) => u.role === 'ADMIN').length;
 
@@ -90,14 +100,72 @@ function AdminUsersScreen() {
               className="flex-1 bg-transparent text-[13px] text-slate-900 outline-none placeholder:text-slate-400"
             />
           </label>
-          <button type="button" className="flex h-10 items-center gap-2 rounded-[9px] border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700">
-            Role
-            <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-          </button>
-          <button type="button" className="flex h-10 items-center gap-2 rounded-[9px] border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700">
-            Site
-            <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex h-10 items-center gap-2 rounded-[9px] border px-3 text-[13px]',
+                  roleFilter === 'ALL'
+                    ? 'border-slate-300 bg-white font-medium text-slate-700 transition-colors hover:border-slate-400'
+                    : 'border-teal-200 bg-teal-50 font-semibold text-primary'
+                )}
+              >
+                {roleFilter === 'ALL' ? 'Role' : `Role: ${roleFilter === 'ADMIN' ? 'Admin' : 'Staff'}`}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {[
+                { key: 'ALL', label: 'All roles' },
+                { key: 'ADMIN', label: 'Admin' },
+                { key: 'STAFF', label: 'Staff' },
+              ].map((option) => (
+                <DropdownMenuItem
+                  key={option.key}
+                  onClick={() => setRoleFilter(option.key)}
+                  className={cn('text-[13px]', roleFilter === option.key && 'font-semibold text-primary')}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex h-10 items-center gap-2 rounded-[9px] border px-3 text-[13px]',
+                  siteFilter === 'ALL'
+                    ? 'border-slate-300 bg-white font-medium text-slate-700 transition-colors hover:border-slate-400'
+                    : 'border-teal-200 bg-teal-50 font-semibold text-primary'
+                )}
+              >
+                {siteFilter === 'ALL' ? 'Site' : `Site: ${siteFilter}`}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-y-auto">
+              <DropdownMenuItem
+                onClick={() => setSiteFilter('ALL')}
+                className={cn('text-[13px]', siteFilter === 'ALL' && 'font-semibold text-primary')}
+              >
+                All sites
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {SITE_OPTIONS.map((name) => (
+                <DropdownMenuItem
+                  key={name}
+                  onClick={() => setSiteFilter(name)}
+                  className={cn('text-[13px]', siteFilter === name && 'font-semibold text-primary')}
+                >
+                  {name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {activeOnly && (
             <button
               type="button"

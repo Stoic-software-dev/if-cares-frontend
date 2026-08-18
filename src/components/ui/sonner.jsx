@@ -8,7 +8,7 @@ const Toaster = ({ ...props }) => {
       theme="light"
       className="toaster group"
       toastOptions={{
-        duration: 10000,
+        duration: 5000,
         classNames: {
           toast:
             'group toast group-[.toaster]:rounded-xl group-[.toaster]:border-slate-200 group-[.toaster]:bg-white group-[.toaster]:text-slate-900 group-[.toaster]:shadow-md',

@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, Download } from 'lucide-react';
+import { AlertCircle, Check, Download, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppNavbar from '@/components/shell/AppNavbar';
@@ -53,6 +54,29 @@ function CountDetailScreen() {
 
   const [count, setCount] = useState(null);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/meal-counts/pdf?site=${encodeURIComponent(site)}&date=${date}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || 'PDF export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MealCount_${site.replace(/[^\w-]+/g, '_')}_${date}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const load = () => {
     setError('');
@@ -191,13 +215,18 @@ function CountDetailScreen() {
             </section>
 
             <div className="flex gap-2.5 md:justify-end">
-              <Button variant="outline" className="h-12 flex-1 rounded-[10px] border-slate-300 font-semibold text-slate-700 md:flex-none md:px-6">
-                <Download className="h-4 w-4" />
-                PDF
+              <Button
+                variant="outline"
+                disabled={downloading}
+                onClick={downloadPdf}
+                className="h-12 flex-1 rounded-[10px] border-slate-300 font-semibold text-slate-700 md:flex-none md:px-6"
+              >
+                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {downloading ? 'Preparing…' : 'Download PDF'}
               </Button>
             </div>
             <span className="-mt-2 text-center text-[11px] text-slate-400 md:text-right">
-              PDF export and admin corrections arrive with the next build phase
+              Admin corrections arrive with the next build phase
             </span>
           </>
         )}

@@ -47,7 +47,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-8">
       <div className="flex w-full max-w-sm flex-col gap-5 md:max-w-md md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-10">
-        <BrandMark size="lg" withProgram />
+        <BrandMark size="lg" />
 
         <div className="mt-2 flex flex-col gap-1.5">
           <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Sign in</h1>

@@ -42,7 +42,7 @@ function ResetPasswordScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-8">
       <div className="flex w-full max-w-sm flex-col gap-5 md:max-w-md md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-10">
-        <BrandMark size="lg" withProgram />
+        <BrandMark size="lg" />
 
         {done ? (
           <div className="flex flex-col items-start gap-3">

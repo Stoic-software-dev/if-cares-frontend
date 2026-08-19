@@ -7,6 +7,7 @@
 //   node scripts/import-history.mjs                         # import all active sites
 //   node scripts/import-history.mjs --site="2025/2026 TX BGC COOKE"
 //   node scripts/import-history.mjs --from-snapshots        # offline, from saved JSON
+//   node scripts/import-history.mjs --resume                # snapshot if saved, else fetch
 //
 // Rules:
 // - Tab names (M/D/YYYY) are the authoritative dates — never timezone math.
@@ -14,6 +15,7 @@
 // - GAS_IMPORT stubs are completed in place (times + entries); missing counts
 //   are created as GAS_IMPORT. Entries are replaced wholesale (idempotent).
 
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { toCanonicalTime } from '../src/lib/dates.js';
 
@@ -26,6 +28,7 @@ try {
 const args = process.argv.slice(2);
 const PARSE_ONLY = args.includes('--parse-only');
 const FROM_SNAPSHOTS = args.includes('--from-snapshots');
+const RESUME = args.includes('--resume');
 const ONLY_SITE = args.find((a) => a.startsWith('--site='))?.slice('--site='.length).replace(/^"|"$/g, '');
 
 const GAS = process.env.GAS_BASE_URL;
@@ -273,6 +276,9 @@ async function main() {
     let data;
     if (item.snapshotFile) {
       data = JSON.parse(await readFile(item.snapshotFile, 'utf8'));
+    } else if (RESUME && existsSync(`${SNAP_DIR}/${sanitize(item.name)}.json`)) {
+      console.log(`▸ ${item.name} — from snapshot (resume)`);
+      data = JSON.parse(await readFile(`${SNAP_DIR}/${sanitize(item.name)}.json`, 'utf8'));
     } else {
       console.log(`▸ ${item.name} — fetching…`);
       data = await fetchSiteHistory(item.name);

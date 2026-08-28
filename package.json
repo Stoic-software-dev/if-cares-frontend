@@ -14,7 +14,9 @@
     "db:import": "node scripts/import-from-gas.mjs",
     "db:import:master": "node scripts/import-master.mjs",
     "db:import:history": "node scripts/import-history.mjs",
-    "db:parity": "node scripts/verify-parity.mjs"
+    "db:parity": "node scripts/verify-parity.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "drive:selftest": "node scripts/drive-selftest.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

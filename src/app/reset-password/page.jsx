@@ -2,12 +2,14 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CircleCheck } from 'lucide-react';
 import BrandMark from '@/components/shell/BrandMark';
+import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { apiPost } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 
 function ResetPasswordScreen() {
   const router = useRouter();
@@ -18,14 +20,17 @@ function ResetPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
+  const longEnough = password.length >= 8;
+  const matches = confirm.length > 0 && password === confirm;
+
   const submit = async (event) => {
     event.preventDefault();
     setError('');
-    if (password.length < 8) {
+    if (!longEnough) {
       setError('The password needs at least 8 characters.');
       return;
     }
-    if (password !== confirm) {
+    if (!matches) {
       setError('The passwords do not match.');
       return;
     }
@@ -40,61 +45,80 @@ function ResetPasswordScreen() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-8">
-      <div className="flex w-full max-w-sm flex-col gap-5 md:max-w-md md:rounded-2xl md:border md:border-slate-200 md:bg-white md:p-10">
+    <main className="flex min-h-[100dvh] items-center justify-center px-6 py-10">
+      <div className="absolute right-5 top-5">
+        <ThemeToggle />
+      </div>
+
+      <div className="flex w-full max-w-[22rem] flex-col gap-6">
         <BrandMark size="lg" className="self-center" />
 
         {done ? (
-          <div className="flex flex-col items-start gap-3">
-            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-            <h1 className="text-[24px] font-bold tracking-tight text-slate-900">Password updated</h1>
-            <p className="text-sm text-slate-500">You can sign in with your new password now.</p>
-            <Button onClick={() => router.push('/login')} className="mt-2 h-12 w-full rounded-[10px] text-[15px] font-semibold">
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-success-border bg-success-soft p-5">
+            <CircleCheck className="h-7 w-7 text-success" />
+            <h1 className="text-[22px] font-bold tracking-tight text-success-text">Password updated</h1>
+            <p className="text-[13px] leading-relaxed text-success-text/90">
+              You can sign in with your new password now.
+            </p>
+            <Button onClick={() => router.push('/login')} size="touch" className="mt-2">
               Go to sign in
             </Button>
           </div>
         ) : (
           <>
-            <div className="mt-2 flex flex-col gap-1.5">
-              <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Set a new password</h1>
-              <p className="text-sm text-slate-500">Choose the password you&apos;ll sign in with.</p>
+            <div className="flex flex-col gap-1.5">
+              <h1 className="text-[26px] font-bold tracking-tight text-foreground">Set a new password</h1>
+              <p className="text-[13px] text-muted-foreground">Choose the password you will sign in with.</p>
             </div>
 
-            <form onSubmit={submit} className="mt-1 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-password" className="text-[13px] text-slate-700">New password</Label>
+            <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+              <Field
+                label="New password"
+                htmlFor="new-password"
+                hint="At least 8 characters."
+              >
                 <Input
                   id="new-password"
                   type="password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => setPassword(event.target.value)}
                   autoComplete="new-password"
-                  className="h-12 rounded-[10px] border-slate-300 text-base"
+                  className="h-12"
                 />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="confirm-password" className="text-[13px] text-slate-700">Confirm password</Label>
+              </Field>
+
+              <Field
+                label="Confirm password"
+                htmlFor="confirm-password"
+                error={confirm.length > 0 && !matches ? 'The passwords do not match.' : undefined}
+              >
                 <Input
                   id="confirm-password"
                   type="password"
                   required
                   value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
+                  onChange={(event) => setConfirm(event.target.value)}
                   autoComplete="new-password"
-                  className="h-12 rounded-[10px] border-slate-300 text-base"
+                  aria-invalid={confirm.length > 0 && !matches}
+                  className="h-12"
                 />
-              </div>
+              </Field>
+
+              <ul className="flex flex-col gap-1.5">
+                <Requirement met={longEnough}>8 characters or more</Requirement>
+                <Requirement met={matches}>Both fields match</Requirement>
+              </ul>
 
               {error && (
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="mt-0.5 h-[15px] w-[15px] shrink-0 text-red-600" />
-                  <span className="text-[13px] font-medium leading-snug text-red-700">{error}</span>
-                </div>
+                <p role="alert" className="flex items-start gap-2 rounded-md bg-destructive-soft px-3 py-2.5">
+                  <AlertCircle className="mt-px h-4 w-4 shrink-0 text-destructive" />
+                  <span className="text-[13px] font-medium leading-snug text-destructive-text">{error}</span>
+                </p>
               )}
 
-              <Button type="submit" disabled={submitting} className="mt-1 h-[50px] rounded-[10px] text-[15px] font-semibold">
-                {submitting ? 'Saving…' : 'Save password'}
+              <Button type="submit" loading={submitting} size="touch" className="mt-1">
+                {submitting ? 'Saving' : 'Save password'}
               </Button>
             </form>
           </>
@@ -104,9 +128,23 @@ function ResetPasswordScreen() {
   );
 }
 
+function Requirement({ met, children }) {
+  return (
+    <li
+      className={cn(
+        'flex items-center gap-2 text-[12.5px] transition-colors',
+        met ? 'text-success-text' : 'text-muted-foreground'
+      )}
+    >
+      <CircleCheck className={cn('h-3.5 w-3.5', met ? 'text-success' : 'text-muted-foreground/50')} />
+      {children}
+    </li>
+  );
+}
+
 export default function ResetPasswordPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <ResetPasswordScreen />
     </Suspense>
   );

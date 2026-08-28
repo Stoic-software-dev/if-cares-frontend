@@ -1,45 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ChevronDown, Send } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Inbox, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
-import AppNavbar from '@/components/shell/AppNavbar';
+import AppShell from '@/components/shell/AppShell';
+import PageHeader from '@/components/shell/PageHeader';
 import StatusBadge from '@/components/requests/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Field, NativeSelect } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Segmented } from '@/components/ui/segmented';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPost } from '@/lib/api-client';
+import { SITES_PATH, cachedGet } from '@/lib/data-cache';
+import { REQUEST_TYPES, TYPE_WITH_TIME, requestDate, requestDetail } from '@/lib/requests';
+import { shortSiteName } from '@/lib/sites';
 import { cn } from '@/lib/utils';
-
-// The eight request types of the current app, verbatim.
-const REQUEST_TYPES = [
-  'Sporks',
-  'Meal Increase',
-  'Meal Decrease',
-  'Change approved meal service time',
-  'Condiments',
-  'Special Meals',
-  'Dietary Restrictions',
-  'Amount of milk on hand',
-];
-
-const TYPE_WITH_TIME = 'Change approved meal service time';
-
-function detailLabel(request) {
-  if (request.time) {
-    const [h, m] = request.time.split(':').map(Number);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-  }
-  if (request.amount != null) return `${request.amount} units`;
-  return '—';
-}
-
-function dateLabel(isoString) {
-  return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 function RequestsScreen() {
   const { user } = useAuth();
@@ -52,19 +31,20 @@ function RequestsScreen() {
   const [time, setTime] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [requests, setRequests] = useState(null);
   const [listError, setListError] = useState('');
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    if (!ownSites) {
-      apiGet('/api/sites')
-        .then((list) => {
-          const names = list.map((s) => s.name);
-          setSites(names);
-          setSite((current) => current || names[0] || '');
-        })
-        .catch(() => {});
-    }
+    if (ownSites) return;
+    cachedGet(SITES_PATH)
+      .then((list) => {
+        const names = list.map((entry) => entry.name);
+        setSites(names);
+        setSite((current) => current || names[0] || '');
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -79,8 +59,7 @@ function RequestsScreen() {
 
   const needsTime = type === TYPE_WITH_TIME;
   const needsAmount = type !== '' && !needsTime;
-  const valid =
-    site !== '' && type !== '' && (needsTime ? time !== '' : amount !== '' && Number(amount) > 0);
+  const valid = site !== '' && type !== '' && (needsTime ? time !== '' : amount !== '' && Number(amount) > 0);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -96,7 +75,7 @@ function RequestsScreen() {
         ...(needsAmount ? { amount: Number(amount) } : {}),
         ...(needsTime ? { time } : {}),
       });
-      toast.success('Request sent — the IF Cares team was notified');
+      toast.success('Request sent to the IF Cares team');
       setType('');
       setAmount('');
       setTime('');
@@ -109,174 +88,214 @@ function RequestsScreen() {
     }
   };
 
+  const counts = useMemo(() => {
+    const list = requests ?? [];
+    return {
+      all: list.length,
+      open: list.filter((request) => request.status !== 'RESOLVED').length,
+      resolved: list.filter((request) => request.status === 'RESOLVED').length,
+    };
+  }, [requests]);
+
+  const visible = useMemo(() => {
+    const list = requests ?? [];
+    if (filter === 'open') return list.filter((request) => request.status !== 'RESOLVED');
+    if (filter === 'resolved') return list.filter((request) => request.status === 'RESOLVED');
+    return list;
+  }, [requests, filter]);
+
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-5 md:max-w-screen-xl md:px-8 md:pt-7">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Requests</h1>
-        <p className="text-[13px] text-slate-500">Ask the IF Cares team for supplies or changes for your site.</p>
-      </div>
+    <AppShell>
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title="Requests"
+          subtitle="Ask the IF Cares team for supplies or changes at your site."
+        />
 
-      <div className="flex flex-col gap-6 md:grid md:grid-cols-[420px_minmax(0,1fr)] md:items-start md:gap-8">
-        <form
-          onSubmit={submit}
-          className="flex flex-col gap-4 rounded-[14px] border border-slate-200 bg-white p-4 md:sticky md:top-6 md:p-5"
-        >
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">New request</span>
+        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start lg:gap-8">
+          <form
+            onSubmit={submit}
+            className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 md:p-5 lg:sticky lg:top-[76px]"
+            noValidate
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              New request
+            </span>
 
-          {sites.length > 1 && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="request-site" className="text-[13px] text-slate-700">Site</Label>
-              <div className="relative">
-                <select
+            {sites.length === 0 && (
+              <p className="rounded-md bg-muted px-3 py-2.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                No site is assigned to your account yet, so there is nothing to request for. An administrator
+                assigns them.
+              </p>
+            )}
+
+            {sites.length > 1 && (
+              <Field label="Site" htmlFor="request-site">
+                <NativeSelect
                   id="request-site"
                   value={site}
-                  onChange={(e) => setSite(e.target.value)}
-                  className="h-12 w-full appearance-none rounded-[10px] border border-slate-300 bg-white px-3.5 pr-10 text-sm font-medium text-slate-900 outline-none transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15"
+                  onChange={(event) => setSite(event.target.value)}
+                  className="h-12"
                 >
                   {sites.map((name) => (
-                    <option key={name} value={name}>{name}</option>
+                    <option key={name} value={name}>
+                      {shortSiteName(name)}
+                    </option>
                   ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              </div>
-            </div>
-          )}
+                </NativeSelect>
+              </Field>
+            )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="request-type" className="text-[13px] text-slate-700">Request type</Label>
-            <div className="relative">
-              <select
+            <Field
+              label="Request type"
+              htmlFor="request-type"
+              error={attempted && type === '' ? 'Pick what you need.' : undefined}
+            >
+              <NativeSelect
                 id="request-type"
                 value={type}
-                onChange={(e) => setType(e.target.value)}
-                className={cn(
-                  'h-12 w-full appearance-none rounded-[10px] border bg-white px-3.5 pr-10 text-sm font-medium outline-none transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
-                  type === '' ? 'text-slate-400' : 'text-slate-900',
-                  attempted && type === '' ? 'border-[1.5px] border-red-600' : 'border-slate-300'
-                )}
+                onChange={(event) => setType(event.target.value)}
+                aria-invalid={attempted && type === ''}
+                className={cn('h-12', type === '' && 'text-muted-foreground')}
               >
-                <option value="">Select a type…</option>
-                {REQUEST_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                <option value="">Select a type</option>
+                {REQUEST_TYPES.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
                 ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            </div>
-            {attempted && type === '' && (
-              <span className="text-xs font-medium text-red-700">Please select a request type</span>
+              </NativeSelect>
+            </Field>
+
+            {needsAmount && (
+              <Field
+                label="Amount"
+                htmlFor="request-amount"
+                hint="How many units the site needs."
+                error={attempted && (amount === '' || Number(amount) <= 0) ? 'Enter a number above zero.' : undefined}
+              >
+                <Input
+                  id="request-amount"
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                  placeholder="10"
+                  aria-invalid={attempted && (amount === '' || Number(amount) <= 0)}
+                  className="h-12"
+                />
+              </Field>
             )}
-          </div>
 
-          {needsAmount && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="request-amount" className="text-[13px] text-slate-700">Amount</Label>
-              <input
-                id="request-amount"
-                type="number"
-                min="1"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 10"
-                className={cn(
-                  'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
-                  attempted && (amount === '' || Number(amount) <= 0)
-                    ? 'border-[1.5px] border-red-600'
-                    : 'border-slate-300'
-                )}
-              />
+            {needsTime && (
+              <Field
+                label="New service time"
+                htmlFor="request-time"
+                error={attempted && time === '' ? 'Pick the new time.' : undefined}
+              >
+                <Input
+                  id="request-time"
+                  type="time"
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                  aria-invalid={attempted && time === ''}
+                  className="h-12 tabular-nums"
+                />
+              </Field>
+            )}
+
+            <Button type="submit" loading={submitting} disabled={sites.length === 0} size="touch" className="mt-1">
+              {!submitting && <Send />}
+              {submitting ? 'Sending' : 'Send request'}
+            </Button>
+          </form>
+
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                My requests
+              </span>
+              {requests && requests.length > 0 && (
+                <Segmented
+                  ariaLabel="Filter requests"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    { value: 'all', label: 'All', count: counts.all },
+                    { value: 'open', label: 'Open', count: counts.open },
+                    { value: 'resolved', label: 'Resolved', count: counts.resolved },
+                  ]}
+                  className="sm:w-auto"
+                />
+              )}
             </div>
-          )}
 
-          {needsTime && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="request-time" className="text-[13px] text-slate-700">New service time</Label>
-              <input
-                id="request-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className={cn(
-                  'h-12 w-full rounded-[10px] border bg-white px-3.5 text-sm tabular-nums text-slate-900 outline-none transition-shadow focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15',
-                  attempted && time === '' ? 'border-[1.5px] border-red-600' : 'border-slate-300'
-                )}
-              />
-            </div>
-          )}
+            {listError && <ErrorState title="Couldn't load your requests" message={listError} onRetry={loadRequests} />}
 
-          <Button type="submit" disabled={submitting} className="h-12 rounded-[10px] text-sm font-semibold">
-            <Send className="h-4 w-4" />
-            {submitting ? 'Sending…' : 'Send request'}
-          </Button>
-        </form>
-
-        <section className="flex flex-col gap-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-            My requests{requests ? ` · ${requests.length}` : ''}
-          </span>
-
-          {listError && (
-            <div className="rounded-[14px] border border-red-200 bg-white px-4 py-8 text-center text-[13px] font-medium text-red-700">
-              {listError}
-            </div>
-          )}
-
-          {!requests && !listError && (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="h-14 rounded-[14px] bg-slate-200/50" />
-              ))}
-            </div>
-          )}
-
-          {requests && requests.length === 0 && (
-            <div className="flex flex-col items-center gap-1 rounded-[14px] border border-dashed border-slate-300 bg-white px-4 py-12">
-              <span className="text-[13px] font-semibold text-slate-700">No requests yet</span>
-              <span className="text-xs text-slate-400">Requests you send will show up here with their status.</span>
-            </div>
-          )}
-
-          {requests && requests.length > 0 && (
-            <div className="overflow-hidden rounded-[14px] border border-slate-200 bg-white">
-              <div className="hidden border-b border-slate-200 px-4 py-2.5 md:grid md:grid-cols-[minmax(0,1fr)_140px_90px_120px] md:px-5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Type</span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Details</span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Date</span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Status</span>
+            {!requests && !listError && (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <Skeleton key={i} className="h-[72px] rounded-lg" />
+                ))}
               </div>
-              {requests.map((request, index) => (
-                <div
-                  key={request.id}
-                  className={cn(
-                    'flex items-center gap-3 px-4 py-3 md:grid md:grid-cols-[minmax(0,1fr)_140px_90px_120px] md:px-5 md:py-3.5',
-                    index < requests.length - 1 && 'border-b border-slate-100'
-                  )}
-                >
-                  <div className="flex min-w-0 flex-1 flex-col md:flex-none">
-                    <span className="truncate text-sm font-semibold text-slate-900">{request.type}</span>
-                    <span className="text-xs text-slate-400 md:hidden">
-                      {detailLabel(request)} · {dateLabel(request.createdAt)}
-                    </span>
-                  </div>
-                  <span className="hidden text-[13px] text-slate-500 md:block">{detailLabel(request)}</span>
-                  <span className="hidden text-[13px] tabular-nums text-slate-500 md:block">{dateLabel(request.createdAt)}</span>
-                  <StatusBadge status={request.status} />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+            )}
+
+            {requests && visible.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border-strong bg-card">
+                <EmptyState
+                  icon={Inbox}
+                  title={requests.length === 0 ? 'No requests yet' : 'Nothing in this filter'}
+                  description={
+                    requests.length === 0
+                      ? 'Requests you send show up here with their status and the answer from the team.'
+                      : 'Switch back to All to see the rest of your requests.'
+                  }
+                />
+              </div>
+            )}
+
+            {visible.length > 0 && (
+              <div
+                className="stagger flex flex-col gap-2"
+                style={{ '--stagger-step': '30ms' }}
+                key={filter}
+              >
+                {visible.map((request, index) => (
+                  <article
+                    key={request.id}
+                    style={{ '--stagger-i': Math.min(index, 10) }}
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3.5 sm:flex-row sm:items-center sm:gap-4"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[14px] font-semibold text-foreground">{request.type}</span>
+                      <span className="text-[12px] text-muted-foreground">
+                        {requestDetail(request)}, {requestDate(request.createdAt)}
+                        {sites.length > 1 && `, ${shortSiteName(request.site)}`}
+                      </span>
+                      {/* The answer from the office, once responses are stored. */}
+                      {request.responseComment && (
+                        <span className="mt-1 rounded-sm bg-muted px-2.5 py-1.5 text-[12px] leading-relaxed text-foreground">
+                          {request.responseComment}
+                        </span>
+                      )}
+                    </div>
+                    <StatusBadge status={request.status} size="lg" />
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
-    </main>
+    </AppShell>
   );
 }
 
 export default function RequestsPage() {
   return (
     <Protected>
-      <div className="min-h-screen bg-background">
-        <AppNavbar active="Requests" />
-        <RequestsScreen />
-      </div>
+      <RequestsScreen />
     </Protected>
   );
 }

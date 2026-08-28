@@ -1,133 +1,188 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { AlertCircle, Download, FileText, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { useMemo, useState } from 'react';
+import { Download, Eye, FileText, UtensilsCrossed } from 'lucide-react';
 import Protected from '@/components/auth/Protected';
-import AppNavbar from '@/components/shell/AppNavbar';
+import AppShell from '@/components/shell/AppShell';
+import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
-import { apiGet } from '@/lib/api-client';
+import { SearchInput } from '@/components/ui/search-input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState, ErrorState } from '@/components/ui/states';
+import { MENUS_PATH, useCachedGet } from '@/lib/data-cache';
+import { cn } from '@/lib/utils';
 
-function fileName(file) {
-  return file.name ?? file.fileName ?? 'Menu.pdf';
+const fileName = (file) => file.name ?? file.fileName ?? 'Menu.pdf';
+const fileId = (file) => file.id ?? file.fileId ?? '';
+
+// "September 2026 Menu.pdf" reads better as a title without its extension, and
+// the extension says more as a chip on the sheet.
+function titleOf(file) {
+  return fileName(file).replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim();
 }
 
-function fileId(file) {
-  return file.id ?? file.fileId ?? '';
+function extensionOf(file) {
+  const match = fileName(file).match(/\.([a-z0-9]+)$/i);
+  return (match?.[1] ?? 'PDF').toUpperCase();
 }
+
+// A menu whose name carries a month reads as "the menu for that month", whether
+// the office wrote it as a word ("September 2026") or as digits ("8 8 2025").
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function periodOf(file) {
+  const name = fileName(file);
+  const byWord = MONTHS.findIndex((month) => name.toLowerCase().includes(month.toLowerCase()));
+  const year = name.match(/\b(20\d{2})\b/)?.[1];
+  if (byWord !== -1) return [MONTHS[byWord], year].filter(Boolean).join(' ');
+
+  const numeric = name.match(/\b(\d{1,2})[ ._-](\d{1,2})[ ._-](20\d{2})\b/);
+  if (numeric) {
+    const month = Number(numeric[1]);
+    if (month >= 1 && month <= 12) return `${MONTHS[month - 1]} ${numeric[3]}`;
+  }
+  return null;
+}
+
+const urlFor = (file, { attachment } = {}) =>
+  `/api/reports/files/download?fileId=${encodeURIComponent(fileId(file))}${attachment ? '&download=1' : ''}`;
 
 function MenusScreen() {
-  const [files, setFiles] = useState(null);
-  const [error, setError] = useState('');
-  const [downloading, setDownloading] = useState('');
+  const [query, setQuery] = useState('');
 
-  const load = () => {
-    setError('');
-    setFiles(null);
-    apiGet('/api/reports/files')
-      .then((list) => setFiles(Array.isArray(list) ? list : []))
-      .catch((err) => setError(err.message));
-  };
+  // The listing is a Drive call, so it is cached for the session: coming back
+  // to Menus is instant and the list refreshes in the background.
+  const listing = useCachedGet(MENUS_PATH, { maxAge: 5 * 60 * 1000 });
+  const { data, error, refresh: load } = listing;
+  const files = useMemo(() => {
+    if (data === undefined) return null;
+    return Array.isArray(data) ? data : [];
+  }, [data]);
 
-  useEffect(load, []);
-
-  const download = async (file) => {
-    const id = fileId(file);
-    setDownloading(id);
-    try {
-      const payload = await apiGet(`/api/reports/files/download?fileId=${encodeURIComponent(id)}`);
-      const bytes = atob(payload.bytes);
-      const buffer = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
-      const blob = new Blob([buffer], { type: payload.mimeType || 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = payload.fileName || fileName(file);
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setDownloading('');
-    }
-  };
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = files ?? [];
+    const filtered = q ? list.filter((file) => fileName(file).toLowerCase().includes(q)) : list;
+    return [...filtered].sort((a, b) => fileName(a).localeCompare(fileName(b)));
+  }, [files, query]);
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-8 pt-5 md:max-w-screen-xl md:px-8 md:pt-7">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Menus</h1>
-        <p className="text-[13px] text-slate-500">Program menus, ready to download.</p>
+    <AppShell width="wide">
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title="Menus"
+          subtitle={
+            files
+              ? `${files.length} ${files.length === 1 ? 'document' : 'documents'} published by the office`
+              : 'Loading the menus'
+          }
+          actions={
+            files && files.length > 3 ? (
+              <SearchInput value={query} onChange={setQuery} placeholder="Find a menu" className="w-full sm:w-72" />
+            ) : null
+          }
+        />
+
+        {error && <ErrorState title="Couldn't load the menus" message={error} onRetry={load} />}
+
+        {!files && !error && (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-[232px] rounded-lg" />
+            ))}
+          </div>
+        )}
+
+        {files && visible.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border-strong bg-card">
+            <EmptyState
+              icon={UtensilsCrossed}
+              title={query ? 'No menu matches' : 'No menus published yet'}
+              description={
+                query
+                  ? `Nothing here matches “${query.trim()}”.`
+                  : 'New menus show up here as soon as the office publishes them.'
+              }
+              action={
+                query ? (
+                  <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+                    Clear search
+                  </Button>
+                ) : null
+              }
+            />
+          </div>
+        )}
+
+        {visible.length > 0 && (
+          <div
+            className="stagger grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4"
+            style={{ '--stagger-step': '35ms' }}
+          >
+            {visible.map((file, index) => {
+              const period = periodOf(file);
+              return (
+                <article
+                  key={fileId(file) || fileName(file)}
+                  style={{ '--stagger-i': Math.min(index, 12) }}
+                  className={cn(
+                    'group flex flex-col overflow-hidden rounded-lg border border-border bg-card',
+                    'transition-[border-color,transform] duration-fast hover:border-border-strong'
+                  )}
+                >
+                  {/* The sheet: a document standing on a tinted surface. */}
+                  <div className="relative flex h-32 items-end justify-center overflow-hidden bg-surface-sunken pt-6">
+                    <span className="absolute right-3 top-3 rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground">
+                      {extensionOf(file)}
+                    </span>
+                    <div
+                      aria-hidden="true"
+                      className="flex h-24 w-[74px] translate-y-2 flex-col gap-1.5 rounded-t-sm border border-b-0 border-border bg-card p-2.5 shadow-e1 transition-transform duration-slow ease-out group-hover:-translate-y-0.5"
+                    >
+                      <FileText className="h-4 w-4 text-primary" strokeWidth={1.8} />
+                      <span className="h-1 w-full rounded-full bg-border" />
+                      <span className="h-1 w-4/5 rounded-full bg-border" />
+                      <span className="h-1 w-full rounded-full bg-border" />
+                      <span className="h-1 w-2/3 rounded-full bg-border" />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-1 flex-col gap-1 border-t border-border p-4">
+                    <h2 className="text-[14.5px] font-semibold leading-snug text-foreground">{titleOf(file)}</h2>
+                    <p className="text-[12px] text-muted-foreground">{period ?? 'Program menu'}</p>
+
+                    <div className="mt-3 flex gap-2">
+                      <Button asChild variant="outline" size="sm" className="flex-1">
+                        <a href={urlFor(file)} target="_blank" rel="noreferrer">
+                          <Eye />
+                          View
+                        </a>
+                      </Button>
+                      <Button asChild size="sm" className="flex-1">
+                        <a href={urlFor(file, { attachment: true })} download={fileName(file)}>
+                          <Download />
+                          Download
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
-
-      {error && (
-        <div className="flex flex-col items-center gap-2 rounded-[14px] border border-red-200 bg-white px-4 py-12">
-          <AlertCircle className="h-6 w-6 text-red-600" />
-          <span className="text-[13px] font-semibold text-red-700">Couldn&apos;t load the menus</span>
-          <span className="text-xs text-slate-500">{error}</span>
-          <Button variant="outline" onClick={load} className="mt-1 h-9 rounded-lg border-slate-300 px-4 text-xs font-semibold text-slate-700">
-            Try again
-          </Button>
-        </div>
-      )}
-
-      {!files && !error && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="h-[88px] rounded-[14px] bg-slate-200/50" />
-          ))}
-        </div>
-      )}
-
-      {files && files.length === 0 && (
-        <div className="flex flex-col items-center gap-2 rounded-[14px] border border-dashed border-slate-300 bg-white px-4 py-14">
-          <FileText className="h-7 w-7 text-slate-300" strokeWidth={1.6} />
-          <span className="text-[13px] font-semibold text-slate-700">No menus yet</span>
-          <span className="text-xs text-slate-400">New menus will show up here as they are published.</span>
-        </div>
-      )}
-
-      {files && files.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
-          {files.map((file) => (
-            <div
-              key={fileId(file) || fileName(file)}
-              className="flex items-center gap-4 rounded-[14px] border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 md:p-5"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-primary md:h-14 md:w-14">
-                <FileText className="h-5 w-5 md:h-7 md:w-7" strokeWidth={1.6} />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col md:gap-0.5">
-                <span className="truncate text-sm font-semibold text-slate-900 md:text-[15px]">{fileName(file)}</span>
-              </div>
-              <Button
-                variant="outline"
-                disabled={downloading === fileId(file)}
-                onClick={() => download(file)}
-                className="h-11 shrink-0 rounded-[10px] border-slate-300 px-3.5 font-semibold text-slate-700 md:px-4"
-              >
-                {downloading === fileId(file) ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                <span className="hidden md:inline">Download</span>
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </main>
+    </AppShell>
   );
 }
 
 export default function MenusPage() {
   return (
     <Protected>
-      <div className="min-h-screen bg-background">
-        <AppNavbar active="Menus" />
-        <MenusScreen />
-      </div>
+      <MenusScreen />
     </Protected>
   );
 }

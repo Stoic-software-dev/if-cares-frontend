@@ -1,34 +1,38 @@
-import * as React from "react"
-import { cva } from "class-variance-authority";
+import * as React from 'react';
+import { cva } from 'class-variance-authority';
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils';
 
+// Status is communicated by tint plus label, never by color alone.
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  'inline-flex w-fit items-center gap-1.5 whitespace-nowrap border font-semibold [&_svg]:size-3 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "text-foreground",
+        neutral: 'border-border bg-muted text-muted-foreground',
+        brand: 'border-primary-border bg-primary-soft text-primary-strong dark:text-primary',
+        success: 'border-success-border bg-success-soft text-success-text',
+        warning: 'border-warning-border bg-warning-soft text-warning-text',
+        danger: 'border-destructive-border bg-destructive-soft text-destructive-text',
+        info: 'border-info-border bg-info-soft text-info-text',
+        solid: 'border-transparent bg-primary text-primary-foreground',
+        outline: 'border-border-strong bg-transparent text-foreground',
+      },
+      size: {
+        sm: 'rounded-full px-2 py-0.5 text-[10.5px]',
+        default: 'rounded-full px-2.5 py-0.5 text-[11px]',
+        lg: 'rounded-full px-3 py-1 text-xs',
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: 'neutral',
+      size: 'default',
     },
   }
-)
+);
 
-function Badge({
-  className,
-  variant,
-  ...props
-}) {
-  return (<div className={cn(badgeVariants({ variant }), className)} {...props} />);
+function Badge({ className, variant, size, ...props }) {
+  return <span className={cn(badgeVariants({ variant, size }), className)} {...props} />;
 }
 
-export { Badge, badgeVariants }
+export { Badge, badgeVariants };

@@ -1,19 +1,28 @@
-import * as React from "react"
+import * as React from 'react';
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils';
 
+// 16px text on phones so iOS never zooms the viewport on focus; 13px from md up.
 const Input = React.forwardRef(({ className, type, ...props }, ref) => {
   return (
     <input
       type={type}
       className={cn(
-        "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        'flex h-11 w-full rounded-md border border-input bg-card px-3 text-base text-foreground',
+        'transition-[border-color,box-shadow] duration-fast ease-out',
+        'placeholder:text-muted-foreground/70',
+        'outline-none focus:border-primary focus:shadow-focus-primary',
+        'disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-70',
+        'aria-[invalid=true]:border-destructive aria-[invalid=true]:focus:shadow-[0_0_0_3px_hsl(var(--destructive)/0.15)]',
+        'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
+        'md:h-10 md:text-[13px]',
         className
       )}
       ref={ref}
-      {...props} />
+      {...props}
+    />
   );
-})
-Input.displayName = "Input"
+});
+Input.displayName = 'Input';
 
-export { Input }
+export { Input };

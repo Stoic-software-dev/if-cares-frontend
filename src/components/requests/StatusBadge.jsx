@@ -1,16 +1,21 @@
-import { cn } from '@/lib/utils';
+import { CircleCheck, CircleDot, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const STATUS = {
-  NEW: { label: 'New', className: 'border-teal-200 bg-teal-50 text-primary' },
-  IN_PROGRESS: { label: 'In progress', className: 'border-amber-200 bg-amber-50 text-amber-700' },
-  RESOLVED: { label: 'Resolved', className: 'border-slate-200 bg-slate-50 text-slate-500' },
+  NEW: { label: 'New', variant: 'brand', icon: CircleDot },
+  IN_PROGRESS: { label: 'In progress', variant: 'warning', icon: Clock },
+  RESOLVED: { label: 'Resolved', variant: 'success', icon: CircleCheck },
 };
 
-export default function StatusBadge({ status }) {
-  const s = STATUS[status] ?? STATUS.NEW;
+export default function StatusBadge({ status, size = 'default' }) {
+  const config = STATUS[status] ?? STATUS.NEW;
+  const Icon = config.icon;
   return (
-    <span className={cn('inline-flex w-fit justify-self-start rounded-full border px-2.5 py-0.5 text-[11px] font-semibold', s.className)}>
-      {s.label}
-    </span>
+    <Badge variant={config.variant} size={size}>
+      <Icon />
+      {config.label}
+    </Badge>
   );
 }
+
+export { STATUS as REQUEST_STATUS };

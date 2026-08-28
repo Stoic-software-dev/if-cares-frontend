@@ -3,7 +3,7 @@
 > Fuente de verdad funcional: cards de Jira **STOIC-2196 a STOIC-2207** (hijas de STOIC-8 "IfCares")
 > y el documento de requerimientos "IF Cares - Regular Year App 2.0".
 > Este archivo consolida lo **técnico**: arquitectura, modelo de datos, convenciones y decisiones.
-> Última actualización: 2026-08-18.
+> Última actualización: 2026-08-28 (relevamiento de paridad con la app Summer — §11).
 
 ---
 
@@ -103,6 +103,34 @@ completa en `prisma/full-schema-reference.sql`.
 - Horarios de servicio por meal type (STOIC-2199 los pide por tipo; hoy hay un
   `timeIn/timeOut` global por count — confirmar con el form real).
 
+**Deltas de schema de paridad Summer** (relevamiento 28-ago, detalle funcional en §11):
+
+- `Holiday` — **entidad nueva**: `name`, `startDate`/`endDate` (rango), alcance de sitios
+  (todos / N sitios) y alcance de comidas (todas / subconjunto `brk|lunch|snk|sup`),
+  `createdBy/At`. Hoy el calendario son `ServiceDay` sueltos: no hay forma de nombrar un
+  feriado, aplicarlo a un rango, ni quitarlo de todos los sitios en una acción (3.6).
+  `ServiceDay` sigue siendo la proyección efectiva que consultan dashboard y submit.
+- `Site` — **plantilla semanal** (qué comidas se sirven cada día de la semana) +
+  `programStart` / `programEnd`, para **generar** los `ServiceDay` del ciclo en vez de
+  cargarlos día a día (3.5; equivale a la tab `Meal Schedules` de Summer).
+- `Site` — **datos de contacto**: `address`, `telephone`, `supervisor` (Summer los imprime
+  en el PDF). Sujeto a confirmar el formulario en papel del Regular Year.
+- `MealCount` — **anulación**: `voidedAt`, `voidedById`, `voidReason`. Baja lógica: el día
+  vuelve a `validDates`, sale de reportes, la fila y sus entries quedan para auditoría.
+  Sin esto, un count en el sitio/fecha equivocada es irreparable (corregir no alcanza).
+- `MealCount` — **aprobación** (condicional a la decisión de IF Cares): `approvalStatus`
+  (`PENDING|APPROVED`), `approvedAt`, `approvedById`. Aprobado ⇒ bloquea corrección;
+  anular sigue disponible.
+- `Request` — **respuesta**: `responseComment`, `respondedById`, `respondedAt` (hoy solo
+  cambia `status`, el solicitante nunca ve el porqué).
+- `GeneratedReport` — agregar el estado de firma (`signedAt`, `signedName`, `signatureRef`)
+  y el token público de la pantalla de firma (§11, ítem *firma del consolidado*).
+- `AppSetting` — además de reminders: destinatarios por tipo de mail (aprobación,
+  respuesta de request, envío de PDFs) para no hardcodear direcciones.
+- **Jobs** (`ReportJob` o cola equivalente): `id` provisto por el cliente, `status`
+  (`processing|completed|error`), `resultRef`, `error`, timestamps — necesario para los
+  PDFs largos (§11, ítem *jobs asíncronos*).
+
 ## 5. API (paridad legacy)
 
 Convenciones (ver `docs/V2-BACKEND.md` para el mapeo completo de los 14 call sites):
@@ -119,7 +147,29 @@ Convenciones (ver `docs/V2-BACKEND.md` para el mapeo completo de los 14 call sit
 
 Endpoints nuevos sin equivalente legacy: `auth/logout|forgot-password|reset-password`,
 `sites/service-days` (calendario admin), `requests` GET/PATCH (inbox), `health`.
-`reports/files` y `download` son **proxy a GAS** hasta que existan los reportes nativos.
+**Todos los PDFs viven en Drive**, por un solo camino: `src/lib/google-drive.js`
+(Drive REST API con service account, JWT firmado con `jose`, sin SDK) y
+`src/lib/pdf-archive.js` para la escritura. Detalle en `docs/DRIVE-STORAGE.md`.
+`reports/files` y `download` leen la carpeta de menús.
+El listado se cachea 10 min en memoria del proceso y se sirve aunque Drive falle; el
+cliente además lo guarda 5 min en `lib/data-cache.js` (`MENUS_PATH`), así que volver a
+Menús es instantáneo. `download` **streamea el archivo** con su content type real, así
+que Ver y Descargar son links directos, sin base64 ni decodificación en el cliente.
+Mientras `GOOGLE_SERVICE_ACCOUNT_*` esté vacío cae al GAS viejo, que es lo único que
+todavía lo invoca en runtime.
+
+**Endpoints a construir** (paridad Summer + cards abiertas; mapeo detallado en
+`docs/V2-BACKEND.md` → *Planned endpoints*):
+
+| Área | Endpoints |
+|---|---|
+| Sitios (admin) | `POST /api/sites`, `PATCH /api/sites/[id]` (incluye rename propagado y `active`), `POST /api/sites/[id]/schedule` (plantilla semanal → genera `ServiceDay`) |
+| Feriados | `GET/POST /api/holidays`, `PATCH/DELETE /api/holidays/[id]` (alcance sitios + comidas) |
+| Counts | `POST /api/meal-counts/void`, `POST /api/meal-counts/approve` (condicional) |
+| Reportes | `POST /api/reports/daily` y `/monthly` (guardar y/o enviar por email), `POST /api/reports/consolidated` (job), `GET /api/reports/jobs/[id]`, `GET /api/reports` (histórico recuperable) |
+| Firma | `GET /api/sign/[token]` + `POST /api/sign/[token]` — **públicos, sin sesión**, autorizados por token de un solo uso con expiración (única excepción a §9) |
+| Requests | `PATCH /api/requests/[id]` extendido con comentario de respuesta + disparo de email |
+| Observabilidad | `POST /api/monitoring` (proxy server-side al servicio central, con la app y el entorno) |
 
 ## 6. Pipeline de migración (STOIC-2198)
 
@@ -156,13 +206,16 @@ verdad hasta STOIC-2207.
 |---|---|---|
 | Crear proyecto Supabase | Todo | **BLOQUEANTE #1** — runbook listo, ~15 min |
 | Proveedor de email (Resend/SES/…) | 2197 reset, 2203/2204 envío PDFs, 2205 requests+reminders | Sin decidir — decidir YA |
-| Storage de archivos (firmas, PDFs generados, menús) | 2199, 2203, 2204 | Candidato: Supabase Storage |
+| Storage de archivos (PDFs generados, menús) | 2199, 2203, 2204 | **Resuelto**: Google Drive vía service account, un solo módulo para lectura y escritura (`docs/DRIVE-STORAGE.md`). Las firmas siguen como data URL en `MealCount.signature` |
 | Cron/scheduler (reminders diarios, refresh del pipeline) | 2198, 2205 | Railway cron / pg_cron / a definir |
 | Motor de PDF (¿puppeteer/react-pdf?) — replicar el form en papel campo por campo | 2203, 2204 | Spike pendiente |
 | Hosting v2 + staging público | 2206, 2207 | Railway candidato |
-| **Menús post-freeze**: hoy salen de GAS `listFiles` sobre Drive. Si el GAS se apaga en el corte, se rompen | 2199 ("siguen igual"), 2207 | Definir: Drive API desde el backend o migrar a Storage |
+| **Menús post-freeze**: si el GAS se apaga en el corte, se rompen | 2199 ("siguen igual"), 2207 | **Resuelto**: Drive API con service account (carpeta `1wagBWXeOi_8U5N7zvqUGhdv6AjH1yyki`). Falta cargar `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `_PRIVATE_KEY` en el entorno |
 | Freeze del GAS (2207): listar y apagar triggers `updateAllMeals`, `sendReminderEmail`, `deleteOldDates`, `checkAndUpdate` | 2207 | Documentar en el plan de corte |
-| Observabilidad: error monitoring + alertas (v1 alertaba por mail); fix pendiente del import `logErrorMonitoring` en login | Transversal | Sin decidir |
+| Observabilidad: error monitoring + alertas (v1 alertaba por mail); fix pendiente del import `logErrorMonitoring` en login | Transversal | Sin decidir — **Summer ya lo tiene** resuelto contra `monitoring-center` (§11); replicar el patrón es lo barato |
+| **¿Va el flujo de aprobación de counts?** (Summer lo tiene; el requerimiento del Regular Year no lo pide) | Schema de `MealCount`, correcciones, PDFs, reportes | **Decisión de IF Cares — bloquea Etapa 2** |
+| **¿El formulario en papel lleva dirección / teléfono / supervisor del sitio?** | Schema de `Site`, alta de sitios (2200), PDF (2203) | Confirmar con IF Cares junto con el formato del PDF |
+| Cola/estado de **jobs largos** (consolidado 1-3 min en Summer): tabla propia + polling, o servicio de colas | 2203, 2204 | Sin decidir — sin esto el mensual/consolidado muere en el timeout del hosting |
 | Backups: configurar al crear Supabase, no en el cutover (2207 solo los verifica) | 2207 | — |
 
 ## 8. Requisitos no funcionales (de las cards)
@@ -173,10 +226,22 @@ verdad hasta STOIC-2207.
 - Site Staff no accede ni por URL directa a sitios no asignados.
 - Consolidación **sin tope fijo de sitios** (antecedente: STOIC-1943).
 - Escala: 5+ años de operación, más sitios/estudiantes/historia. Hoy ~56 sitios, ~3k alumnos.
+- **Nada de trabajo perdido** (paridad Summer): el formulario avisa antes de cerrar la
+  pestaña y antes de navegar dentro de la app si hay marcas sin enviar.
+- **El error se avisa antes de cargar, no al enviar**: fecha futura, día no operativo,
+  feriado y count ya enviado se bloquean en el cliente con mensaje en lenguaje claro; el
+  server sigue siendo la autoridad (422/409).
+- **Toda operación > 10 s es un job con estado consultable**, nunca un request bloqueante.
+- **Toda acción destructiva pide confirmación** y dice qué se lleva puesto.
 
 ## 9. Seguridad y manejo de datos
 
 - Toda pantalla y endpoint detrás de sesión válida (hoy en GAS: nada lo está).
+- **Única excepción prevista**: la pantalla pública de firma del consolidado
+  (`/sign/[token]`, §11). Va autorizada por un token opaco de un solo uso, con
+  expiración, alcance a **un** reporte y sin exponer ningún otro dato; el link se
+  envía por mail a quien firma. Summer hoy publica el `pdfId` de Drive en la URL —
+  el 2.0 **no** debe copiar eso.
 - `migration-data/` (master.xlsx: PII + passwords en texto plano) está **gitignoreado — jamás commitear**.
   Ídem dumps crudos de Sheets.
 - Passwords legacy: se hashean en el import y el texto plano no se persiste en el 2.0.
@@ -193,3 +258,73 @@ verdad hasta STOIC-2207.
 - Docs en `v2-backend`: `docs/V2-BACKEND.md` (API + mapeo call sites),
   `docs/SUPABASE-SETUP.md` (runbook), `prisma/schema.prisma`, `gas-backup/` (fuente GAS).
 - Ruta de trabajo: **ROADMAP.md** (este repo).
+- Paridad con Summer: **§11** de este archivo (código de referencia en
+  `C:\laragon\www\if-cares-summer-frontend`).
+
+---
+
+## 11. Paridad funcional con la app Summer
+
+Relevamiento del **28-ago-2026**: se revisó la app Summer completa (`src/` + `appscript/`)
+contra el estado real del Regular Year 2.0 (`v2-mock` / `v2-backend`) y contra el
+documento de requerimientos. Summer corre la misma operación (meal counts en sitios de
+IF Cares) sobre Sheets + GAS, con dos años más de uso real: lo que ya resolvió es la
+mejor fuente de requisitos que tenemos. Las referencias `→` apuntan al archivo de Summer
+que sirve de blueprint. Ruta de ejecución: **ROADMAP.md** (ítems marcados `[S]`).
+
+### 11.1 No estaba ni construido ni planificado
+
+| # | Qué | Referencia Summer | Dónde entra |
+|---|---|---|---|
+| 1 | **Aprobación de counts**: aprobar por count, `approvedBy/At`, badge en calendario y detalle, bloqueo de edición al aprobar, y PDF + mail al staff del sitio como follow-up asíncrono | `appscript/post/approveMealCount.gs`, `components/calendar/DayMealDetails.jsx` | **Decisión de IF Cares** (no está en el requerimiento del RY) → Etapa 1, luego schema en Etapa 2 y UI en Etapa 4 |
+| 2 | **Anular un count** (admin, con confirmación y motivo): hoy un count en el sitio o la fecha equivocada no tiene salida — corregirlo no alcanza | `dashboard/page.jsx` (`handleDeleteMeal`) | Etapa 2 (schema) + Etapa 4 (UI) |
+| 3 | **Monitoreo de errores del cliente** (app, función, mensaje, stack, URL) contra un servicio central | `utils/index.js`, `api/monitoring/route.js` | Transversal |
+| 4 | **Guardia de cambios sin guardar**: `beforeunload` + intercepción de la navegación interna | `app/page.js` | Etapa 3 |
+| 5 | **Jobs asíncronos + polling** para PDFs largos (jobId del cliente, estado, tiempo transcurrido, cancelar) | `components/consolidatedPdfModal/ConsolidatedPdfModal.jsx` | Etapa 5 (+ decisión de infra en §7) |
+| 6 | **Datos de contacto del sitio** (dirección / teléfono / supervisor) editables y usados en el PDF | `dashboard/site/[siteName]/page.jsx` | Etapa 1 (confirmar) → 2 y 4 |
+| 7 | **Responder un request**: comentario + email al solicitante, con quién y cuándo; búsqueda global; paginación; contadores por pestaña; filtros por sitio y fecha | `dashboard/requests/page.jsx` | Etapa 6 |
+| 8 | **Filtros del dashboard**: por estado y selector libre de mes/año | `dashboard/page.jsx` | Etapa 3 |
+| 9 | **Feriado ≠ sin servicio** en el calendario (estado propio + nombre del feriado) | `getStatusForDay` + leyenda | Etapa 3 |
+| 10 | **Validación en el cliente antes de cargar**: fecha futura, feriado, día no operativo, count ya enviado | `app/page.js` (`isValid`) | Etapa 3 |
+
+### 11.2 Estaba en el plan, pero Summer ya lo tiene resuelto (blueprint) y el plan lo decía en una línea
+
+- **Holidays Manager** → `components/holidayPicker/HolidayPicker.jsx`: nombre + rango de
+  fechas, alcance "todos los sitios" o selección, "todas las comidas" o específicas,
+  detección de duplicados, edición/borrado por alcance, tabs próximos/pasados, paginación.
+  El RY solo tiene `PUT /api/sites/service-days` (reemplazo total por sitio) **sin UI**.
+- **Plantilla semanal de comidas + fechas del programa** → tab `Meal Schedules` +
+  `api/sheets/meal-schedule`: define qué se espera cada día y permite **generar** el
+  calendario. El RY carga días sueltos y no tiene generador (requerimiento 3.5).
+- **Admin de sitios** → `dashboard/sites` + `dashboard/site/[siteName]`: listado con
+  buscador, toggle de inactivos y contador; ficha lectura/edición; desactivar; aviso y
+  propagación al renombrar. El RY no tiene ni UI ni API de alta/edición/baja de sitios.
+- **PDF: guardar / enviar por email / ambos**, con varios destinatarios validados →
+  `components/pdfModal/PdfModal.jsx`. El RY solo descarga en el browser.
+- **Consolidado** → `ConsolidatedPdfModal.jsx`: por estado, rango de fechas, exclusión de
+  sitios con chips y atajos, resultado guardado y recuperable.
+- **Firma del consolidado** → `app/sign/[id]` + `app/sign/success`: preview del PDF, pad
+  de firma, certificación, **sin login**, y confirmación con el PDF firmado. Es el paso
+  que hoy se hace a mano en la master (requerimiento 3.8). Ver la nota de seguridad en §9.
+- **Emails** (aprobación, respuesta de requests, reminders, envío de PDFs): Summer los
+  manda por GAS/MailApp. El RY 2.0 todavía **no tiene proveedor conectado** — el reset de
+  password se copia y pega a mano.
+- **ABM de alumnos / import de roster con UI**: el RY tiene la API (`students`,
+  `students/[id]`) y ninguna pantalla.
+
+### 11.3 Detalles chicos que salen baratos
+
+Indicador de pasos en el formulario · scroll automático al primer campo faltante ·
+prefetch/caché de meses adyacentes y del roster (ayuda al objetivo ≤ 1 s) · colapsar
+tarjetas de detalle en mobile · tooltip con la lista completa de sitios en filas
+agrupadas · atajos "excluir todos / incluir todos" en selecciones múltiples.
+
+### 11.4 Revisado y descartado — propio del dominio Summer
+
+No se traen: conteo por tipo de comida como envíos separados (breakfast/lunch/snack/supper
+son un envío por comida en Summer; en el Regular Year es **un count por día** con las
+comidas marcadas por alumno) · inventario de comidas (recibidas, del día anterior,
+**carry-over automático de sobrantes**) · temperaturas de comida y leche · comidas de
+adultos programa / no programa · no reimbursables · contador de comidas pedidas de más ·
+y toda la maquinaria del espejo `Historical Meal Data` + merge GAS/Sheets + ediciones
+optimistas contra el lag del mirror (el 2.0 lee de una base: no aplica).

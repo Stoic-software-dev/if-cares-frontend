@@ -1,211 +1,354 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, Loader, MoreVertical, RotateCcw } from 'lucide-react';
+import { CircleCheck, Inbox, Play, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
-import AppNavbar from '@/components/shell/AppNavbar';
+import AppShell from '@/components/shell/AppShell';
+import PageHeader from '@/components/shell/PageHeader';
 import StatusBadge from '@/components/requests/StatusBadge';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field, NativeSelect } from '@/components/ui/field';
+import { SearchInput } from '@/components/ui/search-input';
+import { Segmented } from '@/components/ui/segmented';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch } from '@/lib/api-client';
+import { requestDate, requestDetail } from '@/lib/requests';
+import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
-const FILTERS = [
-  { key: 'ALL', label: 'All' },
-  { key: 'NEW', label: 'New' },
-  { key: 'IN_PROGRESS', label: 'In progress' },
-  { key: 'RESOLVED', label: 'Resolved' },
-];
-
-function detailLabel(request) {
-  if (request.time) {
-    const [h, m] = request.time.split(':').map(Number);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
-  }
-  if (request.amount != null) return `${request.amount} units`;
-  return '—';
-}
-
-function dateLabel(isoString) {
-  return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function shortSite(name) {
-  return name.replace(/^\d{4}\/\d{4}\s+(TX|OK)?\s*/i, '');
-}
-
-function AdminRequestsScreen() {
-  const [filter, setFilter] = useState('ALL');
+function InboxScreen() {
   const [inbox, setInbox] = useState(null);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('NEW');
+  const [query, setQuery] = useState('');
+  const [siteFilter, setSiteFilter] = useState('ALL');
+  const [busyId, setBusyId] = useState('');
+  const [resolving, setResolving] = useState(null);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = () => {
     setError('');
     apiGet('/api/requests')
-      .then((res) => setInbox(res.data))
+      .then((res) => {
+        setInbox(res.data);
+        // Open on the queue that actually has something in it: landing on an
+        // empty "New" tab reads as a broken screen.
+        if (!res.data.some((request) => request.status === 'NEW')) setStatus('ALL');
+      })
       .catch((err) => setError(err.message));
   };
 
   useEffect(load, []);
 
-  const requests = useMemo(
-    () => (inbox ? (filter === 'ALL' ? inbox : inbox.filter((r) => r.status === filter)) : []),
-    [filter, inbox]
+  const counts = useMemo(() => {
+    const list = inbox ?? [];
+    return {
+      ALL: list.length,
+      NEW: list.filter((request) => request.status === 'NEW').length,
+      IN_PROGRESS: list.filter((request) => request.status === 'IN_PROGRESS').length,
+      RESOLVED: list.filter((request) => request.status === 'RESOLVED').length,
+    };
+  }, [inbox]);
+
+  const siteOptions = useMemo(
+    () => sortSiteNames([...new Set((inbox ?? []).map((request) => request.site))]),
+    [inbox]
   );
 
-  const newCount = (inbox ?? []).filter((r) => r.status === 'NEW').length;
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (inbox ?? []).filter((request) => {
+      if (status !== 'ALL' && request.status !== status) return false;
+      if (siteFilter !== 'ALL' && request.site !== siteFilter) return false;
+      if (!q) return true;
+      return [request.type, request.site, request.requestedBy, requestDetail(request)]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [inbox, status, siteFilter, query]);
 
-  const setStatus = async (request, status, message) => {
+  // Optimistic: the row moves the moment it is clicked and rolls back with the
+  // reason if the server disagrees.
+  const setRequestStatus = async (request, next, { silent = false, comment = '' } = {}) => {
     const previous = inbox;
-    setInbox((prev) => prev.map((r) => (r.id === request.id ? { ...r, status } : r)));
+    setBusyId(request.id);
+    setInbox((list) => list.map((item) => (item.id === request.id ? { ...item, status: next } : item)));
     try {
-      await apiPatch(`/api/requests/${request.id}`, { status });
-      toast.success(message);
+      await apiPatch(`/api/requests/${request.id}`, {
+        status: next,
+        ...(comment.trim() ? { responseComment: comment.trim() } : {}),
+      });
+      if (!silent) toast.success(`${request.type} marked as ${next.replace('_', ' ').toLowerCase()}`);
     } catch (err) {
       setInbox(previous);
       toast.error(err.message);
+      throw err;
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const resolve = async () => {
+    setSaving(true);
+    const typed = note.trim();
+    try {
+      await setRequestStatus(resolving, 'RESOLVED', { silent: true, comment: note });
+
+      // The note is sent, but the response field is not deployed everywhere
+      // yet. Read the request back and say plainly whether it was kept, rather
+      // than letting an administrator believe the site will see it.
+      let kept = false;
+      try {
+        const fresh = await apiGet('/api/requests');
+        setInbox(fresh.data);
+        kept = Boolean(fresh.data.find((item) => item.id === resolving.id)?.responseComment);
+      } catch {
+        // The list stays as the optimistic update left it.
+      }
+
+      if (typed && !kept) {
+        toast.warning(`${resolving.type} resolved`, {
+          description: 'The note was not stored: request responses are not deployed yet. Tell the site directly.',
+        });
+      } else {
+        toast.success(`${resolving.type} resolved`);
+      }
+      setResolving(null);
+      setNote('');
+    } catch {
+      // The row was rolled back and the error toasted already.
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <main className="mx-auto flex max-w-screen-xl flex-col gap-4 px-4 py-5 md:px-8 md:py-7">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Requests</h1>
-        <p className="text-[13px] tabular-nums text-slate-500">
-          {inbox ? `${inbox.length} total · ${newCount} new` : 'Loading…'}
-        </p>
-      </div>
+    <AppShell width="wide">
+      <div className="flex flex-col gap-5">
+        <PageHeader
+          title="Requests"
+          subtitle={
+            inbox
+              ? `${counts.NEW} new, ${counts.IN_PROGRESS} in progress, ${counts.RESOLVED} resolved`
+              : 'Loading the inbox'
+          }
+        />
 
-      <div className="flex gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              'h-9 rounded-full border px-3.5 text-[13px] font-medium',
-              filter === f.key
-                ? 'border-teal-200 bg-teal-50 font-semibold text-primary'
-                : 'border-slate-300 bg-white text-slate-600 transition-colors hover:border-slate-400 hover:text-slate-900'
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-12">
-          <AlertCircle className="h-6 w-6 text-red-600" />
-          <span className="text-[13px] font-semibold text-red-700">{error}</span>
-          <Button variant="outline" onClick={load} className="mt-1 h-9 rounded-lg border-slate-300 px-4 text-xs font-semibold text-slate-700">
-            Try again
-          </Button>
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+          <Segmented
+            ariaLabel="Filter by status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'NEW', label: 'New', count: counts.NEW },
+              { value: 'IN_PROGRESS', label: 'In progress', count: counts.IN_PROGRESS },
+              { value: 'RESOLVED', label: 'Resolved', count: counts.RESOLVED },
+              { value: 'ALL', label: 'All', count: counts.ALL },
+            ]}
+            className="lg:w-auto"
+          />
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search type, site or requester"
+            className="lg:ml-auto lg:w-72"
+          />
+          {siteOptions.length > 1 && (
+            <NativeSelect
+              aria-label="Filter by site"
+              value={siteFilter}
+              onChange={(event) => setSiteFilter(event.target.value)}
+              className="lg:w-60"
+            >
+              <option value="ALL">All sites</option>
+              {siteOptions.map((name) => (
+                <option key={name} value={name}>
+                  {shortSiteName(name)}
+                </option>
+              ))}
+            </NativeSelect>
+          )}
         </div>
-      )}
 
-      {!inbox && !error && <div className="h-72 rounded-xl bg-slate-200/40" />}
+        {error && <ErrorState title="Couldn't load the inbox" message={error} onRetry={load} />}
 
-      {inbox && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="min-w-[840px] tabular-nums">
-            <div className="grid grid-cols-[190px_minmax(0,1fr)_120px_170px_90px_120px_52px] border-b border-slate-200 px-5 py-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Site</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Type</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Details</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Requested by</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Date</span>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400">Status</span>
-              <span />
-            </div>
-            {requests.map((request, index) => (
-              <div
-                key={request.id}
-                className={cn(
-                  'grid grid-cols-[190px_minmax(0,1fr)_120px_170px_90px_120px_52px] items-center px-5 py-3 transition-colors hover:bg-slate-50/70',
-                  index < requests.length - 1 && 'border-b border-slate-100'
-                )}
-              >
-                <span className="truncate pr-3 text-[13px] font-semibold text-slate-900" title={request.site}>
-                  {shortSite(request.site)}
-                </span>
-                <span className="truncate pr-3 text-[13px] text-slate-700">{request.type}</span>
-                <span className="text-[13px] text-slate-500">{detailLabel(request)}</span>
-                <span className="truncate pr-3 text-[13px] text-slate-500">{request.requestedBy}</span>
-                <span className="text-[13px] text-slate-500">{dateLabel(request.createdAt)}</span>
-                <StatusBadge status={request.status} />
-                <span className="flex justify-end">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Row actions"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <MoreVertical className="h-[15px] w-[15px]" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      {request.status === 'NEW' && (
-                        <DropdownMenuItem
-                          onClick={() => setStatus(request, 'IN_PROGRESS', `${request.type} marked as in progress`)}
-                          className="gap-2 text-[13px]"
-                        >
-                          <Loader className="h-4 w-4 text-amber-600" />
-                          Mark as in progress
-                        </DropdownMenuItem>
-                      )}
-                      {request.status !== 'RESOLVED' && (
-                        <DropdownMenuItem
-                          onClick={() => setStatus(request, 'RESOLVED', `${request.type} resolved`)}
-                          className="gap-2 text-[13px]"
-                        >
-                          <Check className="h-4 w-4 text-emerald-600" />
-                          Mark as resolved
-                        </DropdownMenuItem>
-                      )}
-                      {request.status === 'RESOLVED' && (
-                        <DropdownMenuItem
-                          onClick={() => setStatus(request, 'NEW', `${request.type} reopened`)}
-                          className="gap-2 text-[13px]"
-                        >
-                          <RotateCcw className="h-4 w-4 text-slate-500" />
-                          Reopen
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </span>
-              </div>
+        {!inbox && !error && (
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-[76px] rounded-lg" />
             ))}
-            {requests.length === 0 && (
-              <div className="flex flex-col items-center gap-1 px-5 py-12">
-                <span className="text-[13px] font-semibold text-slate-700">Nothing here</span>
-                <span className="text-xs text-slate-400">No requests match this filter.</span>
-              </div>
-            )}
           </div>
-        </div>
-      )}
-    </main>
+        )}
+
+        {inbox && visible.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border-strong bg-card">
+            <EmptyState
+              icon={Inbox}
+              title={counts.ALL === 0 ? 'No requests yet' : 'Nothing here'}
+              description={
+                counts.ALL === 0
+                  ? 'Requests sent by site staff land here with their status.'
+                  : 'No request matches the current filters.'
+              }
+              action={
+                counts.ALL > 0 ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setStatus('ALL');
+                      setQuery('');
+                      setSiteFilter('ALL');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : null
+              }
+            />
+          </div>
+        )}
+
+        {visible.length > 0 && (
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_110px_260px] gap-4 border-b border-border bg-surface-sunken px-4 py-2 lg:grid">
+              {['Request', 'Site', 'Requested', 'Status', ''].map((heading, index) => (
+                <span
+                  key={heading || index}
+                  className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground"
+                >
+                  {heading}
+                </span>
+              ))}
+            </div>
+
+            <div className="divide-y divide-border">
+              {visible.map((request) => (
+                <div
+                  key={request.id}
+                  className={cn(
+                    'flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-accent/30',
+                    'lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_120px_110px_260px] lg:items-center lg:gap-4'
+                  )}
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate text-[14px] font-semibold text-foreground">{request.type}</span>
+                    <span className="text-[12px] text-muted-foreground">
+                      {requestDetail(request)}, {request.requestedBy}
+                    </span>
+                  </div>
+
+                  <span className="truncate text-[13px] text-muted-foreground lg:block">
+                    {shortSiteName(request.site)}
+                  </span>
+
+                  <span className="text-[12.5px] tabular-nums text-muted-foreground">
+                    {requestDate(request.createdAt)}
+                  </span>
+
+                  <StatusBadge status={request.status} />
+
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {request.status === 'NEW' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        loading={busyId === request.id}
+                        onClick={() => setRequestStatus(request, 'IN_PROGRESS')}
+                      >
+                        <Play />
+                        Start
+                      </Button>
+                    )}
+                    {request.status !== 'RESOLVED' && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setResolving(request);
+                          setNote('');
+                        }}
+                      >
+                        <CircleCheck />
+                        Resolve
+                      </Button>
+                    )}
+                    {request.status === 'RESOLVED' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={busyId === request.id}
+                        onClick={() => setRequestStatus(request, 'NEW')}
+                      >
+                        <RotateCcw />
+                        Reopen
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={Boolean(resolving)} onOpenChange={(open) => !open && setResolving(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resolve this request</DialogTitle>
+            <DialogDescription>
+              {resolving && (
+                <>
+                  {resolving.type}, {requestDetail(resolving)}, {shortSiteName(resolving.site ?? '')}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Field
+            label="Note for the site"
+            htmlFor="resolve-note"
+            hint="Optional. What was done, or why the answer is no."
+          >
+            <Textarea
+              id="resolve-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Delivered with Thursday's order."
+              maxLength={500}
+            />
+          </Field>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResolving(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={resolve} loading={saving}>
+              Mark resolved
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AppShell>
   );
 }
 
 export default function AdminRequestsPage() {
   return (
     <Protected adminOnly>
-      <div className="min-h-screen bg-background">
-        <AppNavbar active="Inbox" />
-        <AdminRequestsScreen />
-      </div>
+      <InboxScreen />
     </Protected>
   );
 }

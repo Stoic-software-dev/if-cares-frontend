@@ -1,25 +1,32 @@
 'use client';
-import { Toaster as Sonner } from 'sonner';
 
-// The app ships light-only; never inherit the OS theme here.
+import { Toaster as Sonner } from 'sonner';
+import { useTheme } from '@/components/shell/ThemeProvider';
+
+// Toasts follow the app's theme, never the OS theme on its own, and sit above
+// the phone's bottom navigation.
 const Toaster = ({ ...props }) => {
+  const { resolved } = useTheme();
+
   return (
     <Sonner
-      theme="light"
-      className="toaster group"
+      theme={resolved}
+      position="top-center"
+      offset={12}
       toastOptions={{
         duration: 5000,
         classNames: {
           toast:
-            'group toast group-[.toaster]:rounded-xl group-[.toaster]:border-slate-200 group-[.toaster]:bg-white group-[.toaster]:text-slate-900 group-[.toaster]:shadow-md',
+            'group toast group-[.toaster]:rounded-lg group-[.toaster]:border-border group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:shadow-e2',
           title: 'group-[.toast]:text-[13px] group-[.toast]:font-semibold',
-          description: 'group-[.toast]:text-slate-500',
-          success: '[&_[data-icon]]:text-emerald-600',
-          error: '[&_[data-icon]]:text-red-600',
-          warning: '[&_[data-icon]]:text-amber-600',
-          info: '[&_[data-icon]]:text-primary',
-          actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
-          cancelButton: 'group-[.toast]:bg-slate-100 group-[.toast]:text-slate-500',
+          description: 'group-[.toast]:text-[12.5px] group-[.toast]:text-muted-foreground',
+          success: '[&_[data-icon]]:text-success',
+          error: '[&_[data-icon]]:text-destructive',
+          warning: '[&_[data-icon]]:text-warning',
+          info: '[&_[data-icon]]:text-info',
+          actionButton:
+            'group-[.toast]:rounded-sm group-[.toast]:bg-primary group-[.toast]:text-primary-foreground group-[.toast]:font-semibold',
+          cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
         },
       }}
       {...props}

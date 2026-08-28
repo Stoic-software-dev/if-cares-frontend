@@ -2,62 +2,151 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens (STOIC-2202). Visual direction: mirror of the Summer app
-   (slate surfaces, white cards, pill accents) with a brand hue of its own —
-   Summer owns indigo #4f46e5, Regular Year uses teal until IF Cares approves
-   the final hue. Components must consume tokens, never hardcoded colors. */
+/* ---------------------------------------------------------------------------
+   IF Cares Regular Year 2.0 - design tokens (STOIC-2202)
+   Product family with the Summer app: slate surfaces, one brand hue, flat
+   cards, status by tint. Summer owns indigo; Regular Year owns teal.
+   Every component consumes tokens. No component hardcodes a color.
+   Both themes are defined here: the app ships light-first and follows the
+   system preference, and the user can pin either mode from the navbar.
+--------------------------------------------------------------------------- */
 @layer base {
   :root {
+    /* surfaces */
     --background: 210 40% 98%;
-    --foreground: 217.2 32.6% 17.5%;
+    --surface: 0 0% 100%;
+    --surface-sunken: 210 40% 96.5%;
+    --foreground: 222 47% 11%;
+
     --card: 0 0% 100%;
-    --card-foreground: 217.2 32.6% 17.5%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 217.2 32.6% 17.5%;
+    --popover-foreground: 222 47% 11%;
+
+    /* brand */
     --primary: 175 77% 26%;
     --primary-foreground: 0 0% 100%;
+    --primary-soft: 172 60% 96%;
+    --primary-border: 172 45% 85%;
+    --primary-strong: 175 82% 21%;
+
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 215.3 25% 26.7%;
+    --secondary-foreground: 215 25% 27%;
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Measured: at 47% lightness this token lands on 4.4:1 over white and 4.3:1
+       over the muted tints, just under AA for the 11 to 13px text it carries
+       (nav links, table headings, badges, hints). 41% clears it everywhere. */
+    --muted-foreground: 215 19% 41%;
     --accent: 210 40% 96.1%;
-    --accent-foreground: 217.2 32.6% 17.5%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142.1 70.6% 45.3%;
+    --accent-foreground: 222 47% 11%;
+
+    /* semantic status: each family carries fill, tint, hairline and text */
+    --success: 160 84% 32%;
     --success-foreground: 0 0% 100%;
-    --warning: 32.1 94.6% 43.7%;
+    --success-soft: 152 76% 96%;
+    --success-border: 152 55% 86%;
+    --success-text: 160 84% 26%;
+
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-soft: 0 86% 97%;
+    --destructive-border: 0 70% 90%;
+    --destructive-text: 0 70% 42%;
+
+    --warning: 32 95% 44%;
     --warning-foreground: 0 0% 100%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 174.7 83.9% 31.6%;
-    --radius: 0.5rem;
+    --warning-soft: 45 93% 96%;
+    --warning-border: 42 80% 85%;
+    --warning-text: 26 85% 36%;
+
+    --info: 217 91% 50%;
+    --info-foreground: 0 0% 100%;
+    --info-soft: 214 100% 97%;
+    --info-border: 213 80% 89%;
+    --info-text: 221 83% 45%;
+
+    /* lines and controls */
+    --border: 214 32% 91%;
+    --border-strong: 213 27% 84%;
+    --input: 213 27% 84%;
+    --ring: 175 70% 32%;
+
+    /* geometry: one scale for the whole product */
+    --radius-xs: 6px;
+    --radius-sm: 8px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+
+    /* elevation, tinted to the surface hue - never pure black */
+    --shadow-1: 0 1px 2px hsl(222 47% 11% / 0.05), 0 1px 1px hsl(222 47% 11% / 0.03);
+    --shadow-2: 0 4px 14px -4px hsl(222 47% 11% / 0.1), 0 2px 5px -2px hsl(222 47% 11% / 0.05);
+    --shadow-3: 0 18px 40px -12px hsl(222 47% 11% / 0.2), 0 6px 14px -6px hsl(222 47% 11% / 0.1);
+
+    /* motion */
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+    --dur-fast: 120ms;
+    --dur: 180ms;
+    --dur-slow: 280ms;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 172.5 66% 50.4%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142.1 70.6% 45.3%;
-    --success-foreground: 222.2 84% 4.9%;
-    --warning: 32.1 94.6% 53.7%;
-    --warning-foreground: 222.2 84% 4.9%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 222 47% 7%;
+    --surface: 222 40% 11%;
+    --surface-sunken: 222 45% 9%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 40% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 40% 13%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 172 66% 45%;
+    --primary-foreground: 222 47% 8%;
+    --primary-soft: 175 45% 15%;
+    --primary-border: 174 40% 24%;
+    --primary-strong: 172 70% 55%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 19%;
+    --accent-foreground: 210 40% 96%;
+
+    --success: 158 64% 42%;
+    --success-foreground: 222 47% 8%;
+    --success-soft: 160 60% 13%;
+    --success-border: 160 40% 24%;
+    --success-text: 156 66% 62%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 222 47% 8%;
+    --destructive-soft: 0 55% 15%;
+    --destructive-border: 0 45% 28%;
+    --destructive-text: 0 85% 76%;
+
+    --warning: 38 92% 52%;
+    --warning-foreground: 222 47% 8%;
+    --warning-soft: 36 60% 14%;
+    --warning-border: 36 45% 27%;
+    --warning-text: 41 92% 68%;
+
+    --info: 213 90% 62%;
+    --info-foreground: 222 47% 8%;
+    --info-soft: 217 60% 16%;
+    --info-border: 217 45% 28%;
+    --info-text: 213 92% 76%;
+
+    --border: 217 33% 20%;
+    --border-strong: 217 28% 28%;
+    --input: 217 28% 28%;
+    --ring: 172 66% 45%;
+
+    --shadow-1: 0 1px 2px hsl(0 0% 0% / 0.4);
+    --shadow-2: 0 4px 16px -4px hsl(0 0% 0% / 0.5), 0 2px 6px -2px hsl(0 0% 0% / 0.4);
+    --shadow-3: 0 20px 44px -12px hsl(0 0% 0% / 0.65), 0 8px 16px -8px hsl(0 0% 0% / 0.5);
   }
 }
 
@@ -65,28 +154,179 @@
   * {
     @apply border-border;
   }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground;
     margin: 0;
     padding: 0;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11' 1, 'ss01' 1;
   }
-  /* Keyboard focus is always visible; elements that draw their own ring opt
-     out with outline-none. */
+
+  /* Counts, times, totals and calendars line up column to column. */
+  .tabular,
+  table,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Keyboard focus is always visible. Controls that draw their own ring opt
+     out with outline-none plus a ring utility. */
   :focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
+    border-radius: var(--radius-xs);
   }
+
   ::selection {
-    background: #ccfbf1;
+    background: hsl(var(--primary) / 0.18);
+  }
+
+  /* Scrollbars in the product's own palette instead of the OS default. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border-strong));
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.55);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Native controls follow the theme (date/time pickers, scrollbars). */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
   }
 }
 
-/* Legacy v1 styles below. Removed together with the old screens at cutover. */
-.title {
-  color: #060606;
-  font-size: 25px;
-  font-style: normal;
-  font-weight: 800;
-  line-height: normal;
+@layer components {
+  /* The one card surface of the product: hairline border, flat by default. */
+  .surface {
+    @apply rounded-lg border border-border bg-card;
+  }
+
+  .surface-raised {
+    @apply rounded-lg border border-border bg-card shadow-e1;
+  }
+
+  /* Physical press feedback for anything tappable. */
+  .press {
+    @apply transition-transform duration-100 active:scale-[0.985];
+  }
+
+  /* Sticky bars over scrolling content (submit bar, table toolbars). */
+  .glass-bar {
+    @apply border-border bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Bottom navigation and sticky footers clear the phone's home indicator. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .h-safe-bottom {
+    height: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@layer utilities {
+  /* Sequenced entrance for lists and grids: the parent sets --stagger-step,
+     each child multiplies it by its index. Communicates order of arrival, and
+     collapses to nothing under reduced motion. */
+  .stagger > * {
+    animation: fade-up var(--dur-slow) var(--ease-out) backwards;
+    animation-delay: calc(var(--stagger-i, 0) * var(--stagger-step, 40ms));
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Placeholder shimmer: a moving highlight instead of a flat pulse, so a
+   skeleton reads as "loading" and not as "empty". */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Indeterminate progress for jobs whose duration we cannot know (report
+   generation), so the bar never lies about how far along it is. */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%) scaleX(0.35);
+  }
+  50% {
+    transform: translateX(20%) scaleX(0.55);
+  }
+  100% {
+    transform: translateX(120%) scaleX(0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

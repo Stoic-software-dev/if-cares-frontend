@@ -3,10 +3,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, isAdmin } from '@/components/auth/AuthProvider';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Gate for signed-in screens. Renders a quiet skeleton while the session
-// resolves, and bounces to /login (or /dashboard for non-admins on admin
-// pages) once it has an answer.
+// Gate for signed-in screens. While the session resolves it renders the shape
+// of the app (bar, header, content block) so the first paint does not jump
+// once the real screen arrives.
 export default function Protected({ adminOnly = false, children }) {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -19,11 +20,12 @@ export default function Protected({ adminOnly = false, children }) {
 
   if (loading || !user || (adminOnly && !isAdmin(user))) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="h-[54px] border-b border-slate-200 bg-white md:h-[58px]" />
+      <div className="min-h-[100dvh] bg-background">
+        <div className="h-14 border-b border-border bg-card md:h-[60px]" />
         <div className="mx-auto flex max-w-screen-xl flex-col gap-4 px-4 pt-6 md:px-8">
-          <div className="h-8 w-48 rounded-lg bg-slate-200/70" />
-          <div className="h-44 rounded-[14px] bg-slate-200/50" />
+          <Skeleton className="h-8 w-52" />
+          <Skeleton className="h-11 w-full max-w-sm" />
+          <Skeleton className="h-72 w-full rounded-lg" />
         </div>
       </div>
     );

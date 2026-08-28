@@ -1,81 +1,181 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { mealsFor } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
-const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const DAY_STYLES = {
-  submitted: 'bg-emerald-50 text-emerald-700 font-semibold hover:bg-emerald-100',
-  missing: 'bg-red-50 text-red-700 font-bold hover:bg-red-100',
-  today: 'border-2 border-primary text-primary font-bold hover:bg-teal-50',
-  upcoming: 'text-slate-600 font-medium',
-  none: 'text-slate-300 font-medium',
+// Status is carried by a tint plus a written label, never by color alone.
+const STATUS = {
+  submitted: {
+    cell: 'border-success-border bg-success-soft text-success-text hover:brightness-[0.98]',
+    number: 'text-success-text',
+    label: 'Submitted',
+  },
+  missing: {
+    cell: 'border-destructive-border bg-destructive-soft text-destructive-text hover:brightness-[0.98]',
+    number: 'text-destructive-text',
+    label: 'Missing',
+  },
+  today: {
+    cell: 'border-primary bg-primary-soft text-primary-strong ring-1 ring-primary hover:brightness-[0.98] dark:text-primary',
+    number: 'text-primary-strong dark:text-primary',
+    label: 'Today',
+  },
+  upcoming: {
+    cell: 'border-border bg-card text-foreground',
+    number: 'text-foreground',
+    label: '',
+  },
+  holiday: {
+    cell: 'border-info-border bg-info-soft text-info-text',
+    number: 'text-info-text',
+    label: 'Holiday',
+  },
+  // Days the site does not serve still belong to the grid, so they carry the
+  // faintest surface instead of a hole in the layout.
+  none: {
+    cell: 'border-transparent bg-surface-sunken/60 text-muted-foreground/50',
+    number: 'text-muted-foreground/50',
+    label: '',
+  },
 };
 
-const DAY_LABELS = {
-  submitted: { text: 'Submitted', className: 'text-emerald-600' },
-  missing: { text: 'Missing', className: 'text-red-600' },
-  today: { text: 'Today', className: 'text-primary' },
-};
-
-// A tap on a submitted day opens its count; a missing day or today opens the
-// form. Other days do not navigate. Phones show the tinted number cell alone;
-// from md up the cells grow and carry a status label.
-export default function MonthCalendar({ month, site }) {
+export default function MonthCalendar({ month, site, filter = 'all' }) {
   const router = useRouter();
 
-  const openDay = (day, status) => {
-    const iso = `${month.year}-${String(month.monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const open = (cell) => {
+    if (!cell) return;
     const siteQuery = `site=${encodeURIComponent(site ?? '')}`;
-    if (status === 'submitted') router.push(`/counts/${iso}?${siteQuery}`);
-    if (status === 'missing' || status === 'today') router.push(`/meal-count?date=${iso}&${siteQuery}`);
+    if (cell.status === 'submitted') router.push(`/counts/${cell.ymd}?${siteQuery}`);
+    if (cell.status === 'missing' || cell.status === 'today') {
+      router.push(`/meal-count?date=${cell.ymd}&${siteQuery}`);
+    }
   };
 
   const cells = [
     ...Array.from({ length: month.leadingBlanks }, () => null),
-    ...Array.from({ length: month.daysInMonth }, (_, i) => i + 1),
+    ...Array.from({ length: month.daysInMonth }, (_, i) => month.days[i + 1]),
   ];
 
   return (
-    <div className="overflow-hidden rounded-[14px] border border-slate-200 bg-white">
-      <div className="grid grid-cols-7 border-b border-slate-200">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="grid grid-cols-7 border-b border-border bg-surface-sunken">
         {WEEKDAYS.map((weekday) => (
           <div
             key={weekday}
-            className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400"
+            className="py-2 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
           >
-            {weekday}
+            <span className="md:hidden">{weekday.slice(0, 1)}</span>
+            <span className="hidden md:inline">{weekday}</span>
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1 p-1.5 tabular-nums md:gap-1.5 md:p-2">
-        {cells.map((day, index) => {
-          if (day === null) return <div key={`blank-${index}`} className="h-12 md:h-[104px]" />;
-          const status = month.days[day] ?? 'none';
-          const label = DAY_LABELS[status];
-          const clickable = status === 'submitted' || status === 'missing' || status === 'today';
+
+      <div
+        key={`${month.year}-${month.monthNumber}`}
+        className="stagger grid grid-cols-7 gap-1 p-1.5 md:gap-1.5 md:p-2"
+        style={{ '--stagger-step': '8ms' }}
+      >
+        {cells.map((cell, index) => {
+          if (!cell) {
+            return <div key={`blank-${index}`} className="h-14 md:h-[104px]" style={{ '--stagger-i': index }} />;
+          }
+
+          const style = STATUS[cell.status] ?? STATUS.none;
+          const clickable = ['submitted', 'missing', 'today'].includes(cell.status);
+          const dimmed = filter !== 'all' && cell.status !== filter;
+          const meals = mealsFor(cell.meals);
+          const Tag = clickable ? 'button' : 'div';
+
           return (
-            <button
-              key={day}
-              type="button"
-              disabled={!clickable}
-              onClick={() => openDay(day, status)}
+            <Tag
+              key={cell.ymd}
+              {...(clickable
+                ? {
+                    type: 'button',
+                    onClick: () => open(cell),
+                    'aria-label': `${style.label || 'Day'} ${cell.day}`,
+                  }
+                : { 'aria-hidden': cell.status === 'none' ? 'true' : undefined })}
+              style={{ '--stagger-i': index }}
               className={cn(
-                'flex h-12 items-center justify-center rounded-lg text-sm',
-                'md:h-[104px] md:flex-col md:items-start md:justify-between md:p-2 md:text-[15px]',
-                DAY_STYLES[status],
-                clickable && 'cursor-pointer transition-[background-color,transform] active:scale-[0.97]'
+                'group relative flex h-14 flex-col items-center justify-center overflow-hidden rounded-md border text-left outline-none',
+                'transition-[filter,opacity,transform] duration-fast ease-out',
+                'md:h-[104px] md:items-stretch md:justify-start md:p-2',
+                style.cell,
+                clickable && 'cursor-pointer active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring',
+                dimmed && 'opacity-25'
               )}
             >
-              <span>{day}</span>
-              {label && (
-                <span className={cn('hidden text-[10px] font-medium md:block', label.className)}>{label.text}</span>
+              <span className="flex w-full items-center justify-between">
+                <span className={cn('text-[13px] font-bold tabular-nums md:text-[15px]', style.number)}>
+                  {cell.day}
+                </span>
+                {cell.status === 'submitted' && (
+                  <span className="hidden h-1.5 w-1.5 rounded-full bg-success md:block" aria-hidden="true" />
+                )}
+                {cell.status === 'missing' && (
+                  <span className="hidden h-1.5 w-1.5 rounded-full bg-destructive md:block" aria-hidden="true" />
+                )}
+              </span>
+
+              {/* Phones: one dot under the number keeps the grid readable at 40px. */}
+              {cell.status !== 'none' && cell.status !== 'upcoming' && (
+                <span
+                  className={cn(
+                    'mt-1 h-1 w-1 rounded-full md:hidden',
+                    cell.status === 'submitted' && 'bg-success',
+                    cell.status === 'missing' && 'bg-destructive',
+                    cell.status === 'today' && 'bg-primary',
+                    cell.status === 'holiday' && 'bg-info'
+                  )}
+                  aria-hidden="true"
+                />
               )}
-            </button>
+
+              <span className="mt-auto hidden w-full flex-col gap-1 md:flex">
+                {cell.holiday ? (
+                  <span className="truncate text-[11px] font-semibold">{cell.holiday}</span>
+                ) : meals.length > 0 && cell.status !== 'submitted' ? (
+                  <span className="flex flex-wrap gap-1">
+                    {meals.map((meal) => (
+                      <span
+                        key={meal}
+                        className="rounded-xs bg-foreground/5 px-1 py-px text-[10px] font-semibold text-muted-foreground"
+                      >
+                        {meal}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+                {style.label && <span className="text-[10.5px] font-semibold">{style.label}</span>}
+              </span>
+            </Tag>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+export function CalendarLegend({ className }) {
+  const items = [
+    { label: 'Submitted', className: 'border-success-border bg-success-soft' },
+    { label: 'Missing', className: 'border-destructive-border bg-destructive-soft' },
+    { label: 'Today', className: 'border-primary bg-primary-soft' },
+    { label: 'Holiday', className: 'border-info-border bg-info-soft' },
+    { label: 'No service', className: 'border-border bg-surface-sunken' },
+  ];
+  return (
+    <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-2', className)}>
+      {items.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <span className={cn('h-3 w-3 rounded-xs border', item.className)} />
+          {item.label}
+        </span>
+      ))}
     </div>
   );
 }

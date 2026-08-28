@@ -53,17 +53,46 @@ add `?pgbouncer=true&connection_limit=1` on Vercel) and `DIRECT_URL` (direct,
 | POST `actionType:mealCount` | POST `/api/meal-counts` (legacy body accepted) |
 | `?type=allMeals` | GET `/api/meal-counts/all` |
 | `?type=request&…` | POST `/api/requests` |
-| `?type=listFiles` | GET `/api/reports/files` (GAS proxy until Phase 5) |
-| `?type=downloadSelectedPdf&fileId=` | GET `/api/reports/files/download?fileId=` (proxy) |
+| `?type=listFiles` | GET `/api/reports/files` (Drive REST API, 10 min in-process cache with stale fallback) |
+
+Every PDF the app generates is archived to Drive through `src/lib/pdf-archive.js`
+(`<reports folder>/<YYYY-MM>/<name>.pdf`). Monthly and consolidated reports must use
+the same helper and store the returned Drive id in `GeneratedReport.storageKey`.
+| `?type=downloadSelectedPdf&fileId=` | GET `/api/reports/files/download?fileId=` (Drive stream, `&download=1` for attachment) |
 
 New (no legacy equivalent): `/api/auth/logout|forgot-password|reset-password`,
 `/api/sites/service-days` (admin calendar authoring), `/api/requests` GET +
 `/api/requests/[id]` PATCH (admin inbox), `/api/health`.
+
+## Planned endpoints
+
+From the open cards plus the **Summer-parity review** (28-Aug-2026 — functional
+inventory in `SPECS.md` §11, sequencing in `ROADMAP.md`, items tagged `[S]`).
+Same conventions as above: site by query param, dates through `src/lib/dates.js`,
+writes return `{result, message?}` with real status codes, every write audited.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/sites` · `PATCH /api/sites/[id]` | Admin site CRUD. A rename must propagate — `Site.name` is the identity matched by `assignedSite`, counts and reports; do it in one transaction and audit it. `PATCH` also flips `active`. |
+| `POST /api/sites/[id]/schedule` | Weekly template (meals per weekday) + `programStart/End` → generates `ServiceDay` rows for the cycle. Never rewrites a day that already has a `MealCount` (same rule the current `PUT /api/sites/service-days` enforces). |
+| `GET/POST /api/holidays` · `PATCH/DELETE /api/holidays/[id]` | Named holiday with a date range, site scope (all / selected) and meal scope (all / subset). Reject duplicates on `name + range + scope`. Deleting only removes rows inside the same scope. Projects onto `ServiceDay` — never onto claimed days. |
+| `POST /api/meal-counts/void` | Soft void: `voidedAt/ById/Reason`. The date returns to `validDates`, the count leaves every report, rows stay for audit. Admin only. |
+| `POST /api/meal-counts/approve` | **Only if IF Cares confirms the approval flow.** Sets `approvalStatus/approvedAt/approvedById`, blocks corrections, and queues the PDF + site email as a follow-up job (never inline — Summer learned this the hard way). |
+| `POST /api/reports/daily` · `POST /api/reports/monthly` | `{ save?, emails? }` — store in Storage, email to N validated recipients, or both. Returns the stored file reference. |
+| `POST /api/reports/consolidated` | Month/range × state, with an excluded-sites list. Client-generated `jobId` so polling survives a dropped connection. Returns immediately. |
+| `GET /api/reports/jobs/[id]` | `processing \| completed \| error` (+ `resultRef`). Everything over ~10s goes through here. |
+| `GET /api/reports` | Stored reports, retrievable without regenerating (`GeneratedReport`). |
+| `GET/POST /api/sign/[token]` | **Public, no session** — the only exception to "everything behind auth" (`SPECS.md` §9). Opaque single-use token, expiring, scoped to one report; returns the PDF for preview and accepts the signature. Do NOT put a Drive/file id in the URL the way Summer does. |
+| `PATCH /api/requests/[id]` (extended) | Adds `responseComment` + `respondedBy/At` and triggers the email to the requester. |
+| `POST /api/monitoring` | Server-side proxy to the central monitoring service; the browser never talks to it directly. Payload: app, environment, screen/function, message, stack, URL. |
 
 ## Still pending (later phases)
 
 - Phase 2: swap the 14 frontend call sites; import historical per-student meal
   counts + real users (needs spreadsheet access — no GAS endpoint exposes them);
   deploy with Supabase; retire GAS writes.
-- Phase 3: admin UI (users, sites, service calendar). Phase 4: redesign.
+- Phase 3: admin UI (users, sites, service calendar, holidays). Phase 4: redesign.
   Phase 5: native reports (replace proxy), request inbox UI, email delivery.
+- Schema deltas the planned endpoints depend on (`SPECS.md` §4): `Holiday`, the site
+  weekly template + program dates, site contact fields, count void (and optional
+  approval) fields, request response fields, report signature + job state.

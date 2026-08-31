@@ -41,8 +41,9 @@ export const POST = handle(async (req) => {
   const date = ymdToUtcDate(body.date);
   if (!date) throw new ApiError(422, 'Invalid date.');
 
-  const count = await prisma.mealCount.findUnique({
-    where: { siteId_date: { siteId: site.id, date } },
+  // Voided counts are not corrected: they are not the count of record any more.
+  const count = await prisma.mealCount.findFirst({
+    where: { siteId: site.id, date, voidedAt: null },
     include: { entries: { orderBy: { number: 'asc' } } },
   });
   if (!count) throw new ApiError(404, 'No meal count was submitted for this date.');

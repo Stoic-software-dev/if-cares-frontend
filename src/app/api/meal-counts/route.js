@@ -3,6 +3,7 @@ import { handle, readJsonBody, legacySuccess, ApiError } from '@/lib/http';
 import { requireUser, requireSiteAccess } from '@/lib/auth';
 import { mealCountSchema } from '@/lib/validation';
 import { isoInstantToYmd, ymdToUtcDate, toCanonicalTime } from '@/lib/dates';
+import { applyHolidays, loadHolidays } from '@/lib/holidays';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,19 @@ export const POST = handle(async (req) => {
   });
   if (!serviceDay) throw new ApiError(422, 'This date is not available for meal counts.');
 
+  // The calendar keeps the day, holidays are subtracted from it, so the check
+  // has to happen here rather than by looking for a missing ServiceDay row.
+  const holidays = await loadHolidays({ from: date, to: date });
+  const { meals: openMeals, holiday } = applyHolidays(
+    { brk: serviceDay.brk, lunch: serviceDay.lunch, snk: serviceDay.snk, sup: serviceDay.sup },
+    holidays,
+    site.id,
+    ymd
+  );
+  if (!openMeals) {
+    throw new ApiError(422, `${holiday || 'That day'} is a holiday at this site, so no meals are served.`);
+  }
+
   const timeIn = toCanonicalTime(values.timeIn);
   const timeOut = toCanonicalTime(values.timeOut);
   if (!timeIn) throw new ApiError(422, 'Time In is required.');
@@ -45,6 +59,8 @@ export const POST = handle(async (req) => {
   });
   const byName = new Map(roster.map((s) => [s.name.trim().toLowerCase(), s.id]));
 
+  // A voided count does not block the day: the partial unique index only covers
+  // active rows, so the site files it again and both submissions stay on record.
   let mealCount;
   try {
     mealCount = await prisma.$transaction(async (tx) => {

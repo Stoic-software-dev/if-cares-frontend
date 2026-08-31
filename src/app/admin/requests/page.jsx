@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CircleCheck, Inbox, Play, RotateCcw } from 'lucide-react';
+import { CircleCheck, Inbox, Play, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
+import RequestForm from '@/components/requests/RequestForm';
 import StatusBadge from '@/components/requests/StatusBadge';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch } from '@/lib/api-client';
+import { SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { requestDate, requestDetail } from '@/lib/requests';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
@@ -37,6 +39,16 @@ function InboxScreen() {
   const [resolving, setResolving] = useState(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [composing, setComposing] = useState(false);
+
+  // Administrators reach requests through this inbox, so the form to file one
+  // has to live here too. It used to exist only on the staff screen, which
+  // their navigation never opens.
+  const siteList = useCachedGet(SITES_PATH);
+  const allSiteNames = useMemo(
+    () => (siteList.data ? sortSiteNames(siteList.data.map((entry) => entry.name)) : []),
+    [siteList.data]
+  );
 
   const load = () => {
     setError('');
@@ -107,9 +119,9 @@ function InboxScreen() {
     try {
       await setRequestStatus(resolving, 'RESOLVED', { silent: true, comment: note });
 
-      // The note is sent, but the response field is not deployed everywhere
-      // yet. Read the request back and say plainly whether it was kept, rather
-      // than letting an administrator believe the site will see it.
+      // Read it back so the row shows the answer that was actually stored, and
+      // say so if the note did not make it: an administrator who believes the
+      // site was told when it was not is worse than no note at all.
       let kept = false;
       try {
         const fresh = await apiGet('/api/requests');
@@ -121,10 +133,12 @@ function InboxScreen() {
 
       if (typed && !kept) {
         toast.warning(`${resolving.type} resolved`, {
-          description: 'The note was not stored: request responses are not deployed yet. Tell the site directly.',
+          description: 'The note could not be saved. Tell the site directly.',
         });
       } else {
-        toast.success(`${resolving.type} resolved`);
+        toast.success(`${resolving.type} resolved`, {
+          description: typed ? 'The site sees your answer on its requests screen.' : undefined,
+        });
       }
       setResolving(null);
       setNote('');
@@ -144,6 +158,12 @@ function InboxScreen() {
             inbox
               ? `${counts.NEW} new, ${counts.IN_PROGRESS} in progress, ${counts.RESOLVED} resolved`
               : 'Loading the inbox'
+          }
+          actions={
+            <Button variant="outline" onClick={() => setComposing(true)}>
+              <Plus />
+              New request
+            </Button>
           }
         />
 
@@ -303,6 +323,24 @@ function InboxScreen() {
           </div>
         )}
       </div>
+
+      <Dialog open={composing} onOpenChange={setComposing}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New request</DialogTitle>
+            <DialogDescription>
+              It lands in this inbox like any other, filed under your name.
+            </DialogDescription>
+          </DialogHeader>
+          <RequestForm
+            sites={allSiteNames}
+            onSent={() => {
+              setComposing(false);
+              load();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(resolving)} onOpenChange={(open) => !open && setResolving(null)}>
         <DialogContent className="sm:max-w-md">

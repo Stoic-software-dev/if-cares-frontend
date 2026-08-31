@@ -2,15 +2,21 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Ban, Check, Download, MoreVertical, Pencil, ShieldAlert } from 'lucide-react';
+import { Ban, Check, Download, History, MoreVertical, Pencil, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,6 +73,8 @@ function CountDetailScreen() {
   const [query, setQuery] = useState('');
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [voided, setVoided] = useState(false);
 
   const load = () => {
     setError('');
@@ -102,20 +110,12 @@ function CountDetailScreen() {
   };
 
   // Voiding is the escape hatch for a count filed on the wrong day or site;
-  // corrections cannot undo those. The endpoint is the one planned in
-  // docs/V2-BACKEND.md, and the dialog surfaces its answer either way.
+  // corrections cannot undo those. The count stays on record, voided, and the
+  // day goes back to being open.
   const voidCount = async () => {
-    try {
-      await apiPost('/api/meal-counts/void', { site, date, reason: voidReason.trim() });
-    } catch (err) {
-      // Until the endpoint ships, say so in plain words instead of leaking a
-      // status code into the dialog.
-      if (err.status === 404 || err.status === 405) {
-        throw new Error('Voiding is not available in this environment yet. It ships with the corrections module.');
-      }
-      throw err;
-    }
+    await apiPost('/api/meal-counts/void', { site, date, reason: voidReason.trim() });
     invalidate(ALL_MEALS_PATH);
+    setVoided(true);
   };
 
   const entries = useMemo(() => {
@@ -134,7 +134,35 @@ function CountDetailScreen() {
       <div className="flex flex-col gap-5">
         <PageHeader
           title={title}
-          subtitle={shortSiteName(site)}
+          subtitle={
+            // Everything the old status card held, as one quiet line: a count on
+            // this screen is submitted by definition, so a badge saying so was
+            // only taking the place of the numbers.
+            count ? (
+              <>
+                {shortSiteName(site)}, {timeLabel(count.timeIn)} to {timeLabel(count.timeOut)}
+                {count.submittedBy && count.submittedBy !== 'gas-import' && (
+                  <>, submitted by {count.submittedBy}</>
+                )}
+                {count.source === 'GAS_IMPORT' && <>, imported from the previous system</>}
+                {count.corrected && (
+                  <>
+                    ,{' '}
+                    <button
+                      type="button"
+                      onClick={() => setHistoryOpen(true)}
+                      className="rounded-xs font-semibold text-warning-text underline decoration-warning-text/30 underline-offset-2 transition-colors hover:decoration-warning-text"
+                    >
+                      corrected {count.corrections.length}{' '}
+                      {count.corrections.length === 1 ? 'time' : 'times'}
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              shortSiteName(site)
+            )
+          }
           backHref={`/dashboard?site=${encodeURIComponent(site)}`}
           backLabel="Back to dashboard"
           actions={
@@ -145,22 +173,30 @@ function CountDetailScreen() {
                   {downloading ? 'Preparing' : 'Download PDF'}
                 </Button>
                 {admin && (
-                  <>
-                    <Button
-                      onClick={() =>
-                        router.push(`/meal-count?date=${date}&site=${encodeURIComponent(site)}&correct=1`)
-                      }
-                    >
-                      <Pencil />
-                      Correct count
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label="More actions">
-                          <MoreVertical />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
+                  <Button
+                    onClick={() =>
+                      router.push(`/meal-count?date=${date}&site=${encodeURIComponent(site)}&correct=1`)
+                    }
+                  >
+                    <Pencil />
+                    Correct count
+                  </Button>
+                )}
+                {(admin || count.corrected) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="More actions">
+                        <MoreVertical />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      {count.corrected && (
+                        <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
+                          <History />
+                          Correction history
+                        </DropdownMenuItem>
+                      )}
+                      {admin && (
                         <DropdownMenuItem
                           destructive
                           onClick={() => {
@@ -171,9 +207,9 @@ function CountDetailScreen() {
                           <Ban />
                           Void count
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </>
             )
@@ -192,49 +228,6 @@ function CountDetailScreen() {
 
         {count && (
           <>
-            <section className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-4 py-3">
-              <Badge variant="success" size="lg">
-                <Check strokeWidth={3} />
-                Submitted
-              </Badge>
-              {count.source === 'GAS_IMPORT' && <Badge size="lg">Imported</Badge>}
-              {count.corrected && (
-                <Badge variant="warning" size="lg">
-                  <Pencil />
-                  Corrected
-                </Badge>
-              )}
-              <span className="ml-auto text-[13px] font-semibold tabular-nums text-foreground">
-                {timeLabel(count.timeIn)} to {timeLabel(count.timeOut)}
-              </span>
-              {count.submittedBy && count.submittedBy !== 'gas-import' && (
-                <span className="w-full text-[12px] text-muted-foreground">
-                  Submitted by {count.submittedBy}
-                </span>
-              )}
-            </section>
-
-            {count.corrected && (
-              <section className="flex flex-col gap-2 rounded-lg border border-warning-border bg-warning-soft p-4">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-warning-text">
-                  Correction history
-                </span>
-                <ol className="flex flex-col gap-2.5">
-                  {count.corrections.map((correction, index) => (
-                    <li key={`${correction.at}-${index}`} className="flex flex-col gap-0.5 text-[13px] text-warning-text">
-                      <span className="font-semibold">
-                        {correction.by}, {stamp(correction.at)}
-                      </span>
-                      {correction.note && <span className="leading-relaxed opacity-90">{correction.note}</span>}
-                    </li>
-                  ))}
-                </ol>
-                <span className="text-[12px] text-warning-text/80">
-                  The values submitted originally are kept on record and never overwritten.
-                </span>
-              </section>
-            )}
-
             <section className="flex flex-col gap-2.5">
               <SectionLabel>Totals</SectionLabel>
               <div className="grid grid-cols-5 divide-x divide-border overflow-hidden rounded-lg border border-border bg-card">
@@ -346,9 +339,60 @@ function CountDetailScreen() {
         )}
       </div>
 
+      {/* The history matters when someone goes looking for it, which is rarely.
+          On the page it pushed the numbers below the fold on every visit. */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Correction history</DialogTitle>
+            <DialogDescription>
+              {title} at {shortSiteName(site)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Newest first, the order the API returns. */}
+          <ol className="flex max-h-[60vh] flex-col overflow-y-auto pr-1">
+            {(count?.corrections ?? []).map((correction, index, list) => (
+              <li key={`${correction.at}-${index}`} className="flex gap-3">
+                {/* A rail so several corrections read as one sequence. */}
+                <div className="flex flex-col items-center pt-1.5">
+                  <span
+                    className={cn(
+                      'h-2 w-2 shrink-0 rounded-full',
+                      index === 0 ? 'bg-warning-text' : 'bg-border-strong'
+                    )}
+                  />
+                  {index < list.length - 1 && <span className="w-px flex-1 bg-border" />}
+                </div>
+                <div className={cn('flex min-w-0 flex-col gap-0.5', index < list.length - 1 && 'pb-5')}>
+                  <span className="text-[13px] font-semibold text-foreground">{correction.by}</span>
+                  <span className="text-[12px] tabular-nums text-muted-foreground">
+                    {stamp(correction.at)}
+                    {index === 0 && list.length > 1 && ', most recent'}
+                  </span>
+                  {correction.note && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-foreground">{correction.note}</p>
+                  )}
+                  <ChangeList changes={correction.changes} />
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <p className="border-t border-border pt-3 text-[12px] leading-relaxed text-muted-foreground">
+            The values submitted originally are kept on record and never overwritten.
+          </p>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={voidOpen}
-        onOpenChange={setVoidOpen}
+        onOpenChange={(next) => {
+          setVoidOpen(next);
+          // Once voided there is no count on this screen any more, so closing
+          // the dialog goes back instead of leaving a page that cannot load.
+          if (!next && voided) router.push(`/dashboard?site=${encodeURIComponent(site)}`);
+        }}
         title="Void this meal count?"
         description={`${title} at ${shortSiteName(site)} goes back to being an open service day.`}
         consequences={[
@@ -358,7 +402,7 @@ function CountDetailScreen() {
         ]}
         confirmLabel="Void count"
         successTitle="Count voided"
-        successDescription="The service day is open again and the count no longer counts toward reports."
+        successDescription="The service day is open again. Opening that day shows who voided it, and an administrator can restore it."
         onConfirm={voidCount}
       >
         <div className="flex flex-col gap-1.5">
@@ -379,6 +423,54 @@ function CountDetailScreen() {
         </div>
       </ConfirmDialog>
     </AppShell>
+  );
+}
+
+// What a correction actually moved. A note says why; this says what, which is
+// the part someone auditing the count needs.
+function ChangeList({ changes }) {
+  if (!changes) return null;
+  if (changes.length === 0) {
+    return (
+      <p className="mt-1.5 text-[12.5px] italic text-muted-foreground">
+        No change was recorded for this entry.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="mt-2 flex flex-col gap-1 border-l-2 border-border pl-3">
+      {changes.map((change, index) => (
+        <li key={index} className="text-[12.5px] leading-relaxed text-muted-foreground">
+          {change.kind === 'time' ? (
+            <>
+              <span className="font-medium text-foreground">{change.label}</span>{' '}
+              {timeLabel(change.from)} to <span className="tabular-nums">{timeLabel(change.to)}</span>
+            </>
+          ) : change.added ? (
+            <>
+              <span className="font-medium text-foreground">{change.name}</span> was added to the count
+            </>
+          ) : change.removed ? (
+            <>
+              <span className="font-medium text-foreground">{change.name}</span> was removed from the count
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-foreground">{change.name}</span>
+              {change.flips.map((flip, i) => (
+                <span key={flip.label}>
+                  {i === 0 ? ' ' : ', '}
+                  <span className={flip.to ? 'text-primary' : 'text-destructive'}>
+                    {flip.to ? 'marked' : 'unmarked'} {flip.label.toLowerCase()}
+                  </span>
+                </span>
+              ))}
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -68,6 +68,9 @@ export const GET = handle(async (req) => {
       site: r.site.name,
       requestedBy: r.requestedByEmail,
       createdAt: r.createdAt.toISOString(),
+      responseComment: r.responseComment,
+      respondedBy: r.respondedByEmail,
+      respondedAt: r.respondedAt ? r.respondedAt.toISOString() : null,
     })),
   });
 });

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { handle, legacyJson } from '@/lib/http';
 import { requireUser, visibleSites } from '@/lib/auth';
 import { dateToYmd } from '@/lib/dates';
+import { applyHolidays, loadHolidays } from '@/lib/holidays';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,12 +16,14 @@ export const GET = handle(async () => {
   const sites = await visibleSites(session);
   const siteIds = sites.map((s) => s.id);
 
-  const [serviceDays, counts] = await Promise.all([
+  const [serviceDays, counts, holidays] = await Promise.all([
     prisma.serviceDay.findMany({ where: { siteId: { in: siteIds } } }),
+    // A voided count leaves its day open again, so it must not show as taken.
     prisma.mealCount.findMany({
-      where: { siteId: { in: siteIds } },
+      where: { siteId: { in: siteIds }, voidedAt: null },
       select: { siteId: true, date: true },
     }),
+    loadHolidays(),
   ]);
 
   const countedBySite = new Map();
@@ -31,7 +34,8 @@ export const GET = handle(async () => {
 
   const result = {};
   for (const site of sites) {
-    result[site.name] = { validDates: {}, excludedDates: [] };
+    // `holidays` is additive to the legacy shape: old callers ignore it.
+    result[site.name] = { validDates: {}, excludedDates: [], holidays: {} };
   }
   const byId = new Map(sites.map((s) => [s.id, s]));
 
@@ -39,13 +43,24 @@ export const GET = handle(async () => {
     const site = byId.get(day.siteId);
     if (!site) continue;
     const ymd = dateToYmd(day.date);
+    // A day that already carries a count stays counted whatever the calendar
+    // says afterwards: the meals were served.
     if (countedBySite.get(day.siteId)?.has(ymd)) continue;
-    result[site.name].validDates[ymd] = {
-      brk: day.brk,
-      lunch: day.lunch,
-      snk: day.snk,
-      sup: day.sup,
-    };
+
+    // Holidays are subtracted here rather than deleted from the calendar, so
+    // removing one puts the day straight back.
+    const { meals, holiday } = applyHolidays(
+      { brk: day.brk, lunch: day.lunch, snk: day.snk, sup: day.sup },
+      holidays,
+      day.siteId,
+      ymd
+    );
+    if (!meals) {
+      result[site.name].holidays[ymd] = holiday;
+      continue;
+    }
+    result[site.name].validDates[ymd] = meals;
+    if (holiday) result[site.name].holidays[ymd] = holiday;
   }
 
   for (const [siteId, ymds] of countedBySite) {

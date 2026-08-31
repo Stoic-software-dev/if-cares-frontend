@@ -20,7 +20,7 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
-import { apiGet, apiPost } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, cachedGet, invalidate } from '@/lib/data-cache';
 import { MEAL_KEYS, dateLabel, todayYmd } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
@@ -69,6 +69,14 @@ const toRow = (student, marks) => [
   marks.sup,
 ];
 
+const voidedStamp = (iso) =>
+  new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
 function MealCountScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,6 +88,7 @@ function MealCountScreen() {
   // Admin correction of an already-submitted count (STOIC-2201): rows come from
   // the submitted entries, prefilled, and saving records a correction.
   const correcting = searchParams.get('correct') === '1' && isAdmin(user);
+  const admin = isAdmin(user);
 
   const [roster, setRoster] = useState(null);
   const [dayMeals, setDayMeals] = useState(null);
@@ -98,6 +107,10 @@ function MealCountScreen() {
 
   const getSignature = useRef(null);
   const [signed, setSigned] = useState(false);
+  // A day can look empty because a count for it was thrown out. Only an
+  // administrator sees this, and only they can put it back.
+  const [voided, setVoided] = useState(null);
+  const [restoring, setRestoring] = useState(false);
   const [restored, setRestored] = useState(false);
 
   // One draft per site and day, on this device only.
@@ -213,6 +226,32 @@ function MealCountScreen() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [site, iso, correcting, today, draftKey]);
+
+  useEffect(() => {
+    if (!admin || !site || !iso || correcting) return;
+    let alive = true;
+    apiGet(`/api/meal-counts/void?site=${encodeURIComponent(site)}&date=${iso}`)
+      .then((res) => alive && setVoided(res.data))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [admin, site, iso, correcting]);
+
+  const restoreVoided = async () => {
+    setRestoring(true);
+    try {
+      await apiPut('/api/meal-counts/void', { site, date: iso });
+      invalidate(ALL_MEALS_PATH);
+      toast.success('Count restored');
+      router.push(`/counts/${iso}?site=${encodeURIComponent(site)}`);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
 
   const meals = useMemo(() => {
     const served = MEAL_KEYS.filter((meal) => dayMeals?.[meal.key]);
@@ -385,6 +424,31 @@ function MealCountScreen() {
     <AppShell>
       {/* Extra room on phones so the sticky submit bar never covers the last field. */}
       <div className="flex flex-col gap-5 pb-24 md:pb-0">
+        {voided && (
+          <div className="flex flex-col gap-2 rounded-lg border border-warning-border bg-warning-soft p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[13px] font-semibold text-warning-text">
+                A count for this day was voided
+              </span>
+              <span className="text-[12.5px] leading-relaxed text-warning-text/90">
+                {voided.by} voided it, {voidedStamp(voided.at)}
+                {voided.reason ? `, "${voided.reason}"` : ''}. It had {voided.students}{' '}
+                {voided.students === 1 ? 'student' : 'students'} on record.
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              loading={restoring}
+              onClick={restoreVoided}
+              className="shrink-0"
+            >
+              {!restoring && <Undo2 />}
+              Restore it
+            </Button>
+          </div>
+        )}
+
         <PageHeader
           title={title}
           subtitle={subtitle}

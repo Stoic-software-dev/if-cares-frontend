@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacySuccess } from '@/lib/http';
 import { forgotPasswordSchema } from '@/lib/validation';
+import { mailConfigured, sendMail } from '@/lib/gmail';
+import { passwordReset } from '@/lib/mail-templates';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -9,8 +11,8 @@ export const dynamic = 'force-dynamic';
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// Always answers success so account existence is never leaked. Email delivery
-// is not wired yet: an admin generates the link with scripts/create-reset-link.mjs.
+// Always answers success so account existence is never leaked, whether or not
+// the address belongs to anyone and whether or not the mail went out.
 export const POST = handle(async (req) => {
   const { email } = forgotPasswordSchema.parse(await readJsonBody(req));
   const user = await prisma.user.findUnique({ where: { email } });
@@ -23,6 +25,18 @@ export const POST = handle(async (req) => {
         expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
       },
     });
+    // The mail is sent alongside the answer, never in front of it: a slow or
+    // broken mail provider must not turn into a slow login screen, and must not
+    // become a way to find out whether an address exists.
+    if (mailConfigured()) {
+      const base = process.env.APP_URL?.replace(/\/$/, '') || new URL(req.url).origin;
+      const link = `${base}/reset-password?token=${token}`;
+      const message = passwordReset({ name: user.name, link });
+      sendMail({ to: [user.email], ...message }).catch((error) => {
+        console.warn(`[mail] password reset to ${user.email}: ${error.message}`);
+      });
+    }
+
     await logAudit({ actor: user, action: 'auth.forgot_password', entity: 'user', entityId: user.id });
   }
   return legacySuccess();

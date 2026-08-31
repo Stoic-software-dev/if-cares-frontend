@@ -54,6 +54,12 @@ const query = (name) => new URL(last().url).searchParams.get(name);
 
 check('the account is detected as configured', drive.driveConfigured());
 
+// A value pasted out of the service account JSON, or out of a dashboard field,
+// often keeps its quotes. That must not be the reason menus stop loading.
+process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY = `"${privateKey.replace(/\n/g, '\\n')}"`;
+process.env.GOOGLE_DRIVE_MENUS_FOLDER_ID = '"MENUS_FOLDER"';
+check('quotes around a pasted value are stripped', drive.driveConfigured() && drive.menusFolderId() === 'MENUS_FOLDER');
+
 // --- listing -------------------------------------------------------------
 responder = () => ({ files: [{ id: 'f1', name: 'Menu.pdf', mimeType: 'application/pdf', createdTime: '2026-01-01T00:00:00Z' }] });
 const menus = await drive.listMenus();
@@ -112,14 +118,38 @@ check('the update sends the raw media', new URL(last().url).searchParams.get('up
 check('the update body is the bytes themselves', Buffer.compare(last().body, bytes) === 0);
 
 // --- error mapping -------------------------------------------------------
-responder = () => new Response('nope', { status: 403 });
-let forbidden = '';
-try {
-  await drive.listFolder('REPORTS_FOLDER');
-} catch (error) {
-  forbidden = error.message;
+// A 403 means two very different things, and saying the wrong one sends whoever
+// is setting this up down the wrong path. It cost a real afternoon once.
+async function failure(status, body) {
+  responder = () => new Response(body, { status });
+  try {
+    await drive.listFolder('REPORTS_FOLDER');
+    return '';
+  } catch (error) {
+    return error.message;
+  }
 }
-check('a 403 explains the folder has to be shared', forbidden.includes('Share it with the service account'));
+
+const apiOff = await failure(403, JSON.stringify({
+  error: {
+    code: 403,
+    message: 'Google Drive API has not been used in project 123 before or it is disabled.',
+    errors: [{ reason: 'accessNotConfigured' }],
+  },
+}));
+check('a disabled Drive API says so', apiOff.includes('not enabled in the Google Cloud project'), apiOff);
+
+const notShared = await failure(403, JSON.stringify({
+  error: { code: 403, message: 'The user does not have sufficient permissions.', errors: [{ reason: 'insufficientFilePermissions' }] },
+}));
+check('a real permission error asks for the share', notShared.includes('Share the folder'), notShared);
+check('the permission error names the account', notShared.includes('menus@ifcares.iam.gserviceaccount.com'), notShared);
+
+const missing = await failure(404, JSON.stringify({ error: { code: 404, message: 'File not found.', errors: [{ reason: 'notFound' }] } }));
+check('a 404 points at the folder id', missing.includes('does not exist for'), missing);
+
+const badKey = await failure(401, 'Invalid Credentials');
+check('a 401 points at the credentials', badKey.includes('rejected the service account credentials'), badKey);
 
 console.log(`\n${failures === 0 ? 'all checks passed' : `${failures} check(s) failed`}`);
 process.exit(failures === 0 ? 0 : 1);

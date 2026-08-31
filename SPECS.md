@@ -158,6 +158,21 @@ que Ver y Descargar son links directos, sin base64 ni decodificación en el clie
 Mientras `GOOGLE_SERVICE_ACCOUNT_*` esté vacío cae al GAS viejo, que es lo único que
 todavía lo invoca en runtime.
 
+### Estado al 28-ago-2026 (inventario contra el código)
+
+Construido y verificado: auth completo (login, logout, me, forgot, reset), `sites` (GET),
+`sites/data`, `sites/service-days` (GET/PUT) y `sites/service-days/close` (POST/PUT, cierre
+masivo con deshacer), `students` (GET/POST), `students/[id]`, `students/roster`,
+`meal-counts` (POST), `meal-counts/all`, `meal-counts/detail` (con el diff de cada
+corrección), `meal-counts/correct`, `meal-counts/pdf` (diario, archivado en Drive),
+`requests` (GET/POST) y `requests/[id]` (PATCH), `users` (GET/POST), `users/[id]`,
+`users/[id]/reset-link`, `reports/files` y `reports/files/download` (Drive), `health`.
+
+Sin construir: alta y edición de sitios (`/api/sites` es solo GET), anulación de counts,
+feriados, reportes mensuales y consolidados, jobs asíncronos, firma pública, envío de mail,
+reminders y monitoreo de errores del cliente. El orden de ataque está en
+`ROADMAP.md` → *Plan de ejecución*.
+
 **Endpoints a construir** (paridad Summer + cards abiertas; mapeo detallado en
 `docs/V2-BACKEND.md` → *Planned endpoints*):
 
@@ -205,7 +220,7 @@ verdad hasta STOIC-2207.
 | Tema | Lo necesitan | Estado |
 |---|---|---|
 | Crear proyecto Supabase | Todo | **BLOQUEANTE #1** — runbook listo, ~15 min |
-| Proveedor de email (Resend/SES/…) | 2197 reset, 2203/2204 envío PDFs, 2205 requests+reminders | Sin decidir — decidir YA |
+| Proveedor de email | 2197 reset, 2203/2204 envío PDFs, 2205 requests+reminders | **Decidido: Gmail** (Workspace de ifcares.org), como hoy. Requiere Gmail API habilitada **más delegación en todo el dominio** con scope `gmail.send`, y una casilla dedicada para el `sub` (hoy el legacy manda desde el dueño del Apps Script y copia a marisela@). Pendiente: definir esa casilla. Alternativa si la delegación se traba: SMTP con contraseña de aplicación |
 | Storage de archivos (PDFs generados, menús) | 2199, 2203, 2204 | **Resuelto**: Google Drive vía service account, un solo módulo para lectura y escritura (`docs/DRIVE-STORAGE.md`). Las firmas siguen como data URL en `MealCount.signature` |
 | Cron/scheduler (reminders diarios, refresh del pipeline) | 2198, 2205 | Railway cron / pg_cron / a definir |
 | Motor de PDF (¿puppeteer/react-pdf?) — replicar el form en papel campo por campo | 2203, 2204 | Spike pendiente |

@@ -60,6 +60,12 @@ Every PDF the app generates is archived to Drive through `src/lib/pdf-archive.js
 the same helper and store the returned Drive id in `GeneratedReport.storageKey`.
 | `?type=downloadSelectedPdf&fileId=` | GET `/api/reports/files/download?fileId=` (Drive stream, `&download=1` for attachment) |
 
+`POST /api/sites/service-days/close` closes a date range across many sites in one
+transaction and answers with the rows it removed; `PUT` on the same route puts them
+back, which is what makes a mistaken bulk close undoable. It replaced a read plus a
+full-calendar write per site, issued sequentially from the browser: 6.4 s per site
+measured, against 1.9 s for all 56.
+
 New (no legacy equivalent): `/api/auth/logout|forgot-password|reset-password`,
 `/api/sites/service-days` (admin calendar authoring), `/api/requests` GET +
 `/api/requests/[id]` PATCH (admin inbox), `/api/health`.

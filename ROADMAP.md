@@ -2,13 +2,50 @@
 
 > Orden de ejecución sobre las cards STOIC-2196..2207. Detalle técnico en **SPECS.md**.
 > Estrategia: la app vieja (GAS + Sheets) opera en prod hasta un **único cutover al final**.
-> Sin dual-write. Actualizado: 2026-08-28.
+> Sin dual-write. Actualizado: 2026-08-28, sincronizado contra el código.
+>
+> Leyenda: `[x]` construido y verificado · `[~]` parcial, con el detalle de qué falta ·
+> `[ ]` sin construir. Los `[~]` y `[ ]` de las Etapas 2 a 6 están agrupados abajo en
+> **Plan de ejecución**, en el orden en que se van a atacar.
 >
 > Los ítems marcados **[S]** vienen del relevamiento de paridad con la app **Summer**
 > (`if-cares-summer-frontend`, 28-ago-2026): funcionalidad que Summer ya tiene resuelta
 > y que el Regular Year no tenía construida ni planificada, o que el plan mencionaba en
 > una línea sin el detalle que Summer ya probó en producción. Inventario completo,
 > equivalencias y lo que se descartó por ser propio del dominio Summer: **SPECS.md §11**.
+
+## Plan de ejecución — lo que falta, en orden de dificultad
+
+De menor a mayor. Cada fase se testea antes de pasar a la siguiente.
+
+| Fase | Qué entra | Estado |
+|---|---|---|
+| **A** | Anulación de counts y respuesta a requests. | **hecha** |
+| **B** | Monitoreo de errores del cliente. | **hecha** |
+| **C** | Alta y edición de sitios con generación de calendario. | **hecha** |
+| **D** | Feriados con nombre, rango y alcance. | **hecha** |
+| **E** | PDF mensual, consolidados, jobs asíncronos y firma pública. | **hecha**, menos el envío por email, que es de la fase F |
+| **F** | Envío de mails y reminders diarios. | **construida**, operativa cuando exista la delegación de dominio |
+
+Las seis fases están **construidas y verificadas**. Después de la última se hizo un
+recorrido exploratorio sobre el build de producción: las 12 pantallas responden 200,
+contraste WCAG AA sin fallos en claro y en oscuro sobre todas las pantallas nuevas,
+88 controles enfocables sin ninguno sin nombre accesible y sin `tabindex` positivo, y
+**cero excepciones capturadas** por el monitor de errores durante todo el recorrido.
+`npm run lint` limpio, `npm run build` compila, `npm run smoke` 26/26 y
+`npm run drive:selftest` 25/25.
+
+Lo que quedó pendiente y **no depende de código**:
+
+- Cargar las credenciales de Drive y de Gmail, y la delegación de dominio
+  (`docs/DRIVE-STORAGE.md`, `docs/EMAIL.md`).
+- La **maquetación exacta** del formulario oficial del consolidado: el contenido está
+  campo por campo, falta la plantilla o un PDF de muestra para calcarla.
+- Las decisiones de IF Cares: aprobación de counts, datos de contacto del sitio,
+  destinatarios y textos de los mails, nombres de los feriados del ciclo.
+
+Fuera de este plan quedan las Etapas 7 (testing con staff real) y 8 (cutover), que son
+trabajo con el cliente.
 
 ## Etapa 0 — Ya hecho (branch `v2-backend`, jul-2026)
 
@@ -29,7 +66,9 @@
       + redeploy → correr `import-history` con data real de punta a punta.
 - [ ] STOIC-2202: cerrar tokens + componentes base y **aprobación de las 5 pantallas
       clave con IF Cares** (dependencia externa más riesgosa — perseguirla).
-- [ ] Decidir proveedor de **email** y **storage** de archivos (bloquean 2197/2199/2203/2204/2205).
+- [x] Decidir proveedor de **email** y **storage** de archivos: **Gmail** del Workspace de
+      ifcares.org y **Google Drive** vía service account (`docs/DRIVE-STORAGE.md`). Drive ya
+      está funcionando; Gmail necesita la delegación de dominio para poder enviar.
 - [ ] Mandar a IF Cares el listado de anomalías (19 alumnos, "ZZ ", emails duplicados,
       hojas "Copy of…") para que decidan caso por caso (cierre de STOIC-2196).
 - [ ] Actualizar el timeline con el cliente: el artifact aún dice cutover en agosto;
@@ -66,55 +105,71 @@
 
 ## Etapa 3 — Camino crítico de UI (STOIC-2199)
 
-- [ ] Meal count diario contra la base: roster por sitio/fecha, asistencia + meal types,
+- [x] Meal count diario contra la base: roster por sitio/fecha, asistencia + meal types,
       horarios, firma + certificación, bloqueo post-submit y en días no operativos.
-      Lógica **idéntica** al flujo actual; construcción con componentes de 2202.
-- [ ] Dashboard mensual: mes × sitio en una pantalla, estado por color de cada día
-      (submiteado / faltante / hoy / feriado / no operativo), click → count o formulario.
+      Incluye borrador local del roster marcado, que sobrevive a un cierre de pestaña.
+- [x] Dashboard mensual: mes × sitio en una pantalla, estado por color de cada día,
+      click → count o formulario. Con caché stale-while-revalidate compartido entre
+      pantallas (`lib/data-cache.js`), que es lo que bajó la navegación a ~1 s.
 - [x] Mantener descargas de menú (ahora por Drive REST API con service account; el GAS solo
       actúa como fallback mientras falten las credenciales).
-- [ ] Verificar ≤ 1 s en carga y submit.
-- [ ] **[S] Guardia de cambios sin guardar** en el formulario: aviso antes de cerrar la
-      pestaña (`beforeunload`) **y** al navegar dentro de la app (links del navbar). Sin
-      esto, un roster de 250 alumnos marcado a mano se pierde con un toque al menú.
-- [ ] **[S] Bloqueos en el cliente, no recién en el submit**: fecha futura, feriado, día
-      no operativo y count ya enviado se avisan con mensaje claro al entrar al form
-      (hoy el server devuelve 422/409 y el staff se entera después de cargar todo).
-- [ ] **[S] Calendario: distinguir "feriado" de "sin servicio"** (estado propio + nombre
-      del feriado en la celda). Hoy todo lo no operativo se pinta igual.
-- [ ] **[S] Filtros del dashboard**: por estado (submitted / missing / upcoming) y
-      selector libre de mes y año, además de las flechas de mes.
-- [ ] **[S] UX del form**: indicador de pasos, scroll automático al primer campo que
-      falta y prefetch/caché de meses adyacentes y del roster (ayuda al objetivo ≤ 1 s).
+- [~] Verificar ≤ 1 s en carga y submit. Medido en desarrollo: navegación entre
+      secciones ~1 s con caché tibio, toggle de un roster de 250 alumnos 3 a 7 ms. Falta
+      medirlo en el hosting real y con conexiones lentas (va con la Etapa 7).
+- [x] **[S] Guardia de cambios sin guardar** (`components/common/UnsavedGuard.jsx`):
+      `beforeunload` para cerrar la pestaña y captura de los links de la app, con el
+      diálogo del producto en vez del `confirm` nativo.
+- [x] **[S] Bloqueos en el cliente, no recién en el submit**: fecha futura, día no
+      operativo y count ya enviado se avisan al entrar al formulario.
+- [x] **[S] Calendario: distinguir "feriado" de "sin servicio"**: el día lleva su propio
+      estado y el **nombre del feriado en la celda**, tanto en el dashboard como en el
+      calendario de administración.
+- [x] **[S] Filtros del dashboard**: por estado y selector libre de mes y año.
+- [x] **[S] UX del form**: scroll al primer campo que falta, prefetch de los datos
+      compartidos al montar el shell, y paleta de comandos con Ctrl K.
 - Sugerencia: partir la card en dos entregables (carga diaria / dashboard).
 
 ## Etapa 4 — Admin (STOIC-2200 / 2201)
 
-- [ ] Usuarios: alta/edición/desactivación, roles, multi-sitio, reset, búsqueda + filtros.
-- [ ] Sitios: alta con formulario único (comidas, días de semana, fechas de programa),
-      edición, desactivación; importación de roster con validación fila a fila.
+- [x] Usuarios: alta/edición/desactivación, roles, multi-sitio, link de reset,
+      búsqueda + filtros combinados.
+- [x] Sitios: alta con formulario único, edición, renombrado y desactivación
+      (`POST /api/sites`, `PATCH/PUT /api/sites/[id]`, `GET /api/sites/record?site=`),
+      más la importación de roster con validación fila a fila y la edición de alumnos.
+      Renombrar es seguro: counts, roster y asignaciones apuntan al sitio, no a su nombre.
 - [ ] **[S] Pantallas de sitios como las de Summer** (`dashboard/sites` + `dashboard/site/[siteName]`):
       listado con buscador y toggle "mostrar inactivos" + contador de activos; ficha en
       modo lectura/edición con confirmación al cambiar el nombre (el nombre es la
       identidad que matchea `assignedSite` y los counts → el rename tiene que propagar);
       desactivar desde la ficha. Campos de contacto del sitio si Etapa 1 los confirma.
-- [ ] Calendarios: días operativos/no operativos por sitio, comidas por día,
-      feriado en todos los sitios en una acción (y quitar en uno solo).
-- [ ] **[S] Holidays Manager completo** (blueprint: `components/holidayPicker/HolidayPicker.jsx`
-      de Summer): feriado con **nombre + rango de fechas**, alcance "todos los sitios" o
-      selección múltiple, "todas las comidas" o comidas específicas, detección de
-      duplicados, edición y borrado respetando el alcance, tabs próximos/pasados con
-      paginación. Regla dura: **un cambio de calendario nunca toca un día que ya tiene
-      count** (el `PUT /api/sites/service-days` actual ya lo respeta — mantenerlo).
-- [ ] **[S] Generador de calendario por sitio**: a partir de días de la semana + comidas
-      por día + fechas de inicio/fin del programa se crean los `ServiceDay`, en vez de
-      cargarlos uno por uno. Es lo que hace la tab `Meal Schedules` de Summer y lo que
-      pide el requerimiento 3.5.
-- [ ] Correcciones de counts: solo Admin, valor original intacto, quién/cuándo/antes,
-      marca visible de "corregido"; reportes toman el valor corregido.
-- [ ] **[S] Anular un count** (solo Admin, con modal de confirmación y motivo): hoy un
-      count cargado en el sitio o la fecha equivocada no tiene salida — corregirlo no
-      alcanza. Baja lógica + auditoría; el día vuelve a "faltante" y sale de los reportes.
+- [x] Calendarios: días operativos/no operativos por sitio, comidas por día, patrón
+      semanal, y cierre de un rango en varios sitios en una sola operación
+      (`POST /api/sites/service-days/close`: 1,9 s para los 56 sitios contra los ~6 min
+      del ciclo por sitio que había antes) **con deshacer**.
+- [x] **[S] Holidays Manager completo**: nombre, rango de fechas, alcance "todos los
+      sitios" o selección múltiple, "todo el día" o comidas específicas, detección de
+      duplicados, edición y borrado, tabs próximos/pasados con buscador y paginado
+      (`/admin/holidays`).
+
+      Decisión de diseño: los feriados son **declarativos**. No borran `ServiceDay`, se
+      restan al leer el calendario (`src/lib/holidays.js`). Por eso la celda puede decir
+      "Thanksgiving" en vez de quedar vacía, quitar un feriado devuelve los días exactos,
+      y un feriado parcial deja el día abierto para las comidas que no cubre. Un día que
+      ya tiene count no se ve afectado nunca.
+- [x] **[S] Generador de calendario por sitio**: `programStart`, `programEnd` y una
+      plantilla semanal por comida generan los `ServiceDay` al crear el sitio, y
+      "Generate missing days" rellena lo que falte después de extender el ciclo. Solo
+      **agrega**: nunca borra ni reescribe un día, así que correrlo dos veces no hace
+      nada la segunda vez.
+- [x] Correcciones de counts: solo Admin, snapshot completo del estado anterior en
+      `MealCountCorrection.previous`, marca visible de "corregido" y un historial que
+      muestra **qué cambió** en cada corrección, no solo quién y cuándo.
+- [x] **[S] Anular un count**: baja lógica con motivo y auditoría. El día vuelve a
+      quedar abierto y sale de `meal-counts/all`, del detalle, del PDF y de los tiempos
+      recordados del sitio. La fila **no se borra**: un índice único parcial permite una
+      sola cuenta *activa* por sitio y fecha, así que el día puede guardar la que se
+      descartó junto a la que la reemplazó. Al abrir ese día, un admin ve quién la anuló,
+      cuándo y por qué, y puede **restaurarla**.
 - [ ] **[S] Aprobación de counts** — *solo si IF Cares la confirmó en Etapa 1*: acción de
       aprobar por count, badge visible en calendario y detalle, bloqueo de edición al
       aprobar (la anulación sigue disponible), y PDF + mail al staff del sitio como
@@ -125,41 +180,47 @@
 *(Puede solaparse con Etapa 4 si se suma otra persona; si no, va después.
 2204 requiere las correcciones de 2201.)*
 
-- [ ] Spike motor de PDF → réplica campo por campo del formulario en papel.
-- [ ] PDF de count diario + PDF mensual por sitio (sin timeouts con roster completo).
-- [ ] Envío por email desde la app.
-- [ ] **[S] Diálogo de PDF con tres acciones** (Summer: `components/pdfModal/PdfModal.jsx`):
-      **guardar** en storage · **enviar** por email a varios destinatarios (lista separada
-      por comas, validada) · **guardar y enviar**. Con el link al archivo guardado en el
-      resultado.
-- [ ] Consolidados por mes × estado (TX/OK): los 2 reportes actuales, mismos totales,
-      **sin tope de sitios**, paso de firma incluido, guardados y recuperables.
-- [ ] **[S] Formulario del consolidado como el de Summer** (`ConsolidatedPdfModal.jsx`):
-      estado + rango de fechas + **exclusión de sitios** con chips y atajos "excluir
-      todos / incluir todos", validando que quede al menos un sitio.
-- [ ] **[S] Jobs asíncronos con polling** para todo PDF largo (el consolidado de Summer
-      tarda 1-3 min): el cliente genera el `jobId`, dispara, y consulta estado
-      (`processing | completed | error`) con tiempo transcurrido y cancelación visible.
-      Sin esto, el mensual y el consolidado mueren en el timeout del hosting.
-- [ ] **[S] Página pública de firma del consolidado** (`/sign/[token]` → confirmación):
-      preview del PDF + pad de firma + texto de certificación, **sin login** (link
-      enviable a quien firma), y confirmación con el PDF ya firmado. Es el paso que hoy
-      se hace a mano en la master spreadsheet (requerimiento 3.8). El token es opaco, de
-      un solo uso y con vencimiento: no repetir el `/sign/<pdfId de Drive>` de Summer
-      (ver SPECS.md §9).
+- [~] Motor de PDF: `pdf-lib` en el servidor, sin dependencias nuevas. El **contenido** de los consolidados sale campo por campo del generador viejo (`gas-backup/report/generateReports.gs`). La **maquetación exacta** del formulario oficial no está replicada: el legacy llenaba una plantilla de Google Sheets que no está en el repo. Hace falta esa plantilla o un PDF de muestra para calcarla.
+- [x] PDF de count diario + **PDF mensual por sitio** (`GET /api/reports/monthly?site=&year=&month=`), los dos archivados en Drive.
+- [x] Envío por email desde la app: un claim se manda con el PDF adjunto, o se manda el **link de firma** en vez del archivo. Nunca los dos juntos, para que un documento que se manda a leer no termine firmado por quien no corresponde.
+- [~] **[S] Guardar y recuperar**: todo consolidado que se construye queda guardado en
+      `GeneratedReport` y archivado en Drive, y se descarga después desde la pantalla de
+      claims. Si Drive no lo tiene, se **reconstruye desde los counts**, así que un claim
+      nunca queda inaccesible. Falta la parte de **enviar por email** (fase F).
+- [x] Consolidados por mes × estado: los 2 reportes (`claim-part1` por sitio,
+      `claim-part2` por día), sin tope de sitios, guardados y recuperables, con el paso
+      de firma. Medido: 34 sitios de TX en 3,4 s.
+- [x] **[S] Formulario del consolidado**: estado, mes y año, exclusión de sitios con
+      buscador y atajos de incluir o excluir todos, validando que quede al menos uno
+      (`/admin/reports/consolidated`).
+- [x] **[S] Jobs asíncronos con polling** (`src/lib/report-jobs.js`): el POST arranca el
+      trabajo y devuelve un id, la pantalla consulta cada 1,5 s y muestra en qué paso va,
+      el tiempo transcurrido y un botón de cancelar. El registro vive en el proceso; lo
+      que tiene que sobrevivir (el PDF en Drive y la fila en `GeneratedReport`) se
+      persiste, así que un reinicio pierde el trabajo, no el documento.
+- [x] **[S] Página pública de firma** `/sign/[token]`: el documento se abre para leerlo
+      (link o preview embebido a pedido, porque el visor inline falla en las tablets de
+      los sitios), pad de firma, nombre, cargo y texto de certificación, sin login. El
+      token son 32 bytes aleatorios, **de un solo uso**, con vencimiento de 14 días y sin
+      relación con el id del documento; se puede revocar desde la pantalla de claims. La
+      firma se guarda como imagen en la base, así que el claim firmado se reproduce
+      aunque el archivo no esté en Drive.
 
 ## Etapa 6 — Requests y notificaciones (STOIC-2205)
 
-- [ ] Inbox de requests con estados New / In Progress / Resolved + filtros combinados;
-      mails a los destinatarios actuales.
-- [ ] **[S] Responder el request, no solo cambiar el estado**: comentario del admin +
-      email al solicitante al resolver/rechazar, con quién lo resolvió y cuándo (Summer:
-      `dashboard/requests/page.jsx`). Hoy el staff ve el estado cambiar sin explicación.
-- [ ] **[S] Inbox usable con volumen**: buscador que cruza todos los campos (sitio,
-      solicitante, tipo, fechas, detalle), contador por pestaña, paginación, y filtros
-      por **sitio y fecha** además de estado (el requerimiento 3.9 los pide).
-- [ ] Reminders diarios de counts atrasados: mismo contenido/horario que hoy;
-      destinatarios, horario y on/off configurables desde Admin (sin deploy). Cron en la infra nueva.
+- [x] Inbox de requests con estados y filtros combinados, alta desde el propio inbox, y
+      **mail al solicitante** cuando se responde.
+- [x] **[S] Responder el request**: el comentario se guarda con quién y cuándo, el sitio
+      lo ve en su pantalla y le llega por mail. Reabrir un request limpia la respuesta,
+      para que no quede una resolución vieja sobre algo otra vez abierto.
+- [x] **[S] Inbox usable con volumen**: buscador que cruza todos los campos, contador
+      por pestaña y filtros por sitio además de estado.
+- [x] Reminders diarios de counts atrasados: on/off, horario, cuántos días atrás mirar y
+      copias fijas se configuran en `/admin/reminders`, **sin deploy**. Cada persona
+      recibe solo sus sitios, un feriado nunca cuenta como atrasado, y hay un **preview**
+      que corre la misma búsqueda sin mandar nada. La ejecución la dispara el cron de la
+      infraestructura contra `POST /api/reminders` con un secreto compartido, así que no
+      se puede disparar desde afuera.
 - [x] Resolver el destino de los archivos: **Drive API desde el backend** para
       **todos los PDFs**, no solo los menús (`src/lib/google-drive.js` para leer y
       escribir, `src/lib/pdf-archive.js` para archivar lo generado). La oficina sigue
@@ -170,17 +231,21 @@
 
 ## Transversal — [S] se construye junto con las etapas, no al final
 
-- [ ] **Monitoreo de errores del cliente**: reportar toda excepción del front con app,
-      función, mensaje, stack y URL a un servicio central + alerta. Summer lo tiene
-      (`utils/logErrorMonitoring` → `/api/monitoring` → monitoring-center) y el v1
-      alertaba por mail; el 2.0 hoy no tiene **nada**. Incluye arreglar el import roto
-      de `logErrorMonitoring` que quedó en la pantalla de login del v1.
-- [ ] **Patrón de listados admin**: buscador + toggle de inactivos + contadores +
-      paginación en todas las pantallas de administración (usuarios ya lo tiene; sitios,
-      feriados, requests y reportes deben seguir el mismo patrón).
-- [ ] **Confirmación explícita en acciones destructivas** (anular count, borrar feriado,
-      desactivar sitio/usuario): modal con estados confirmar → procesando → resultado,
-      y el aviso de qué se lleva puesto la acción.
+- [~] **Monitoreo de errores del cliente**: `POST /api/monitoring` recibe mensaje, stack,
+      pantalla y origen; el error boundary lo reporta y un handler global cubre lo que
+      nunca llega a React (listeners, timers, promesas rechazadas). Se agrupan por huella
+      (mensaje + primer frame + pantalla) con contador, así que la misma pantalla rota en
+      cuarenta sitios es **una** fila. Pantalla `/admin/monitoring` para verlos, con
+      stack, buscador, paginado y marcar como resuelto; volver a verse lo reabre. El
+      endpoint acepta reportes sin sesión, porque el login también puede romperse, y por
+      eso tiene esquema estricto y límite por IP. Falta la **alerta por mail** (fase F).
+- [~] **Patrón de listados admin**: usuarios, sitios (20 por página, componente
+      `ui/pagination.jsx`) y requests lo tienen. Faltan feriados y reportes, que todavía
+      no existen como pantallas.
+- [x] **Confirmación explícita en acciones destructivas** (`ui/confirm-dialog.jsx`):
+      estados confirmar → procesando → resultado y el aviso de qué se lleva puesto la
+      acción. Aplica a anular, desactivar, cerrar días en varios sitios y salir con
+      cambios sin guardar.
 
 ## Etapa 7 — Testing con staff real (STOIC-2206)
 

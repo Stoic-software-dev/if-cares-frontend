@@ -1,5 +1,8 @@
 import {
+  BellRing,
+  Bug,
   Building2,
+  CalendarOff,
   CalendarDays,
   CalendarRange,
   FileText,
@@ -24,6 +27,9 @@ const ADMIN_ITEMS = [
   { key: 'inbox', label: 'Requests', href: '/admin/requests', icon: Inbox, primary: false },
   { key: 'users', label: 'Users', href: '/admin/users', icon: Users, primary: false },
   { key: 'menus', label: 'Menus', href: '/menus', icon: UtensilsCrossed, primary: false },
+  { key: 'holidays', label: 'Holidays', href: '/admin/holidays', icon: CalendarOff, primary: false },
+  { key: 'reminders', label: 'Reminders', href: '/admin/reminders', icon: BellRing, primary: false },
+  { key: 'monitoring', label: 'Client errors', href: '/admin/monitoring', icon: Bug, primary: false },
 ];
 
 export function navItemsFor(admin) {
@@ -38,6 +44,9 @@ export function activeKeyForPath(pathname = '') {
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin/requests')) return 'inbox';
   if (pathname.startsWith('/admin/users')) return 'users';
+  if (pathname.startsWith('/admin/holidays')) return 'holidays';
+  if (pathname.startsWith('/admin/reminders')) return 'reminders';
+  if (pathname.startsWith('/admin/monitoring')) return 'monitoring';
   if (pathname.startsWith('/menus')) return 'menus';
   if (pathname.startsWith('/requests')) return 'requests';
   if (pathname.startsWith('/counts') || pathname.startsWith('/meal-count') || pathname.startsWith('/dashboard')) {

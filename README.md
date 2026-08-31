@@ -14,6 +14,10 @@ congeladas como archivo histórico en el cutover; ningún proceso las lee ni las
 
 ## Funcionalidades
 
+> Esta sección describe el **producto completo**, que es el alcance acordado. Lo que
+> todavía no está construido va marcado con **(pendiente)** y su fase en
+> [ROADMAP.md](ROADMAP.md) → *Plan de ejecución*.
+
 **Para Site Staff**
 
 - Login con sesión autenticada; cada usuario ve únicamente sus sitios asignados.
@@ -36,28 +40,34 @@ congeladas como archivo histórico en el cutover; ningún proceso las lee ni las
 - Todo lo anterior, sobre **todos** los sitios.
 - **Usuarios**: altas, edición, desactivación, roles, asignación multi-sitio, reset de
   contraseña; búsqueda y filtros combinados.
-- **Sitios**: listado con buscador y filtro de inactivos; alta completa desde un
-  formulario (datos de contacto, comidas, días de servicio, fechas del programa) que
-  **genera el calendario del ciclo**; edición, desactivación, e importación de roster con
-  validación fila a fila y edición de estudiantes.
-- **Calendarios**: días operativos/no operativos por sitio y comidas por día; **feriados
-  con nombre y rango de fechas**, aplicables a todos los sitios o a una selección, a
-  todas las comidas o solo a algunas, y removibles con el mismo alcance. Un cambio de
-  calendario nunca toca un día que ya tiene count cargado.
+- **Sitios**: listado con buscador, filtro por estado y paginado; importación de roster
+  con validación fila a fila y edición de estudiantes. **Alta y edición del sitio** desde
+  un formulario único: las fechas del ciclo y las comidas por día de semana **generan el
+  calendario** al crearlo, y se pueden completar después si el programa se extiende.
+- **Calendarios**: días operativos/no operativos por sitio, comidas por día, patrón
+  semanal, y cierre de un rango de fechas en varios sitios en una sola operación, con
+  deshacer. Un cambio de calendario nunca toca un día que ya tiene count cargado.
+  **Feriados con nombre y rango**, aplicables a todos los sitios o a una selección, a todo
+  el día o solo a algunas comidas, y removibles: quitarlos devuelve los días tal como
+  estaban, porque nunca se borraron.
 - **Correcciones**: edición de counts submiteados con historial completo — el valor
   original nunca se pisa; queda quién, cuándo y qué había antes, y el count se marca
   visiblemente como corregido.
 - **Anulación**: un count cargado en el sitio o la fecha equivocada se anula con motivo;
   el día vuelve a quedar pendiente y sale de los reportes, sin borrar la historia.
-- **Reportes**: PDF de cualquier count diario (réplica exacta del formulario en papel),
-  PDF mensual por sitio, y los reportes consolidados por mes y estado (con exclusión de
-  sitios) — se pueden guardar, enviar por email a varios destinatarios y quedan
-  recuperables. Los consolidados incluyen el **paso de firma**: un link enviable donde
-  quien firma ve el PDF y firma en pantalla, sin necesidad de tener cuenta.
-- **Inbox de requests** con estados (New / In Progress / Resolved), filtros por estado,
-  sitio y fecha, buscador y **respuesta al solicitante** por email.
+  Un administrador que anula por error ve el aviso al abrir ese día y puede restaurarla.
+- **Reportes**: PDF de cualquier count diario, réplica del formulario en papel, que
+  además queda archivado en Drive automáticamente. El **PDF mensual por sitio**, los
+  **consolidados por mes y estado** con exclusión de sitios y el **paso de firma** con
+  link público, sin login, están construidos. Falta el **envío por email** (pendiente,
+  fase F).
+- **Inbox de requests** con estados (New / In Progress / Resolved), filtros por estado y
+  sitio, buscador, y alta de un request desde el propio inbox. La **respuesta al
+  solicitante** se guarda con autor y fecha, y el sitio la ve. El **envío por email** es
+  (pendiente, fase F).
 - **Notificaciones**: recordatorios diarios de counts atrasados, con destinatarios,
-  horario y activación configurables desde Admin, sin deploy.
+  horario y activación configurables desde Admin, sin deploy, con vista previa de a quién
+  se le escribiría antes de activarlos.
 
 **Transversal**
 
@@ -65,11 +75,13 @@ congeladas como archivo histórico en el cutover; ningún proceso las lee ni las
 - Sesión con expiración por inactividad (período configurable).
 - Pensada para los dispositivos reales de los sitios: celulares y tablets, targets
   táctiles grandes, sin zoom ni scroll horizontal. Cargas y submits en ≤ 1 segundo.
-- Auditoría: toda escritura queda registrada (actor, acción, entidad, payload).
-- Monitoreo: los errores del navegador se reportan a un servicio central con contexto
-  (pantalla, función, stack) para detectarlos sin depender de que el sitio los avise.
+- Auditoría: toda escritura queda registrada (actor, acción, entidad, payload). Un
+  cierre masivo de días guarda además las filas que borró, así que es reversible.
+- Monitoreo: los errores del navegador se reportan con contexto (pantalla, función,
+  stack) para detectarlos sin depender de que el sitio los avise, agrupados por problema
+  en una pantalla de administración. Falta la alerta por mail (pendiente, fase F).
 - Las operaciones largas (PDF mensual, consolidado) corren como trabajo en segundo plano
-  con estado consultable — nunca dejan la pantalla colgada esperando.
+  con estado consultable, nunca dejan la pantalla colgada esperando.
 
 > Pendiente de definición con IF Cares: un **flujo de aprobación de counts** (el
 > administrador aprueba cada count, se bloquea la edición y se notifica al sitio), que la
@@ -84,8 +96,8 @@ congeladas como archivo histórico en el cutover; ningún proceso las lee ni las
 | Base de datos | PostgreSQL en Supabase, acceso vía Prisma 6 (migraciones versionadas) |
 | Auth | Sesiones propias: bcrypt + JWT (jose) en cookie httpOnly, expiración deslizante |
 | UI | Tailwind CSS + shadcn/ui; librerías headless (react-hook-form + zod, TanStack Table, react-day-picker, Sonner, Vaul, lucide, motion). Estética por tokens (CSS vars) |
-| Archivos | Storage para firmas, PDFs generados y menús |
-| Email | Proveedor transaccional (reset de contraseña, requests, reminders, envío de reportes) |
+| Archivos | Google Drive vía service account: menús y todos los PDFs generados (`docs/DRIVE-STORAGE.md`) |
+| Email | Gmail del Workspace de ifcares.org (reset de contraseña, requests, reminders, envío de reportes) |
 | Hosting | Railway — prod deploya desde `main` |
 
 ## Desarrollo local
@@ -108,11 +120,23 @@ Variables principales de `.env` (nunca commitear valores):
 | `DIRECT_URL` | Conexión directa (5432) para migraciones |
 | `AUTH_SECRET` | Firma de los JWT de sesión |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | Admin inicial del seed |
-| `EMAIL_*` | Credenciales del proveedor de email |
+| `MAIL_FROM` | Casilla desde la que se manda (Gmail, ver `docs/EMAIL.md`) |
+| `REMINDERS_SECRET` | Secreto compartido con el cron que dispara los recordatorios |
+| `APP_URL` | URL absoluta de la app, para los links dentro de los mails |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `_PRIVATE_KEY` | Service account de Drive, el almacenamiento de todos los PDFs (`docs/DRIVE-STORAGE.md`) |
 | `GOOGLE_DRIVE_MENUS_FOLDER_ID` | Carpeta donde la oficina publica los menús (lectura) |
 | `GOOGLE_DRIVE_REPORTS_FOLDER_ID` | Carpeta donde la app archiva lo que genera (escritura) |
 | `GAS_BASE_URL` | Apps Script legacy. Solo se usa como fallback de menús y por los scripts de import |
+
+En Railway los nombres son **exactamente estos**, sin prefijo ni renombre: se cargan
+en Variables del servicio. `NODE_ENV` y `PORT` los inyecta Railway, no hay que
+declararlos. Las que solo usan los scripts locales (`SEED_ADMIN_*`, `GAS_EXPORT_KEY`,
+`IMPORT_ACTIVE_SY`, `PARITY_API_URL`, `BASE_URL`, `SMOKE_*`) no hacen falta en el
+servicio, salvo que se corra el seed o el smoke desde ahí.
+
+`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` va en **una sola línea**, tal como viene en el
+JSON del service account, con los `\n` literales. Si queda con las comillas del JSON
+alrededor, el código las quita igual.
 
 ## Scripts
 
@@ -121,6 +145,8 @@ Variables principales de `.env` (nunca commitear valores):
 | `npm run dev` / `npm run build` | Desarrollo / build de producción |
 | `npm run db:seed` | Admin inicial |
 | `npm run drive:selftest` | Cliente de Drive contra un fetch simulado, sin tocar Drive |
+| `npm run drive:doctor` | Diagnóstico de Drive con las credenciales reales; dice qué contesta Google |
+| `npm run smoke` | 26 chequeos de contrato contra la app corriendo |
 | `npx prisma migrate dev` | Aplica/crea migraciones en desarrollo |
 | `npx prisma studio` | Explorador visual de la base |
 

@@ -126,6 +126,63 @@ async function run() {
   const user = users.body?.data?.[0];
   check('users carry role, active and their sites', Boolean(user) && 'role' in user && 'active' in user && Array.isArray(user.sites));
 
+  const request = requests.body?.data?.[0];
+  check(
+    'requests carry the administrator answer fields',
+    Boolean(request) && 'responseComment' in request && 'respondedBy' in request && 'respondedAt' in request
+  );
+
+  // Voiding is a write, so the check uses a site that cannot exist: it proves
+  // the route is deployed and guarded without touching a real count.
+  const voidGuard = await api('/api/meal-counts/void', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site: 'NO SUCH SITE ZZZ', date: '2026-01-01', reason: 'smoke check' }),
+  });
+  check('voiding is deployed and refuses an unknown site', voidGuard.status === 404, `status ${voidGuard.status}`);
+
+  const record = await json(`/api/sites/record?site=${encodeURIComponent(sites.body[0].name)}`);
+  check(
+    'the site record carries the cycle and the weekly template',
+    record.status === 200 && 'programStart' in record.body.data && 'weeklyTemplate' in record.body.data
+  );
+
+  const holidays = await json('/api/holidays');
+  check('holidays are deployed', Array.isArray(holidays.body?.data), `status ${holidays.status}`);
+
+  const anySite = Object.values(all.body)[0];
+  check('the calendar map carries the holiday names', anySite && typeof anySite.holidays === 'object');
+
+  const monthly = await api(
+    `/api/reports/monthly?site=${encodeURIComponent(sites.body[0].name)}&year=${new Date().getFullYear()}&month=1`
+  );
+  check(
+    'the monthly site report renders',
+    monthly.ok && (monthly.headers.get('content-type') || '').includes('pdf'),
+    `status ${monthly.status}`
+  );
+
+  const claims = await json('/api/reports/generated');
+  check('saved consolidated claims are listed', Array.isArray(claims.body?.data), `status ${claims.status}`);
+
+  const badToken = await api('/api/sign/not-a-real-token-at-all-0000000');
+  check('an invalid signing token is refused', badToken.status === 404, `status ${badToken.status}`);
+
+  const reminders = await json('/api/reminders');
+  check(
+    'reminder settings are readable and say whether mail is ready',
+    reminders.status === 200 && typeof reminders.body?.data?.enabled === 'boolean' &&
+      'mailReady' in reminders.body.data
+  );
+
+  // The scheduler entry point must never be open. Without the shared secret it
+  // refuses, whatever the settings say.
+  const cron = await api('/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  check('the reminder scheduler refuses without its secret', cron.status === 503 || cron.status === 401, `status ${cron.status}`);
+
+  const crashes = await json('/api/monitoring');
+  check('client error monitoring is deployed', Array.isArray(crashes.body?.data), `status ${crashes.status}`);
+
   const menus = await json('/api/reports/files');
   check('menus listing responds', Array.isArray(menus.body), `status ${menus.status}`);
 

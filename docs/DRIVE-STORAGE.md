@@ -64,6 +64,14 @@ para reportes), así que son las mismas carpetas que la oficina usa hoy.
 Los saltos de línea de la clave pueden ir escapados como `\n`, que es como
 vienen en el JSON del service account; el código acepta las dos formas.
 
+### En Railway
+
+Los mismos nombres, sin prefijo, en Variables del servicio. Lo único que tiene
+truco es la clave privada: va en **una sola línea**, con los `\n` literales tal
+como viene en el JSON, no con saltos de línea reales. El módulo acepta las dos
+formas y además saca las comillas si quedaron pegadas, que es el error más común
+al copiar del JSON.
+
 ## Pasos para crear el service account
 
 1. En Google Cloud Console, proyecto de IF Cares, **APIs y servicios →
@@ -94,6 +102,22 @@ que permite confiar en el camino de escritura antes de que existan credenciales.
 Con las credenciales cargadas, la app no vuelve a llamar al Apps Script. Sin
 ellas, cae al GAS viejo para menús y se saltea el archivado, así que se puede
 configurar sin downtime.
+
+## Si algo falla
+
+`npm run drive:doctor` usa las credenciales reales del `.env` y muestra lo que
+Google contesta de verdad: a qué cuenta pertenece el token, si la carpeta existe,
+si se puede escribir en la de reportes (`canAddChildren`) y qué hay compartido
+con la cuenta. Nunca imprime la clave privada. Para correrlo contra el entorno de
+Railway: `railway run node scripts/drive-doctor.mjs`.
+
+Los tres errores que se ven en la práctica:
+
+| Síntoma | Causa |
+|---|---|
+| "The Drive API is not enabled in the Google Cloud project" | Falta habilitar **Google Drive API** en el proyecto del service account. Es el paso 1 y es fácil de saltear cuando la cuenta se creó para otra API |
+| "cannot reach that folder" | La carpeta no está compartida con el `client_email`, o se compartió otra |
+| Los menús cargan pero no se archiva ningún PDF | La carpeta de menús está compartida como Lector, pero la de reportes necesita **Editor**. El archivado no rompe nada de cara al usuario: solo deja un `[pdf-archive]` en el log |
 
 ## Seguridad
 

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, FileText, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Layers, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -142,14 +142,32 @@ function ReportsScreen() {
       <div className="flex flex-col gap-5">
         <PageHeader
           title="Reports"
-          subtitle="Daily meal count forms, exactly as they are filed."
+          subtitle="Daily meal count forms, the month summary for a site, and the consolidated claims."
           actions={
-            submitted.length > 0 && (
-              <Button onClick={downloadMonth} loading={Boolean(bulk)}>
-                {!bulk && <Download />}
-                {bulk ? `Downloading ${bulk.done} of ${bulk.total}` : `Download the month (${submitted.length})`}
+            <>
+              <Button variant="outline" asChild>
+                <Link href="/admin/reports/consolidated">
+                  <Layers />
+                  Consolidated claims
+                </Link>
               </Button>
-            )
+              {site && (
+                <Button variant="outline" asChild>
+                  <a
+                    href={`/api/reports/monthly?site=${encodeURIComponent(site)}&year=${cursor.year}&month=${cursor.month}`}
+                  >
+                    <FileText />
+                    Monthly summary
+                  </a>
+                </Button>
+              )}
+              {submitted.length > 0 && (
+                <Button onClick={downloadMonth} loading={Boolean(bulk)}>
+                  {!bulk && <Download />}
+                  {bulk ? `Downloading ${bulk.done} of ${bulk.total}` : `Download the month (${submitted.length})`}
+                </Button>
+              )}
+            </>
           }
         />
 

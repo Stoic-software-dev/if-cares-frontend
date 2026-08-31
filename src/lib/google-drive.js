@@ -22,11 +22,20 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
 export class DriveError extends Error {}
 
+// Copying a value out of the service account JSON brings its quotes along, and
+// a dashboard field keeps them as part of the value. Stripping one matching
+// pair turns the most common misconfiguration into a non event.
+const unquote = (value) => {
+  const trimmed = value?.trim() ?? '';
+  const quoted = trimmed.length > 1 && (trimmed.startsWith('"') || trimmed.startsWith("'"));
+  return quoted && trimmed.at(-1) === trimmed[0] ? trimmed.slice(1, -1) : trimmed;
+};
+
 function credentials() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
-  // Private keys carry newlines, which .env files cannot hold literally, so
-  // both the escaped and the real form are accepted.
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim().replace(/\\n/g, '\n');
+  const email = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
+  // Private keys carry newlines, which env vars cannot hold literally, so both
+  // the escaped form (what the JSON gives you) and the real one are accepted.
+  const privateKey = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, '\n');
   if (!email || !privateKey) return null;
   return { email, privateKey };
 }
@@ -38,12 +47,12 @@ export function driveConfigured() {
 
 /** Folder the office drops menus into. Read only. */
 export function menusFolderId() {
-  return process.env.GOOGLE_DRIVE_MENUS_FOLDER_ID?.trim() || '';
+  return unquote(process.env.GOOGLE_DRIVE_MENUS_FOLDER_ID);
 }
 
 /** Folder the app archives everything it generates into. Needs write access. */
 export function reportsFolderId() {
-  return process.env.GOOGLE_DRIVE_REPORTS_FOLDER_ID?.trim() || '';
+  return unquote(process.env.GOOGLE_DRIVE_REPORTS_FOLDER_ID);
 }
 
 // Tokens last an hour; keeping the live one avoids a signing round trip per request.
@@ -108,15 +117,46 @@ async function request(base, { search, ...init } = {}) {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    if (res.status === 404) throw new DriveError('That file is no longer in Drive.');
-    if (res.status === 403) {
-      throw new DriveError(
-        'The service account cannot reach that folder. Share it with the service account email.'
-      );
-    }
-    throw new DriveError(`Drive answered ${res.status}. ${detail.slice(0, 200)}`);
+    // The full payload names the project and the exact reason, which is what
+    // makes a setup problem solvable. It belongs in the log, not in a toast.
+    console.warn(`[drive] ${res.status} on ${url.pathname}: ${detail.slice(0, 500)}`);
+    throw new DriveError(explain(res.status, detail));
   }
   return res;
+}
+
+/**
+ * Turns a Drive failure into something that names the cause. A 403 means two
+ * very different things: the API is off in the project, or the folder was never
+ * shared. Saying the wrong one sends whoever is setting this up down the wrong
+ * path, which is exactly what happened the first time.
+ */
+function explain(status, detail) {
+  let reason = '';
+  let message = '';
+  try {
+    const parsed = JSON.parse(detail);
+    reason = parsed.error?.errors?.[0]?.reason ?? parsed.error?.status ?? '';
+    message = parsed.error?.message ?? '';
+  } catch {
+    // Google answers HTML when the request never reached the API.
+  }
+
+  const account = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() || 'the service account';
+
+  if (reason === 'accessNotConfigured' || /has not been used in project|is disabled/i.test(message)) {
+    return 'The Drive API is not enabled in the Google Cloud project this service account belongs to. Enable it and retry.';
+  }
+  if (status === 401 || reason === 'authError') {
+    return 'Google rejected the service account credentials. Check the email and the private key.';
+  }
+  if (status === 404 || reason === 'notFound') {
+    return `That folder or file does not exist for ${account}. Check the id, and that the folder was shared with that exact address.`;
+  }
+  if (status === 403) {
+    return `${account} cannot reach that folder. Share the folder with that address, as Viewer for menus and Editor for reports.`;
+  }
+  return `Drive answered ${status}. ${message || detail.slice(0, 200)}`;
 }
 
 // Drive queries are single quoted, so a name with an apostrophe has to be

@@ -17,7 +17,7 @@ export const GET = handle(async (req) => {
   await requireSiteAccess(session, site.name);
 
   const lastCount = await prisma.mealCount.findFirst({
-    where: { siteId: site.id, timeIn: { not: '' } },
+    where: { siteId: site.id, timeIn: { not: '' }, voidedAt: null },
     orderBy: { date: 'desc' },
     select: { timeIn: true, timeOut: true },
   });

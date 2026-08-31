@@ -1,18 +1,30 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, ChevronRight, CircleAlert, CircleCheck } from 'lucide-react';
+import { Building2, ChevronRight, CircleAlert, CircleCheck, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import SiteForm, { emptySite } from '@/components/sites/SiteForm';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { NativeSelect } from '@/components/ui/field';
+import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
+import { apiPost } from '@/lib/api-client';
+import { ALL_MEALS_PATH, SITES_PATH, invalidate, useCachedGet } from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
 import { shortSiteName, siteInitials, siteState, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
@@ -31,10 +43,19 @@ function monthStats(siteData, monthPrefix, today) {
   return { submitted, missing, upcoming, service: submitted + missing + upcoming };
 }
 
+// Ten per column in the two column grid, which is as much as fits on a laptop
+// screen without scrolling past the filters.
+const PAGE_SIZE = 20;
+
 function AdminSitesScreen() {
   const [query, setQuery] = useState('');
   const [stateFilter, setStateFilter] = useState('ALL');
   const [sort, setSort] = useState('name');
+  const [page, setPage] = useState(1);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState(emptySite);
+  const [attempted, setAttempted] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const today = todayYmd();
   const monthPrefix = today.slice(0, 7);
@@ -78,7 +99,51 @@ function AdminSitesScreen() {
     [rows]
   );
 
+  // Any change to what is being listed starts the listing over: page 7 of a
+  // filter that now returns four sites is an empty screen.
+  useEffect(() => {
+    setPage(1);
+  }, [query, stateFilter, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const pageRows = useMemo(
+    () => rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    [rows, current]
+  );
+
   const states = useMemo(() => [...new Set((sites ?? []).map(siteState).filter(Boolean))].sort(), [sites]);
+
+  const createSite = async () => {
+    if (draft.name.trim().length < 3) {
+      setAttempted(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await apiPost('/api/sites', {
+        ...draft,
+        name: draft.name.trim(),
+      });
+      // Every screen reads the site list and the calendar through the shared
+      // cache; a new site has to reach them without a reload.
+      invalidate(SITES_PATH);
+      invalidate(ALL_MEALS_PATH);
+      siteList.refresh();
+      mealList.refresh();
+      setCreating(false);
+      const days = res.data?.serviceDays ?? 0;
+      toast.success(`${draft.name.trim()} created`, {
+        description: days
+          ? `${days} service ${days === 1 ? 'day' : 'days'} generated from the cycle.`
+          : 'No service days yet: set the cycle and the weekly meals to generate them.',
+      });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppShell width="wide">
@@ -89,6 +154,18 @@ function AdminSitesScreen() {
             sites
               ? `${sites.length} active sites, ${totals.submitted} counts submitted and ${totals.missing} missing this month`
               : 'Loading sites'
+          }
+          actions={
+            <Button
+              onClick={() => {
+                setDraft(emptySite);
+                setAttempted(false);
+                setCreating(true);
+              }}
+            >
+              <Plus />
+              Add site
+            </Button>
           }
         />
 
@@ -154,7 +231,7 @@ function AdminSitesScreen() {
 
         {rows.length > 0 && (
           <div className="stagger grid grid-cols-1 gap-2 md:grid-cols-2" style={{ '--stagger-step': '20ms' }}>
-            {rows.map((row, index) => (
+            {pageRows.map((row, index) => (
               <Link
                 key={row.name}
                 href={`/admin/sites/detail?site=${encodeURIComponent(row.name)}`}
@@ -204,7 +281,44 @@ function AdminSitesScreen() {
             ))}
           </div>
         )}
+
+        <Pagination
+          page={current}
+          pageCount={pageCount}
+          onPageChange={(next) => {
+            setPage(next);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          total={rows.length}
+          pageSize={PAGE_SIZE}
+          label="sites"
+        />
       </div>
+
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add a site</DialogTitle>
+            <DialogDescription>
+              The cycle dates and the weekly meals generate the calendar, so the site is ready to take
+              counts as soon as it is created.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[65vh] overflow-y-auto pr-1">
+            <SiteForm value={draft} onChange={setDraft} attempted={attempted} mode="create" />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreating(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={createSite} loading={saving}>
+              Create site
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

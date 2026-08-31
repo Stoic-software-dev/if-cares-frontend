@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -600,32 +601,15 @@ function AdminUsersScreen() {
               )}
             </div>
 
-            {filtered.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] tabular-nums text-muted-foreground">
-                  {currentPage * PAGE_SIZE + 1} to {Math.min((currentPage + 1) * PAGE_SIZE, filtered.length)} of{' '}
-                  {filtered.length}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 0}
-                    onClick={() => setPage(currentPage - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= pageCount - 1}
-                    onClick={() => setPage(currentPage + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              page={currentPage + 1}
+              pageCount={pageCount}
+              onPageChange={(next) => setPage(next - 1)}
+              total={filtered.length}
+              pageSize={PAGE_SIZE}
+              label="accounts"
+            />
+
           </>
         )}
       </div>

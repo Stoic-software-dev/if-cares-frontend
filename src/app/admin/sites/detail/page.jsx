@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -10,6 +10,7 @@ import {
   MoreVertical,
   Pencil,
   Plus,
+  Power,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import SiteForm, { emptySite } from '@/components/sites/SiteForm';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
@@ -41,7 +43,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
-import { ALL_MEALS_PATH, cachedGet } from '@/lib/data-cache';
+import { apiPut } from '@/lib/api-client';
+import { ALL_MEALS_PATH, SITES_PATH, cachedGet, invalidate } from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
 import { shortSiteName, siteState, siteYear } from '@/lib/sites';
 
@@ -196,6 +199,100 @@ function SiteDetailScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [site]);
 
+  // The site record itself, which the roster view never needed until now.
+  const [record, setRecord] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(emptySite);
+  const [attempted, setAttempted] = useState(false);
+  const [savingSite, setSavingSite] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const loadRecord = useCallback(() => {
+    if (!site) return;
+    apiGet(`/api/sites/record?site=${encodeURIComponent(site)}`)
+      .then((res) => setRecord(res.data))
+      .catch(() => {});
+  }, [site]);
+
+  useEffect(loadRecord, [loadRecord]);
+
+  const openEditor = () => {
+    if (!record) return;
+    setDraft({
+      name: record.name,
+      state: record.state ?? '',
+      ceName: record.ceName ?? '',
+      ceId: record.ceId ?? '',
+      siteName: record.siteName ?? '',
+      siteNumber: record.siteNumber ?? '',
+      programStart: record.programStart ?? '',
+      programEnd: record.programEnd ?? '',
+      weeklyTemplate: record.weeklyTemplate ?? {},
+    });
+    setAttempted(false);
+    setEditing(true);
+  };
+
+  const saveSite = async () => {
+    if (draft.name.trim().length < 3) {
+      setAttempted(true);
+      return;
+    }
+    setSavingSite(true);
+    const renamed = draft.name.trim() !== record.name;
+    try {
+      await apiPatch(`/api/sites/${record.id}`, { ...draft, name: draft.name.trim() });
+      invalidate(SITES_PATH);
+      invalidate(ALL_MEALS_PATH);
+      setEditing(false);
+      toast.success('Site saved');
+      // The name is in the URL of this very screen, so a rename has to move.
+      if (renamed) {
+        window.location.replace(`/admin/sites/detail?site=${encodeURIComponent(draft.name.trim())}`);
+      } else {
+        loadRecord();
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingSite(false);
+    }
+  };
+
+  const generateDays = async () => {
+    setGenerating(true);
+    try {
+      const res = await apiPut(`/api/sites/${record.id}`, {});
+      invalidate(ALL_MEALS_PATH);
+      loadRecord();
+      toast.success(
+        res.added
+          ? `${res.added} service ${res.added === 1 ? 'day' : 'days'} added`
+          : 'The calendar already matches the cycle'
+      );
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const setActive = async (active) => {
+    setDeactivating(true);
+    try {
+      await apiPatch(`/api/sites/${record.id}`, { active });
+      invalidate(SITES_PATH);
+      loadRecord();
+      toast.success(active ? 'Site reactivated' : 'Site deactivated');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+
   const stats = useMemo(() => {
     const submitted = (meals?.excludedDates ?? []).filter((ymd) => ymd.startsWith(monthPrefix)).length;
     let missing = 0;
@@ -255,6 +352,33 @@ function SiteDetailScreen() {
                   Open dashboard
                 </Link>
               </Button>
+              {record && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Site actions">
+                      <MoreVertical />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={openEditor}>
+                      <Pencil />
+                      Edit site
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={generateDays} disabled={generating}>
+                      <CalendarRange />
+                      Generate missing days
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      destructive={record.active}
+                      onClick={() => setActive(!record.active)}
+                      disabled={deactivating}
+                    >
+                      <Power />
+                      {record.active ? 'Deactivate site' : 'Reactivate site'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           }
         />
@@ -419,6 +543,30 @@ function SiteDetailScreen() {
         onClose={() => setDialog(null)}
         onSaved={loadRoster}
       />
+
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit site</DialogTitle>
+            <DialogDescription>
+              Renaming is safe: counts, roster and assignments point at the site itself, not at its name.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[65vh] overflow-y-auto pr-1">
+            <SiteForm value={draft} onChange={setDraft} attempted={attempted} mode="edit" />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(false)} disabled={savingSite}>
+              Cancel
+            </Button>
+            <Button onClick={saveSite} loading={savingSite}>
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={Boolean(removing)}

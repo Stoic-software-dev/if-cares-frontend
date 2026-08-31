@@ -4,14 +4,16 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { reportError } from '@/lib/monitoring';
 
 // Route-level boundary: the screen failed, the app did not. It says what to do
 // next instead of leaving a blank page.
 export default function ErrorBoundary({ error, reset }) {
   useEffect(() => {
-    // Until the monitoring endpoint ships (ROADMAP, Transversal), the console
-    // is where a failure in production leaves a trace.
     console.error(error);
+    // A site that hits this screen rarely tells anyone. This is how an
+    // administrator finds out.
+    reportError(error, 'boundary');
   }, [error]);
 
   return (

@@ -1,5 +1,6 @@
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import ErrorReporter from '@/components/common/ErrorReporter';
 import { ThemeProvider } from '@/components/shell/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <AuthProvider>{children}</AuthProvider>
           <Toaster />
+          <ErrorReporter />
         </ThemeProvider>
       </body>
     </html>

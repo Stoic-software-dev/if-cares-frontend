@@ -40,6 +40,13 @@ model Site {
   // while today falls inside [reminderStart, reminderEnd].
   reminderStart       DateTime? @db.Date
   reminderEnd         DateTime? @db.Date
+  // The cycle the site operates in, and which meals each weekday serves:
+  // { "mon": { "brk": false, "lunch": true, "snk": false, "sup": true }, ... }.
+  // Together they generate the ServiceDay rows, so a new site is a form instead
+  // of two hundred clicks on a calendar.
+  programStart        DateTime? @db.Date
+  programEnd          DateTime? @db.Date
+  weeklyTemplate      Json?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -48,6 +55,7 @@ model Site {
   mealCounts  MealCount[]
   userSites   UserSite[]
   requests    Request[]
+  holidays    HolidaySite[]
 }
 
 model Student {
@@ -95,14 +103,27 @@ model MealCount {
   submittedById    String?
   submittedByEmail String          @default("")
   createdAt        DateTime        @default(now())
+  // Logical void: a count filed on the wrong day or site. Correcting it cannot
+  // fix that, and deleting it would erase the audit trail, so the row stays and
+  // every reader filters it out. A voided day is an open service day again.
+  voidedAt         DateTime?
+  voidedById       String?
+  voidedByEmail    String          @default("")
+  voidReason       String          @default("")
 
   site        Site                  @relation(fields: [siteId], references: [id])
-  submittedBy User?                 @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedBy User?                 @relation("MealCountSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  voidedBy    User?                 @relation("MealCountVoider", fields: [voidedById], references: [id], onDelete: SetNull)
   entries     MealCountEntry[]
   corrections MealCountCorrection[]
 
-  @@unique([siteId, date])
+  // Only ONE ACTIVE count per site and date, enforced by a partial unique index
+  // created in SQL (`MealCount_siteId_date_active_key ... WHERE voidedAt IS NULL`),
+  // which Prisma cannot express. Voided rows stay, so a day can hold the count
+  // that was thrown out plus the one that replaced it, and the audit trail keeps
+  // both. Read an active count with findFirst({ siteId, date, voidedAt: null }).
   @@index([siteId, date])
+  @@index([voidedAt])
 }
 
 model MealCountEntry {
@@ -139,12 +160,15 @@ model User {
   updatedAt    DateTime @updatedAt
 
   sites            UserSite[]
-  mealCounts       MealCount[]
-  requests         Request[]
+  mealCounts       MealCount[]          @relation("MealCountSubmitter")
+  voidedCounts     MealCount[]          @relation("MealCountVoider")
+  requests         Request[]            @relation("RequestAuthor")
+  answeredRequests Request[]            @relation("RequestResponder")
   auditLogs        AuditLog[]
   resetTokens      PasswordResetToken[]
   corrections      MealCountCorrection[]
   generatedReports GeneratedReport[]
+  holidays         Holiday[]
 }
 
 model UserSite {
@@ -166,11 +190,18 @@ model Request {
   siteId           String
   requestedById    String?
   requestedByEmail String        @default("")
+  // What the administrator answered. A status change on its own leaves the site
+  // watching a label move with no explanation.
+  responseComment  String        @default("")
+  respondedById    String?
+  respondedByEmail String        @default("")
+  respondedAt      DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   site        Site  @relation(fields: [siteId], references: [id])
-  requestedBy User? @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  requestedBy User? @relation("RequestAuthor", fields: [requestedById], references: [id], onDelete: SetNull)
+  respondedBy User? @relation("RequestResponder", fields: [respondedById], references: [id], onDelete: SetNull)
 
   @@index([siteId, status])
 }
@@ -193,6 +224,69 @@ model AuditLog {
 
 // Small key-value config store (e.g. foundationId.TX / foundationId.OK for the
 // consolidated claim reports).
+// Crashes in the browser, which until now left no trace anywhere. Reports are
+// grouped by fingerprint instead of stored one by one: the same broken screen
+// hit by forty sites in a morning is one row with a counter, not forty rows to
+// scroll past.
+model ClientError {
+  id          String    @id @default(cuid())
+  fingerprint String    @unique
+  message     String
+  stack       String    @db.Text
+  pathname    String    @default("")
+  source      String    @default("") // "boundary" | "window" | "promise"
+  userAgent   String    @default("")
+  lastEmail   String    @default("") // whoever hit it most recently, when signed in
+  count       Int       @default(1)
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@index([lastSeenAt])
+  @@index([resolvedAt])
+}
+
+// A named non service period. Holidays are DECLARATIVE: they never delete a
+// ServiceDay, they are subtracted when the calendar is read. That is what lets a
+// cell say "Thanksgiving" instead of just being blank, and what makes removing a
+// holiday put the days straight back.
+//
+// A day that already carries a count is never affected: the meals were served,
+// whatever the calendar says afterwards.
+model Holiday {
+  id          String   @id @default(cuid())
+  name        String
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  // Scope over sites: every site, or the ones listed in HolidaySite.
+  allSites    Boolean  @default(true)
+  // Scope over meals: the whole day, or only the meals flagged below.
+  allMeals    Boolean  @default(true)
+  brk         Boolean  @default(false)
+  lunch       Boolean  @default(false)
+  snk         Boolean  @default(false)
+  sup         Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  sites     HolidaySite[]
+
+  @@index([startDate, endDate])
+}
+
+model HolidaySite {
+  holidayId String
+  siteId    String
+
+  holiday Holiday @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([holidayId, siteId])
+  @@index([siteId])
+}
+
 model AppSetting {
   key       String   @id
   value     String
@@ -242,6 +336,16 @@ model GeneratedReport {
   fileName       String
   storageKey     String   @default("")
   signedBy       String   @default("")
+  signedTitle    String   @default("")
+  // The signature itself, as a PNG data URL. Without it the signed claim could
+  // only ever be reproduced from the file store, and a claim has to be
+  // reproducible from the database alone.
+  signature      String   @default("") @db.Text
+  signedAt       DateTime?
+  // Opaque, single use and expiring: the link is sent to whoever signs, who has
+  // no account. Never the id of the document itself.
+  signToken      String?  @unique
+  signTokenSetAt DateTime?
   createdById    String?
   createdByEmail String   @default("")
   createdAt      DateTime @default(now())

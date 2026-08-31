@@ -87,6 +87,9 @@ export const requestSchema = z.object({
 
 export const requestStatusSchema = z.object({
   status: z.enum(['NEW', 'IN_PROGRESS', 'RESOLVED']),
+  // What the administrator answers when resolving. Optional, because moving a
+  // request to In Progress does not need an explanation.
+  responseComment: z.string().trim().max(1000).optional(),
 });
 
 export const serviceDaysPutSchema = z.object({
@@ -99,6 +102,140 @@ export const serviceDaysPutSchema = z.object({
       sup: z.boolean().default(false),
     })
   ),
+});
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date.');
+
+// Closing a month across every site used to be two requests per site, run one
+// after the other. This is the whole operation in one call.
+export const closeDaysSchema = z.object({
+  sites: z.array(z.string().min(1)).min(1, 'Pick at least one site.').max(500),
+  from: ymd,
+  to: ymd,
+});
+
+// The days a close removed, handed back so it can be undone.
+export const restoreDaysSchema = z.object({
+  days: z
+    .array(
+      z.object({
+        site: z.string().min(1),
+        date: ymd,
+        brk: z.boolean().default(false),
+        lunch: z.boolean().default(false),
+        snk: z.boolean().default(false),
+        sup: z.boolean().default(false),
+      })
+    )
+    .min(1)
+    .max(20000),
+});
+
+// Short limits on purpose: this is the one endpoint a signed out caller can
+// write to, so nothing here is allowed to be big.
+export const clientErrorSchema = z.object({
+  message: z.string().trim().min(1).max(500),
+  stack: z.string().trim().max(4000).optional(),
+  pathname: z.string().trim().max(300).optional(),
+  source: z.enum(['boundary', 'window', 'promise']).optional(),
+});
+
+const dayMealsSchema = z.object({
+  brk: z.boolean().default(false),
+  lunch: z.boolean().default(false),
+  snk: z.boolean().default(false),
+  sup: z.boolean().default(false),
+});
+
+// Every weekday optional: a site that only serves Monday to Friday sends five
+// keys, not seven. A record keyed by an enum would demand all of them.
+const weeklyTemplateSchema = z.object({
+  mon: dayMealsSchema.optional(),
+  tue: dayMealsSchema.optional(),
+  wed: dayMealsSchema.optional(),
+  thu: dayMealsSchema.optional(),
+  fri: dayMealsSchema.optional(),
+  sat: dayMealsSchema.optional(),
+  sun: dayMealsSchema.optional(),
+});
+
+const siteFields = {
+  // The full legacy name with its school-year prefix: it is the identity every
+  // screen shows and every URL carries.
+  name: z.string().trim().min(3, 'The full site name is required.').max(200),
+  state: z.string().trim().max(10).optional(),
+  ceName: z.string().trim().max(200).optional(),
+  ceId: z.string().trim().max(50).optional(),
+  siteName: z.string().trim().max(200).optional(),
+  siteNumber: z.string().trim().max(50).optional(),
+  programStart: z.union([ymd, z.literal('')]).optional(),
+  programEnd: z.union([ymd, z.literal('')]).optional(),
+  weeklyTemplate: weeklyTemplateSchema.optional(),
+};
+
+export const siteCreateSchema = z
+  .object(siteFields)
+  .refine(
+    (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,
+    { message: 'The program ends before it starts.', path: ['programEnd'] }
+  );
+
+export const siteUpdateSchema = z
+  .object({ ...siteFields, name: siteFields.name.optional(), active: z.boolean().optional() })
+  .refine(
+    (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,
+    { message: 'The program ends before it starts.', path: ['programEnd'] }
+  );
+
+const holidayFields = {
+  name: z.string().trim().min(2, 'Give the holiday a name.').max(120),
+  startDate: ymd,
+  endDate: ymd,
+  allSites: z.boolean().default(true),
+  // A holiday over the whole day, or only over the meals flagged below.
+  allMeals: z.boolean().default(true),
+  brk: z.boolean().optional(),
+  lunch: z.boolean().optional(),
+  snk: z.boolean().optional(),
+  sup: z.boolean().optional(),
+  sites: z.array(z.string().min(1)).max(500).optional(),
+};
+
+export const holidayCreateSchema = z.object(holidayFields).refine(
+  (value) => value.allMeals || value.brk || value.lunch || value.snk || value.sup,
+  { message: 'Pick at least one meal, or apply it to the whole day.', path: ['allMeals'] }
+);
+
+export const holidayUpdateSchema = z.object({
+  ...holidayFields,
+  name: holidayFields.name.optional(),
+  startDate: ymd.optional(),
+  endDate: ymd.optional(),
+  allSites: z.boolean().optional(),
+  allMeals: z.boolean().optional(),
+});
+
+export const consolidatedSchema = z.object({
+  kind: z.enum(['claim-part1', 'claim-part2']),
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+  state: z.string().trim().max(10).optional(),
+  // Sites left out of this claim, by name, with the guarantee below that at
+  // least one remains.
+  excludeSites: z.array(z.string().min(1)).max(500).optional(),
+  title: z.string().trim().max(120).optional(),
+});
+
+export const signReportSchema = z.object({
+  signature: z.string().startsWith('data:image/png;base64,', 'A signature is required.').max(400_000),
+  signedBy: z.string().trim().min(2, 'Type the name of whoever is signing.').max(120),
+  title: z.string().trim().max(120).optional(),
+});
+
+export const voidCountSchema = z.object({
+  site: z.string().min(1),
+  date: ymd,
+  reason: z.string().trim().min(3, 'Say why in a few words.').max(300),
 });
 
 export const forgotPasswordSchema = z.object({

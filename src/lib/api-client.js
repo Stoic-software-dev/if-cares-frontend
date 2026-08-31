@@ -36,6 +36,15 @@ export async function apiPost(path, body) {
   return parse(res);
 }
 
+export async function apiPut(path, body) {
+  const res = await fetch(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return parse(res);
+}
+
 export async function apiPatch(path, body) {
   const res = await fetch(path, {
     method: 'PATCH',

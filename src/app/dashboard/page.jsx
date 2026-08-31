@@ -84,9 +84,10 @@ function DashboardScreen() {
   const hasNext = index >= 0 && index < months.length - 1;
 
   const month = useMemo(
-    // Holidays land here once /api/holidays exists (SPECS.md 11.2); the grid
-    // already renders the state.
-    () => (current && siteData ? buildMonth(current.year, current.month, siteData, today, {}) : null),
+    () =>
+      current && siteData
+        ? buildMonth(current.year, current.month, siteData, today, siteData.holidays ?? {})
+        : null,
     [current, siteData, today]
   );
 

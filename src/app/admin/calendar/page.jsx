@@ -27,26 +27,13 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
-import { apiGet } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, SITES_PATH, cachedGet, invalidate } from '@/lib/data-cache';
 import { MEAL_KEYS, monthLabel, todayYmd, ymdOf } from '@/lib/calendar';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-async function apiPut(path, body) {
-  const res = await fetch(path, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || data?.result === 'error') {
-    throw new Error(data?.message || `Request failed (${res.status})`);
-  }
-  return data;
-}
 
 const dowOf = (ymd) => {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -72,6 +59,9 @@ function CalendarScreen() {
   const [patternOpen, setPatternOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [pendingSite, setPendingSite] = useState(null);
+  // Holidays are read, never written into the calendar, so this screen has to
+  // ask for them to be able to tell a holiday apart from a closed day.
+  const [holidays, setHolidays] = useState({});
 
 
   useEffect(() => {
@@ -99,6 +89,7 @@ function CalendarScreen() {
         }
         setDays(map);
         setLocked(new Set(allMeals?.[site]?.excludedDates ?? []));
+        setHolidays(allMeals?.[site]?.holidays ?? {});
         setDirty(false);
       })
       .catch((err) => setError(err.message));
@@ -126,10 +117,16 @@ function CalendarScreen() {
     const cells = Array.from({ length: leading }, () => null);
     for (let day = 1; day <= daysInMonth; day++) {
       const ymd = ymdOf(year, month, day);
-      cells.push({ day, ymd, meals: days?.get(ymd) ?? null, locked: locked.has(ymd) });
+      cells.push({
+        day,
+        ymd,
+        meals: days?.get(ymd) ?? null,
+        locked: locked.has(ymd),
+        holiday: holidays[ymd] ?? '',
+      });
     }
     return cells;
-  }, [cursor, days, locked]);
+  }, [cursor, days, locked, holidays]);
 
   const monthStats = useMemo(() => {
     const prefix = `${cursor.year}-${String(cursor.month).padStart(2, '0')}`;
@@ -388,7 +385,7 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
         type="button"
         onClick={onToggle}
         aria-pressed={open}
-        aria-label={`${cell.ymd}, ${open ? 'service day' : 'closed'}`}
+        aria-label={`${cell.ymd}, ${cell.holiday ? cell.holiday : open ? 'service day' : 'closed'}`}
         className="flex items-start justify-between outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span
@@ -401,6 +398,15 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
         </span>
         {cell.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
       </button>
+
+      {cell.holiday && (
+        <span
+          title={cell.holiday}
+          className="mt-0.5 truncate rounded-xs bg-info-soft px-1 py-px text-[10px] font-semibold text-info-text"
+        >
+          {cell.holiday}
+        </span>
+      )}
 
       {open && (
         <Popover>
@@ -589,26 +595,34 @@ function CloseDaysDialog({ open, onOpenChange, sites, currentSite, cursor, onClo
 
   const visibleSites = sites.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
 
-  const applyToOtherSites = async () => {
-    // The submitted-count map is the same for every site: read it once, not
-    // once per site.
-    const allMeals = await cachedGet(ALL_MEALS_PATH);
-    let done = 0;
-    for (const name of targets) {
-      setProgress({ done, total: targets.length, site: shortSiteName(name) });
-      // eslint-disable-next-line no-await-in-loop
-      const res = await apiGet(`/api/sites/service-days?site=${encodeURIComponent(name)}`);
-      const locked = new Set(allMeals?.[name]?.excludedDates ?? []);
-      const remaining = (res.days ?? []).filter(
-        (day) => locked.has(day.date) || day.date < from || day.date > to
-      );
-      // eslint-disable-next-line no-await-in-loop
-      await apiPut(`/api/sites/service-days?site=${encodeURIComponent(name)}`, { days: remaining });
-      done += 1;
-      setProgress({ done, total: targets.length, site: shortSiteName(name) });
+  // Putting the days back is the whole point of handing them to the client: a
+  // month closed at forty sites by mistake used to be forty manual repairs.
+  const undoClose = async (days) => {
+    try {
+      const res = await apiPut('/api/sites/service-days/close', { days });
+      invalidate(ALL_MEALS_PATH);
+      onSaved();
+      toast.success(`${res.restored} days reopened.`);
+    } catch (error) {
+      toast.error(error.message);
     }
+  };
+
+  const applyToOtherSites = async () => {
+    setProgress({ sites: targets.length });
+    const res = await apiPost('/api/sites/service-days/close', { sites: targets, from, to });
     invalidate(ALL_MEALS_PATH);
     onSaved();
+
+    const removed = res.days ?? [];
+    toast.success(`${res.closed} days closed at ${res.sites} ${res.sites === 1 ? 'site' : 'sites'}.`, {
+      description: res.kept
+        ? `${res.kept} days already had a submitted count and stayed open.`
+        : undefined,
+      // Long enough to notice the mistake and act on it.
+      duration: 30_000,
+      action: removed.length ? { label: 'Undo', onClick: () => undoClose(removed) } : undefined,
+    });
   };
 
   return (
@@ -696,7 +710,7 @@ function CloseDaysDialog({ open, onOpenChange, sites, currentSite, cursor, onClo
 
         {progress && (
           <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] tabular-nums text-muted-foreground">
-            Saving {progress.done} of {progress.total}, {progress.site}
+            Closing the range at {progress.sites} sites.
           </p>
         )}
 
@@ -726,25 +740,27 @@ function CloseDaysDialog({ open, onOpenChange, sites, currentSite, cursor, onClo
 function CloseManyButton({ disabled, onRun, onDone, count }) {
   const [confirm, setConfirm] = useState(false);
   const [running, setRunning] = useState(false);
+  const places = `${count} ${count === 1 ? 'site' : 'sites'}`;
 
   return (
     <>
       <Button variant="destructive" disabled={disabled} loading={running} onClick={() => setConfirm(true)}>
-        Close at {count} sites
+        Close at {places}
       </Button>
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Close these days at ${count} sites?`}
-        description="Each site is saved on its own, one after the other."
+        title={`Close these days at ${places}?`}
+        description="All of them are written together, in a single operation."
         consequences={[
           'Those days stop accepting meal counts at every selected site.',
           'Days that already have a submitted count are left exactly as they are.',
           'The change is written immediately, not with the Save button.',
+          'It can be undone right afterwards, from the message that confirms it.',
         ]}
         confirmLabel="Close the days"
         successTitle="Days closed"
-        successDescription="Every selected site was saved."
+        successDescription="Undo is available for half a minute in the message on screen."
         onConfirm={async () => {
           setRunning(true);
           try {

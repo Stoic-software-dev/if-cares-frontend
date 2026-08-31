@@ -96,13 +96,14 @@ export function buildMonth(year, month, siteData, today = todayYmd(), holidays =
     const meals = valid[ymd];
     let status = 'none';
 
+    // A holiday that only closes some meals leaves the day open for the rest, so
+    // meals decide the state and the holiday name is carried along for the cell.
     if (submitted.has(ymd)) status = 'submitted';
-    else if (holiday) status = 'holiday';
     else if (meals) {
       if (ymd < today) status = 'missing';
       else if (ymd === today) status = 'today';
       else status = 'upcoming';
-    }
+    } else if (holiday) status = 'holiday';
 
     if (status !== 'none') {
       days[day] = { day, ymd, status, meals: meals ?? null, holiday: holiday ?? null };

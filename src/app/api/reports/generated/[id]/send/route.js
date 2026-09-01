@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { appBaseUrl, handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients, MailError } from '@/lib/gmail';
 import { claimSent, signatureRequest } from '@/lib/mail-templates';
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
 // wrong person.
 export const POST = handle(async (req, { params }) => {
   const session = await requireAdmin();
-  const body = await readJsonBody(req);
+  const body = requireObjectBody(await readJsonBody(req));
 
   const { valid, invalid } = parseRecipients(body.to);
   if (invalid.length) throw new ApiError(422, `Not an email address: ${invalid[0]}`);

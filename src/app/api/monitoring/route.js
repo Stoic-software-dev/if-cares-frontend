@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { prisma } from '@/lib/db';
-import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
+import { handle, readJsonBody, requireObjectBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin, getSession } from '@/lib/auth';
 import { canSeeMonitoring } from '@/lib/monitoring-access';
 import { clientErrorSchema } from '@/lib/validation';
@@ -128,7 +128,7 @@ export const GET = handle(async (req) => {
 // Marking one as handled, so the list shows what is still happening.
 export const PATCH = handle(async (req) => {
   await requireMonitoringAccess();
-  const { id, resolved } = await readJsonBody(req);
+  const { id, resolved } = requireObjectBody(await readJsonBody(req));
   if (!id) throw new ApiError(400, 'Missing id.');
 
   await prisma.clientError.update({

@@ -49,6 +49,21 @@ export async function readJsonBody(req) {
   }
 }
 
+/**
+ * For the handful of routes that read `readJsonBody` straight, without a Zod
+ * schema to reject a malformed shape first. `null` and `[]` are both valid
+ * JSON, so a caller sending either sailed past `readJsonBody` and then crashed
+ * the moment the route touched a property on it. Same wording a Zod route
+ * already gives for the same mistake, so the contract does not depend on
+ * whether a route happens to validate with Zod.
+ */
+export function requireObjectBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new ApiError(422, 'Invalid input.');
+  }
+  return body;
+}
+
 // Wraps a route handler and converts thrown errors into legacy-shaped responses.
 export function handle(fn) {
   return async (req, ctx) => {

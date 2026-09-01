@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { appBaseUrl, handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients } from '@/lib/gmail';
 import { countOverdue } from '@/lib/mail-templates';
@@ -51,7 +51,7 @@ export const GET = handle(async () => {
 
 export const PATCH = handle(async (req) => {
   const session = await requireAdmin();
-  const body = await readJsonBody(req);
+  const body = requireObjectBody(await readJsonBody(req));
 
   const settings = await readSettings();
   const next = { ...settings };

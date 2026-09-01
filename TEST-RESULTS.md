@@ -93,23 +93,29 @@ cerrados**, más 2 Medio que salían gratis con el mismo cambio.
 | Calendario admin tinta un día cerrado por feriado | **Arreglado** — sin tinte, con las comidas configuradas tachadas: sigue siendo la pantalla donde se editan |
 | "Apply a weekly pattern" no avisa con From > To | **Arreglado** — "It ends before it starts.", igual que el form de feriados |
 
-**Sin arreglar, con motivo:**
+### Tercera tanda (`eb458f7`) — lo que quedaba, incluido lo que había cerrado como decisión
 
-- **Prefill de comidas al reabrir un día** (Medio): depende de los datos del sitio y el propio
-  agente lo vio autocorregirse cuando la mayoría cambió. Sin una reproducción estable no hay qué
-  arreglar.
-- **React #185 en `/counts/[date]`** (Medio): una sola ocurrencia, no reproducible bajo demanda, y
-  con atribución dudosa (browser compartido con otro agente sobre el mismo sitio). Queda anotado
-  para el próximo pase.
-- **Sin campo de texto libre en los tipos de request** (Bajo): es una decisión de producto de IF
-  Cares, no un defecto.
-- **Sin paginación en `/admin/requests`** (Bajo): con 10 requests no hay nada que paginar todavía.
-- **La pestaña Holidays sin selector de sitio** (Bajo): es intencional — un feriado no es "de un
-  sitio a la vez".
-- Los dos de timing/enumeración ya explicados arriba.
+| Hallazgo | Estado |
+|---|---|
+| Prefill de comidas al reabrir un día | **Arreglado** — sí tenía causa: `defaultMeals` contaba los días que no sirven nada al buscar la combinación más común, así que un sitio con suficientes días cerrados tenía el vacío como forma. Por eso "se autocorregía" cuando las pruebas cambiaban la mayoría |
+| Canal de tiempo en `forgot-password` | **Arreglado** — piso de respuesta de 400ms: las dos ramas tardan lo mismo. El envío sigue sin `await`, que era lo correcto; el hueco no lo era |
+| 403 distinto para cuenta sin contraseña | **Arreglado** — misma respuesta que cualquier login fallido. A la persona real la atiende "Forgot your password?", que emite link para esa cuenta igual |
+| "Remove" de alumno es borrado duro | **Arreglado** — ahora desactiva. El roster ya leía `active`, así que en pantalla no cambia nada, pero los counts ya enviados siguen apuntando a un alumno real en vez de quedar con `studentId` en null, y volver a agregar el mismo nombre lo revive |
+| Sin campo de texto libre en los requests | **Arreglado** — campo `note` (migración `20260901180000_request_note`), buscable en el inbox y visible en las dos pantallas |
+| Sin paginación en `/admin/requests` | **Arreglado** — 10 por página, con el mismo componente que el resto |
+| `respondedBy`/`respondedAt` en el inbox admin | **Arreglado** — faltaba también del lado admin, no solo del solicitante |
 
-Queda **todo lo demás cerrado**: de los 32 hallazgos, 21 arreglados, 11 cerrados como decisión
-consciente o sin reproducción.
+**Único hallazgo que sigue abierto:**
+
+- **React #185 en `/counts/[date]`** (Medio): busqué la causa. Los dos únicos `onChange` de esa
+  pantalla son `setState` directo sobre inputs controlados, sin ningún efecto detrás, y
+  `SearchInput` no tiene nada raro. Una sola ocurrencia, con el browser compartido entre agentes
+  sobre el mismo sitio, no alcanza para cambiar código a ciegas. Queda anotado, no cerrado.
+
+**La pestaña Holidays sin selector de sitio** no se toca: es intencional, un feriado no es "de un
+sitio a la vez".
+
+De los 32 hallazgos: **31 arreglados, 1 abierto** (el React #185, sin reproducción).
 
 ---
 

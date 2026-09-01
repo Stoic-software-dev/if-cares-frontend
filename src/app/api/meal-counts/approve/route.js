@@ -48,6 +48,9 @@ async function activeCount(siteName, ymd) {
  * The follow-up an approval sends: the count as a PDF, archived and mailed to
  * the people at that site. It never decides whether the approval happened - the
  * approval is already written - so every failure here is reported and swallowed.
+ *
+ * It reports back how many were meant to hear and how many did, because an
+ * approval that quietly notifies nobody looks exactly like one that worked.
  */
 async function deliverApproval(session, siteName, ymd) {
   const detail = await loadMealCountDetail(session, siteName, ymd);
@@ -56,7 +59,7 @@ async function deliverApproval(session, siteName, ymd) {
     notifyFailure({ area: 'Archiving an approved count', error, context: { site: siteName, date: ymd } });
   });
 
-  if (!mailConfigured()) return 0;
+  if (!mailConfigured()) return { sent: 0, recipients: 0, error: 'Email sending is not configured.' };
 
   const site = await prisma.site.findUnique({ where: { name: siteName }, select: { id: true } });
   // Only the people assigned to that site, which is what Summer does
@@ -74,6 +77,7 @@ async function deliverApproval(session, siteName, ymd) {
   });
 
   let sent = 0;
+  let failure = '';
   for (const user of users) {
     const message = countApproved({ name: user.name, site: siteName, date: ymd });
     try {
@@ -85,6 +89,7 @@ async function deliverApproval(session, siteName, ymd) {
       });
       sent += 1;
     } catch (error) {
+      failure = failure || error.message;
       notifyFailure({
         area: 'Approval email',
         error,
@@ -92,7 +97,7 @@ async function deliverApproval(session, siteName, ymd) {
       });
     }
   }
-  return sent;
+  return { sent, recipients: users.length, error: sent === 0 ? failure : '' };
 }
 
 export const POST = handle(async (req) => {
@@ -123,10 +128,11 @@ export const POST = handle(async (req) => {
   // The PDF and the emails are the slow half. They run before answering rather
   // than after, because a request that ends is the only thing this runtime
   // promises to finish - but a failure in them never undoes the approval.
-  let notified = 0;
+  let delivery = { sent: 0, recipients: 0, error: '' };
   try {
-    notified = await deliverApproval(session, siteName, ymd);
+    delivery = await deliverApproval(session, siteName, ymd);
   } catch (error) {
+    delivery = { sent: 0, recipients: 0, error: error.message };
     notifyFailure({
       area: 'Approval follow-up',
       error,
@@ -136,7 +142,13 @@ export const POST = handle(async (req) => {
 
   return legacyJson({
     result: 'success',
-    data: { at: approvedAt.toISOString(), by: session.user.email, notified },
+    data: {
+      at: approvedAt.toISOString(),
+      by: session.user.email,
+      notified: delivery.sent,
+      recipients: delivery.recipients,
+      mailError: delivery.error,
+    },
   });
 });
 

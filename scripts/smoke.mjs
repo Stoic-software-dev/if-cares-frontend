@@ -195,8 +195,22 @@ async function run() {
   const cron = await api('/api/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   check('the reminder scheduler refuses without its secret', cron.status === 503 || cron.status === 401, `status ${cron.status}`);
 
+  // Monitoring is gated to developers, so the contract is the gate, not the
+  // list: this account sees it or gets a 404 depending on which side of
+  // NEXT_PUBLIC_MONITORING_EMAILS it is on. A 403, or a 200 for an account that
+  // should not have it, is the failure worth catching.
+  const allowedToSeeCrashes = (process.env.NEXT_PUBLIC_MONITORING_EMAILS || 'miqueas@stoicsoftware.io')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .includes(String(EMAIL).trim().toLowerCase());
   const crashes = await json('/api/monitoring');
-  check('client error monitoring is deployed', Array.isArray(crashes.body?.data), `status ${crashes.status}`);
+  check(
+    allowedToSeeCrashes
+      ? 'client error monitoring answers a developer'
+      : 'client error monitoring is hidden from an ordinary administrator',
+    allowedToSeeCrashes ? Array.isArray(crashes.body?.data) : crashes.status === 404,
+    `status ${crashes.status}`
+  );
 
   const menus = await json('/api/reports/files');
   check('menus listing responds', Array.isArray(menus.body), `status ${menus.status}`);

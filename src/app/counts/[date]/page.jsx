@@ -117,11 +117,17 @@ function CountDetailScreen() {
     try {
       const res = await apiPost('/api/meal-counts/approve', { site, date });
       setCount((prev) => ({ ...prev, approved: res.data }));
-      toast.success(
-        res.data.notified
-          ? `Approved. ${res.data.notified} ${res.data.notified === 1 ? 'person' : 'people'} at the site were emailed.`
-          : 'Approved.'
-      );
+      if (res.data.notified) {
+        toast.success(
+          `Approved. ${res.data.notified} ${res.data.notified === 1 ? 'person' : 'people'} at the site were emailed.`
+        );
+      } else if (res.data.recipients) {
+        // The approval is saved either way, but saying "approved" alone would
+        // let someone believe the site was told when it was not.
+        toast.warning(`Approved, but the site could not be emailed. ${res.data.mailError}`);
+      } else {
+        toast.success('Approved. Nobody is assigned to this site, so no email was sent.');
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {

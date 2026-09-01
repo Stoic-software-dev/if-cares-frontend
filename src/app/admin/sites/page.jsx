@@ -132,7 +132,7 @@ function AdminSitesScreen() {
   );
 
   const createSite = async () => {
-    if (draft.name.trim().length < 3) {
+    if (draft.name.trim().length < 3 || !draft.state.trim()) {
       setAttempted(true);
       return;
     }

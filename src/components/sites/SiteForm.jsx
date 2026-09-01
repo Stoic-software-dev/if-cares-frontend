@@ -76,6 +76,12 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
 
   const generated = useMemo(() => countDays(value), [value]);
   const nameError = attempted && value.name.trim().length < 3 ? 'The full site name is required.' : undefined;
+  // Only enforced on create: a site already missing it can still be edited for
+  // everything else without the save being blocked on an unrelated fix, but a
+  // new site cannot be born into the exact gap that caused a claim to drop 7
+  // real sites without anyone noticing.
+  const stateError =
+    attempted && mode === 'create' && !value.state.trim() ? 'Pick TX or OK.' : undefined;
   const rangeError =
     attempted && value.programStart && value.programEnd && value.programStart > value.programEnd
       ? 'The program ends before it starts.'
@@ -99,12 +105,18 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="State" htmlFor="site-state" hint="TX or OK. Drives the consolidated reports.">
+        <Field
+          label="State"
+          htmlFor="site-state"
+          hint="TX or OK. Drives the consolidated reports."
+          error={stateError}
+        >
           <Input
             id="site-state"
             value={value.state}
             onChange={(event) => set({ state: event.target.value.toUpperCase().slice(0, 2) })}
             placeholder="TX"
+            aria-invalid={Boolean(stateError)}
           />
         </Field>
         <Field label="Site number" htmlFor="site-number">

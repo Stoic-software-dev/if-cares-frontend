@@ -177,7 +177,16 @@ const siteFields = {
 };
 
 export const siteCreateSchema = z
-  .object(siteFields)
+  .object({
+    ...siteFields,
+    // Required only here, not on update: the worst bug this app has shipped
+    // was a claim silently dropping sites whose state column was never filled
+    // in. That happened through a bulk import, not this form, but the form is
+    // the only thing standing between a typo and the same failure recurring -
+    // an empty state is invisible in the UI (the badge falls back to parsing
+    // the name) right up until a claim quietly excludes the site.
+    state: z.string().trim().min(1, 'Pick TX or OK.').max(10),
+  })
   .refine(
     (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,
     { message: 'The program ends before it starts.', path: ['programEnd'] }

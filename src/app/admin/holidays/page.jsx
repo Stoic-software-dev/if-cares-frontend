@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
+import { CALENDAR_TABS, SectionTabs } from '@/components/shell/SectionTabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -206,6 +207,8 @@ function HolidaysScreen() {
             </Button>
           }
         />
+
+        <SectionTabs options={CALENDAR_TABS} ariaLabel="Calendar section" />
 
         <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
           <Segmented

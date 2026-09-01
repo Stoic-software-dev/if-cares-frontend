@@ -2,12 +2,13 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CalendarOff, ChevronLeft, ChevronRight, Lock, Save, Wand2 } from 'lucide-react';
+import { CalendarOff, ChevronDown, ChevronLeft, ChevronRight, Lock, Save, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
+import { CALENDAR_TABS, SectionTabs } from '@/components/shell/SectionTabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,11 +21,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
@@ -216,14 +224,24 @@ function CalendarScreen() {
           subtitle="Open or close service days, and set which meals each day serves."
           actions={
             <>
-              <Button variant="outline" onClick={() => setPatternOpen(true)} disabled={!days}>
-                <Wand2 />
-                Weekly pattern
-              </Button>
-              <Button variant="outline" onClick={() => setCloseOpen(true)} disabled={!days}>
-                <CalendarOff />
-                Close days
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!days}>
+                    Bulk edit
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onSelect={() => setPatternOpen(true)}>
+                    <Wand2 />
+                    Apply a weekly pattern
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCloseOpen(true)}>
+                    <CalendarOff />
+                    Close a range of days
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button onClick={save} loading={saving} disabled={!dirty}>
                 <Save />
                 {dirty ? 'Save changes' : 'Saved'}
@@ -231,6 +249,8 @@ function CalendarScreen() {
             </>
           }
         />
+
+        <SectionTabs options={CALENDAR_TABS} ariaLabel="Calendar section" />
 
         {sites && (
           <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
@@ -263,17 +283,9 @@ function CalendarScreen() {
           <>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-muted-foreground">
               <Badge variant="brand">{monthStats.service} service days this month</Badge>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border border-primary-border bg-primary-soft" />
-                Service day
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-xs border border-border bg-card" />
-                Closed
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Lock className="h-3 w-3" />
-                Has a submitted count and cannot change
+              <span>
+                A tinted day serves meals. Click any day to change it. A lock means the day already has a
+                count and cannot change.
               </span>
             </div>
 
@@ -373,52 +385,47 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
   const open = Boolean(cell.meals);
   const served = MEAL_KEYS.filter((meal) => cell.meals?.[meal.key]);
 
+  // One target per day. The cell used to carry two - the number toggled the day
+  // and a strip at the bottom opened the meals - which is two meanings inside a
+  // box the size of a thumb. Now the whole cell opens one panel that says what
+  // the day is and what it serves.
   return (
-    <div
-      className={cn(
-        'relative flex h-16 flex-col rounded-md border p-1.5 transition-colors md:h-[96px] md:p-2',
-        open ? 'border-primary-border bg-primary-soft' : 'border-border bg-card',
-        isToday && 'ring-1 ring-primary'
-      )}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-pressed={open}
-        aria-label={`${cell.ymd}, ${cell.holiday ? cell.holiday : open ? 'service day' : 'closed'}`}
-        className="flex items-start justify-between outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <span
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={cell.locked}
+          aria-label={`${cell.ymd}, ${cell.holiday ? cell.holiday : open ? 'service day' : 'closed'}`}
           className={cn(
-            'text-[13px] font-bold tabular-nums md:text-[14px]',
-            open ? 'text-primary-strong dark:text-primary' : 'text-muted-foreground'
+            'relative flex h-16 w-full flex-col rounded-md border p-1.5 text-left outline-none transition-colors md:h-[96px] md:p-2',
+            open ? 'border-primary-border bg-primary-soft' : 'border-border bg-card',
+            isToday && 'ring-1 ring-primary',
+            cell.locked ? 'cursor-default' : 'hover:border-primary focus-visible:ring-2 focus-visible:ring-ring'
           )}
         >
-          {cell.day}
-        </span>
-        {cell.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
-      </button>
-
-      {cell.holiday && (
-        <span
-          title={cell.holiday}
-          className="mt-0.5 truncate rounded-xs bg-info-soft px-1 py-px text-[10px] font-semibold text-info-text"
-        >
-          {cell.holiday}
-        </span>
-      )}
-
-      {open && (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              disabled={cell.locked}
+          <span className="flex items-start justify-between">
+            <span
               className={cn(
-                'mt-auto flex flex-wrap gap-1 rounded-xs px-0.5 py-0.5 outline-none transition-colors',
-                !cell.locked && 'hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring'
+                'text-[13px] font-bold tabular-nums md:text-[14px]',
+                open ? 'text-primary-strong dark:text-primary' : 'text-muted-foreground'
               )}
             >
+              {cell.day}
+            </span>
+            {cell.locked && <Lock className="h-3 w-3 text-muted-foreground" />}
+          </span>
+
+          {cell.holiday && (
+            <span
+              title={cell.holiday}
+              className="mt-0.5 truncate rounded-xs bg-info-soft px-1 py-px text-[10px] font-semibold text-info-text"
+            >
+              {cell.holiday}
+            </span>
+          )}
+
+          {open && (
+            <span className="mt-auto flex flex-wrap gap-1">
               {served.length === 0 ? (
                 <span className="text-[10px] font-semibold text-destructive-text">No meal</span>
               ) : (
@@ -431,10 +438,20 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
                   </span>
                 ))
               )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56 p-2.5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-60 p-3">
+        <label className="flex cursor-pointer items-center justify-between gap-3">
+          <span className="text-[13px] font-semibold text-foreground">Service day</span>
+          <Switch checked={open} onCheckedChange={onToggle} />
+        </label>
+
+        {open && (
+          <>
+            <p className="mb-2 mt-3.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
               Meals served
             </p>
             <div className="flex flex-col gap-1">
@@ -451,10 +468,10 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
                 </label>
               ))}
             </div>
-          </PopoverContent>
-        </Popover>
-      )}
-    </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 

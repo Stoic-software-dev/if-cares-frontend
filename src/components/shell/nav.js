@@ -1,12 +1,11 @@
 import {
-  BellRing,
   Bug,
   Building2,
-  CalendarOff,
   CalendarDays,
   CalendarRange,
   FileText,
   Inbox,
+  SlidersHorizontal,
   UtensilsCrossed,
   Users,
 } from 'lucide-react';
@@ -28,8 +27,7 @@ const ADMIN_ITEMS = [
   { key: 'inbox', label: 'Requests', href: '/admin/requests', icon: Inbox, primary: false },
   { key: 'users', label: 'Users', href: '/admin/users', icon: Users, primary: false },
   { key: 'menus', label: 'Menus', href: '/menus', icon: UtensilsCrossed, primary: false },
-  { key: 'holidays', label: 'Holidays', href: '/admin/holidays', icon: CalendarOff, primary: false },
-  { key: 'reminders', label: 'Reminders', href: '/admin/reminders', icon: BellRing, primary: false },
+  { key: 'settings', label: 'Settings', href: '/admin/settings', icon: SlidersHorizontal, primary: false },
   { key: 'monitoring', label: 'Client errors', href: '/admin/monitoring', icon: Bug, primary: false },
 ];
 
@@ -43,12 +41,12 @@ export function navItemsFor(admin, user) {
 // links (/admin/sites/<name> still lights up Sites).
 export function activeKeyForPath(pathname = '') {
   if (pathname.startsWith('/admin/sites')) return 'sites';
-  if (pathname.startsWith('/admin/calendar')) return 'calendar';
+  // Holidays is a tab of the calendar now, so it lights up the same entry.
+  if (pathname.startsWith('/admin/calendar') || pathname.startsWith('/admin/holidays')) return 'calendar';
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin/requests')) return 'inbox';
   if (pathname.startsWith('/admin/users')) return 'users';
-  if (pathname.startsWith('/admin/holidays')) return 'holidays';
-  if (pathname.startsWith('/admin/reminders')) return 'reminders';
+  if (pathname.startsWith('/admin/settings')) return 'settings';
   if (pathname.startsWith('/admin/monitoring')) return 'monitoring';
   if (pathname.startsWith('/menus')) return 'menus';
   if (pathname.startsWith('/requests')) return 'requests';

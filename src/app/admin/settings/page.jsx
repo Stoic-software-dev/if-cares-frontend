@@ -69,7 +69,7 @@ function RemindersScreen() {
     <AppShell>
       <div className="flex flex-col gap-5">
         <PageHeader
-          title="Overdue reminders"
+          title="Settings"
           subtitle="The daily nudge for counts that were not filed. Changing any of this takes effect immediately."
         />
 

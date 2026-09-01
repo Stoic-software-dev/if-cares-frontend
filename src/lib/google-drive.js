@@ -153,11 +153,18 @@ function explain(status, detail) {
   if (status === 404 || reason === 'notFound') {
     return `That folder or file does not exist for ${account}. Check the id, and that the folder was shared with that exact address.`;
   }
+  // A service account owns no storage of its own, so it cannot create a file
+  // that it would own - which is every file in an ordinary My Drive folder, no
+  // matter who shared it or how. Drive still answers `canAddChildren: true` for
+  // that folder, because the ACL really does allow it; the quota rule bites
+  // afterwards. Sharing harder is the obvious reaction and it never works, so
+  // this case has to say the actual fix.
+  if (reason === 'storageQuotaExceeded' || /storage quota/i.test(message)) {
+    return `${account} has no storage of its own, so it cannot create files in an ordinary Drive folder however it is shared. Move this folder into a Shared drive and give that address Content manager: files in a Shared drive belong to the drive, not to the account writing them.`;
+  }
   if (status === 403) {
-    // Reading a folder that was never shared answers 404, so a 403 is almost
-    // always a write against Viewer access. Menus used to be read only, and
-    // saying "Viewer is enough for menus" here now sends whoever is publishing
-    // one to set exactly the permission that is failing.
+    // Reading a folder that was never shared answers 404, so a plain 403 is a
+    // write against Viewer access.
     return `${account} is not allowed to do that in Drive. Share the folder with that address as Editor: publishing a menu and archiving a report both write to it.`;
   }
   return `Drive answered ${status}. ${message || detail.slice(0, 200)}`;

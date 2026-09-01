@@ -83,11 +83,35 @@ al copiar del JSON.
 4. Del JSON, copiar `client_email` a `GOOGLE_SERVICE_ACCOUNT_EMAIL` y
    `private_key` a `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
 5. En Drive, compartir las dos carpetas con ese `client_email`:
-   - carpeta de **menús**: **Editor**. Lector alcanzaba mientras la app solo
-     leía; desde que un admin puede publicar un menú desde **Menus → Publish
-     menu**, el service account escribe ahí. Con Lector la pantalla sigue
-     funcionando y solo falla el publicar, diciendo que hay que compartirla.
-   - carpeta de **reportes**: **Editor**, porque ahí escribe.
+   - carpeta de **menús**: lectura para listarlos, escritura desde que se
+     publica un menú con **Menus → Publish menu**.
+   - carpeta de **reportes**: escritura, ahí archiva los PDFs.
+
+### Las dos carpetas TIENEN que estar en una unidad compartida
+
+Compartirlas como Editor **no alcanza y nunca alcanzó**. Un service account no
+tiene almacenamiento propio, así que no puede crear un archivo que quedaría a su
+nombre — que es todo archivo en una carpeta de "Mi unidad", la comparta quien la
+comparta. Drive igual contesta `canAddChildren: true` (el permiso ACL sí está);
+la cuota pega después, con:
+
+```
+403 storageQuotaExceeded
+"Service Accounts do not have storage quota. Leverage shared drives, or use OAuth delegation instead."
+```
+
+**Estado al 1-sep-2026**: las tres carpetas (`Menu` `1wagBW...`, `Consolidated
+Reports` `1m5Psk...`, y la `IfCares` que las contiene) están en Mi unidad. O sea
+que **ningún PDF generado se archivó nunca** — el síntoma del `[pdf-archive]` en
+el log de más abajo es esto, no un permiso.
+
+**El arreglo**: crear una **unidad compartida**, mover `Menu` y `Consolidated
+Reports` adentro, y agregar al service account como **Administrador de
+contenido**. Los archivos de una unidad compartida pertenecen a la unidad y no a
+quien los escribe, así que la cuota deja de aplicar. No requiere cambios de
+código. La alternativa es darle a Drive la misma delegación de dominio que a
+Gmail y suplantar a una persona real, pero eso ata el archivo de la organización
+a la cuenta de alguien.
 
 ## Verificación
 

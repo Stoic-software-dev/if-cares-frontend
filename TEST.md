@@ -1,11 +1,27 @@
-# Testeo exploratorio de punta a punta
+# Testeo exhaustivo de punta a punta
 
-> Plan para recorrer **toda** la app: cada pantalla, cada botón, cada estado, cada rol.
-> No es una lista de casos felices — es un barrido con la intención de romper cosas antes
-> de que las rompa un site en su tablet.
->
-> Escrito el 31-ago-2026 contra el commit desplegado en producción. Antes de ejecutarlo,
-> revisá que el inventario de §3 siga coincidiendo con `find src/app -name page.jsx`.
+**Tolerancia cero a bugs.** Esta app reemplaza un sistema del que dependen 56 sitios para
+reclamar el reembolso de las comidas que sirven. Un count que no se cuenta es plata que IF
+Cares no cobra, y un mail que no llega es una persona que no puede entrar.
+
+Este documento es la lista completa de lo que hay que romper antes de que salga a producción.
+
+---
+
+## 0. Cómo leer este documento
+
+Tiene **tres formas de testear** y las tres son obligatorias. No se sustituyen.
+
+| | Qué encuentra | Dónde está |
+|---|---|---|
+| **Barrido de cobertura** | Lo que se ve: botones que no andan, validaciones ausentes, estados rotos | §3–§7 |
+| **Verificación de integraciones** | Lo que **miente con cara de éxito**: la UI dice OK y el sistema no hizo nada | §8 |
+| **Charters exploratorios** | Lo que nadie pensó en poner en una lista | §10 |
+
+Esa segunda fila es la que más caro salió históricamente. Los tres peores bugs del proyecto
+—el claim consolidado imprimiendo sitios equivocados, el archivado de PDFs que nunca archivó
+nada, y Gmail reescribiendo el remitente— **pasaron todos el barrido de cobertura sin
+despeinarse**, porque la pantalla decía que todo estaba bien. §8 existe por ellos.
 
 ---
 
@@ -13,96 +29,103 @@
 
 ### 1.1 Dónde correrlo
 
-| | |
-|---|---|
-| **App** | `https://if-cares-frontend-production.up.railway.app` |
-| **Base** | Supabase `vcixfuaqxnkwihzbqetq`, schema `regular_year` |
-| **Zona horaria** | `America/Chicago`. Todo lo que diga "hoy" se resuelve ahí, no en la máquina del tester |
+Contra **producción** (`https://if-cares-frontend-production.up.railway.app`) mientras la app
+no esté en uso real. Es el único entorno con las integraciones de verdad conectadas: Drive,
+Gmail, Supabase. Un bug de integración no aparece en local, y §8 es justamente eso.
 
-**Esta base tiene data real importada de Sheets** — 56 sitios activos, ~2.600 alumnos, más
-de 2.000 counts históricos, y 63 usuarios con los nombres y mails reales del master. No hay
-staging todavía (Etapa 7 del ROADMAP). Eso condiciona todo el plan: ver §2.
+Antes de empezar, anotá el commit desplegado. Un hallazgo sin commit no es reproducible.
 
 ### 1.2 Cuentas necesarias
 
-| Rol | Cuenta | Para qué | Estado |
-|---|---|---|---|
-| **Admin** | `SEED_ADMIN_EMAIL` del `.env` | Todo el panel de administración | Existe |
-| **Desarrollo** | `miqueas@stoicsoftware.io` | Único que ve `/admin/monitoring` | Existe, hay que saber su contraseña o generarse un link de reset |
-| **Staff (no admin)** | **hay que crearlo** | La mitad de la app que un admin nunca ve | **Falta** — crearlo desde `/admin/users` asignado solo a `Training Only` |
-| **Anónimo** | sin sesión | Guards, login, reset, firma pública | — |
+| Rol | Cuenta | Para qué |
+|---|---|---|
+| Admin | `qa.admin@example.org` / `QaAdmin2026!Verify` | Todo lo administrativo |
+| Staff 1 sitio | `qa.tester@example.org` / `QaTest2026!Training` | Alcance: solo ve *Training Only* |
+| Staff sin sitios | crear uno | Un staff sin asignaciones no debe romper ninguna pantalla |
+| Staff `allSites` | crear uno | Camino distinto al de admin, se olvida siempre |
+| Desactivado | crear y desactivar | No debe poder entrar, y el mensaje no debe delatar por qué |
+| Sin contraseña | crear sin mandar mail | Debe comportarse igual que una cuenta inexistente |
 
-Hoy hay 16 admins con todos los sitios y 47 usuarios sin ninguno; **crear el staff de
-prueba es el primer paso del plan**, porque sin él no se puede probar el recorte por sitio,
-que es la regla de seguridad más importante de la app.
+Creá las que falten desde `/admin/users` y **prefijalas con `ZZ `** para poder barrerlas
+después. Ese prefijo ya se usa en producción para alumnos dados de baja.
 
 ### 1.3 Datos de prueba
 
-- **Sitio de prueba: `Training Only`.** Es el único que se puede tocar sin consecuencias.
-  Tiene `training@ifcares.org` como único usuario activo asignado, así que los mails que
-  dispare el testeo caen ahí.
-- **Cualquier otro sitio es data real de un programa en curso.** Sobre esos: mirar, filtrar,
-  abrir, descargar. Nunca anular, corregir, cerrar días ni desactivar.
-- Fechas seguras para crear: días del mes en curso en `Training Only`.
+- Un sitio con **calendario denso** y otro **sin service days**.
+- Un sitio con **250 alumnos** (el roster real más grande) y uno con **cero**.
+- Un día **con count enviado**, uno **aprobado**, uno **anulado**, uno **feriado**, uno vacío.
+- Un mes **cerrado completo** para generar un claim consolidado de verdad.
+- Requests en los tres estados, con y sin nota.
+
+### 1.4 Reglas de seguridad del testeo
+
+1. **No tocar datos de sitios reales.** Todo lo que crees va con `ZZ `.
+2. **No aprobar counts de sitios reales**: la aprobación bloquea la corrección.
+3. **No anular counts que no creaste vos.**
+4. Los mails salen **de verdad**. Usá direcciones tuyas o `@example.org` (que no existe).
+5. Antes de un test destructivo, anotá cómo revertirlo. Si no sabés, no lo hagas.
+6. **Nada de datos personales reales** en capturas o reportes.
 
 ---
 
-## 2. Reglas de seguridad del testeo
+## 2. Herramientas y trampas conocidas
 
-Esta app **manda mails reales, escribe en el Drive del cliente y tiene data de producción**.
-El testeo no puede ser inocente sobre eso.
+Cosas que ya nos hicieron perder tiempo. Leelas antes de reportar un falso positivo:
 
-**Acciones que salen del sistema — solo sobre `Training Only`, y anotando qué se disparó:**
-
-| Acción | Qué manda hacia afuera |
-|---|---|
-| Aprobar un count | Mail con PDF adjunto a cada usuario **asignado a ese sitio** |
-| Responder un request | Mail al solicitante |
-| Enviar un claim | Mail con el PDF, o el link de firma, a los destinatarios que se carguen |
-| Forgot password | Mail a la dirección que se escriba (si existe la cuenta) |
-| Generar cualquier PDF | Escribe el archivo en la carpeta de Drive de IF Cares |
-| `POST /api/mail/test` | Mail a la propia dirección del admin logueado |
-
-**Nunca:** correr los reminders con `?force=1` sin apagarlos antes en `/admin/settings`
-(escribe a decenas de personas reales), desactivar usuarios o sitios reales, ni borrar
-feriados que haya cargado la oficina.
-
-**Al terminar cada bloque destructivo, restaurar**: deshacer la aprobación, restaurar el
-count anulado, borrar el feriado de prueba, reabrir los días cerrados.
+- **Los screenshots no ven los portales de Radix.** Diálogos, dropdowns y selects no aparecen
+  en la captura ni en `read_page`. Usá `find`. Dos "bugs" se reportaron así y ninguno existía.
+- **Un screenshot con un diálogo Radix abierto puede colgar el renderer.** `find` sigue
+  andando; no reintentes la captura.
+- **La vista normal de Gmail miente sobre el remitente**, en las dos direcciones: resuelve
+  contactos del directorio y pisa el nombre real. Para el remitente, **siempre "Mostrar
+  original"** y leer el header `From:` crudo.
+- **`capabilities.canAddChildren` de Drive miente sobre si se puede escribir.** Dice `true` en
+  carpetas donde toda escritura falla. La única prueba es intentar la escritura.
+- El listado de menús está **cacheado 10 minutos** del lado del server. Un cambio hecho a mano
+  en Drive no se ve hasta que vence, o hasta usar **Refresh** / `?refresh=1`.
+- `NEXT_REDIRECT` en la consola es **ruido conocido**, no es un bug.
 
 ---
 
 ## 3. Inventario — nada de esto queda sin tocar
 
-### 3.1 Pantallas (19)
+### 3.1 Pantallas (18)
+
+Públicas: `/login` · `/reset-password` · `/sign/[token]`
+
+Staff: `/dashboard` · `/menus` · `/requests` · `/meal-count` · `/counts/[date]`
+
+Admin: `/admin/sites` · `/admin/sites/detail` · `/admin/calendar` · `/admin/holidays` ·
+`/admin/reports` · `/admin/reports/consolidated` · `/admin/requests` · `/admin/users` ·
+`/admin/settings` · `/admin/monitoring`
+
+### 3.2 API (39 rutas, 65 pares método+ruta)
 
 ```
-/                        (redirige)          /admin/calendar
-/login                                       /admin/holidays
-/reset-password                              /admin/sites
-/dashboard                                   /admin/sites/detail
-/meal-count                                  /admin/users
-/counts/[date]                               /admin/requests
-/menus                                       /admin/reports
-/requests                                    /admin/reports/consolidated
-/sign/[token]            (pública)           /admin/settings
-                                             /admin/monitoring  (solo desarrollo)
+auth        POST /login  POST /logout  GET /me  POST /forgot-password  POST /reset-password
+health      GET  /api/health
+holidays    GET,POST /holidays          PATCH,DELETE /holidays/[id]
+mail        POST /mail/test
+counts      POST /meal-counts           GET /meal-counts/all      GET /meal-counts/detail
+            POST,PUT /meal-counts/approve   POST /meal-counts/correct
+            GET /meal-counts/pdf        GET,POST,PUT /meal-counts/void
+monitoring  POST,GET,PATCH /monitoring
+reminders   GET,PATCH,POST /reminders
+reports     POST,GET,DELETE /reports/consolidated   GET /reports/monthly
+            GET /reports/generated      GET,POST,DELETE /reports/generated/[id]
+            POST /reports/generated/[id]/send
+menus       GET,POST,DELETE /reports/files          GET /reports/files/download
+requests    POST,GET /requests          PATCH /requests/[id]
+sign        GET,POST /sign/[token]
+sites       GET,POST /sites             GET,PATCH,PUT /sites/[id]
+            GET /sites/data   GET /sites/record
+            GET,PUT /sites/service-days POST,PUT /sites/service-days/close
+students    GET,POST /students          PATCH,DELETE /students/[id]   GET /students/roster
+users       GET,POST /users             PATCH /users/[id]   POST /users/[id]/reset-link
 ```
 
-### 3.2 API (40 rutas)
-
-```
-auth/       login · logout · me · forgot-password · reset-password
-meal-counts/  (POST) · all · detail · correct · void · approve · pdf
-sites/      (GET/POST) · [id] · data · record · service-days · service-days/close
-students/   (GET/POST) · [id] · roster
-users/      (GET/POST) · [id] · [id]/reset-link
-reports/    monthly · consolidated · generated · generated/[id] · generated/[id]/send
-            files · files/download
-holidays/   (GET/POST) · [id]
-requests/   (GET/POST) · [id]
-otros/      health · reminders · monitoring · sign/[token] · mail/test
-```
+**Ninguna ruta queda sin probar con los 5 métodos**, incluidos los que no implementa: un
+método no soportado debe contestar 405, nunca 500.
 
 ---
 
@@ -110,22 +133,20 @@ otros/      health · reminders · monitoring · sign/[token] · mail/test
 
 Para **cada** una, no solo la ruta feliz:
 
-1. **Estados**: cargando (skeleton), vacío, error de red (cortar la conexión y reintentar),
-   sin permisos, y con volumen real (un sitio de 250 alumnos, un mes lleno).
-2. **Cada control**: cada botón, link, select, checkbox, switch, tab, menú, diálogo. Incluye
-   los que están deshabilitados: ¿por qué lo están y se habilitan cuando corresponde?
-3. **Formularios**: enviar vacío, con espacios, con el máximo de caracteres, con caracteres
-   raros (`ñ á ' " < > &`, emojis), números negativos y cero, fechas al revés (desde > hasta),
-   fechas de otro año. Doble click en submit (¿duplica?).
-4. **Navegación**: atrás del navegador, recargar a mitad de un formulario, abrir en pestaña
-   nueva, entrar por deep link directo a la URL, y **entrar con la sesión vencida**.
-5. **Responsive**: 375px (teléfono), 768px (tablet — es el dispositivo real de los sitios) y
-   1440px. En teléfono: barra inferior, hoja "More", que nada desborde en horizontal.
+1. **Estados**: cargando (skeleton), vacío, error de red (cortar conexión y reintentar), sin
+   permisos, y con volumen real (250 alumnos, un mes lleno).
+2. **Cada control**: botón, link, select, checkbox, switch, tab, menú, diálogo. Incluidos los
+   deshabilitados: ¿por qué lo están, y se habilitan cuando corresponde?
+3. **Formularios**: vacío, solo espacios, máximo de caracteres, caracteres raros
+   (`ñ á ' " < > &`, emojis), negativos y cero, fechas al revés, fechas de otro año, fechas
+   imposibles (`2026-02-30`). **Doble click en submit: ¿duplica?**
+4. **Navegación**: atrás del navegador, recargar a mitad de un formulario, pestaña nueva, deep
+   link directo, y **entrar con la sesión vencida**.
+5. **Responsive**: 375px, 768px (el tablet real de los sitios) y 1440px. En teléfono: barra
+   inferior, hoja "More", que nada desborde horizontalmente.
 6. **Tema**: claro y oscuro, y el toggle en cada pantalla.
-7. **Teclado**: Tab por toda la pantalla sin perder el foco, Enter y Escape en los diálogos,
-   `Ctrl+K` para la paleta de comandos.
-8. **Consola**: `/admin/monitoring` al final de cada bloque. **Cero errores nuevos** es el
-   criterio; los `NEXT_REDIRECT` son ruido conocido (§7).
+7. **Teclado**: Tab sin perder foco, Enter y Escape en diálogos, `Ctrl+K` para la paleta.
+8. **Consola**: `/admin/monitoring` al final de cada bloque. **Cero errores nuevos.**
 
 ---
 
@@ -133,183 +154,254 @@ Para **cada** una, no solo la ruta feliz:
 
 ### 5.1 Anónimo
 
-- `/login`: credenciales mal, mail inexistente, contraseña vacía, usuario **desactivado**
-  (crear uno y probar), doble submit, Enter en el campo.
-- **Forgot password**: abrir el diálogo, mandar una dirección que existe y una que no —
-  **tiene que contestar lo mismo en los dos casos**; si la respuesta difiere, es una fuga
-  de qué cuentas existen y es un bug de seguridad, no de UX.
-- `/reset-password?token=…`: token válido, token ya usado, token vencido, token inventado,
-  sin token. Contraseña corta, contraseñas que no coinciden.
-- **Guards**: entrar directo a `/dashboard`, `/admin/users`, `/admin/calendar`, `/counts/…`
-  sin sesión → tiene que mandar a `/login`, no mostrar un flash del contenido.
-- `/sign/[token]`: token válido (generar uno desde claims), **usarlo dos veces** (es de un
-  solo uso), vencido, inventado. Firmar sin trazo, con un solo punto, sin nombre.
+- `/login`: credenciales mal, mail inexistente, contraseña vacía, usuario desactivado, cuenta
+  **sin contraseña**, doble submit, Enter en el campo.
+- **Las cuatro respuestas de fallo tienen que ser idénticas** — mensaje, status y *tiempo*.
+  Cualquier diferencia dice qué cuentas existen.
+- **Forgot password**: dirección que existe y una que no. Misma respuesta, mismo tiempo
+  (hay un piso de 400 ms deliberado). Medí 5 de cada una y compará promedios.
+- `/reset-password`: token válido, vencido, ya usado, inventado, ausente, y **el mismo token
+  dos veces**.
+- `/sign/[token]`: igual, más firmar con un trazo mínimo y con la firma vacía.
+- **Deep link a cada pantalla privada sin sesión** → debe mandar a login, no romper.
 
-### 5.2 Staff (usuario de un sitio)
+### 5.2 Staff
 
-- **Solo ve sus sitios.** Probar el selector de sitio, y además pedir por URL un sitio ajeno
-  (`/counts/2026-08-04?site=<otro sitio>`) y por API (`/api/meal-counts/detail?site=…`).
-  Tiene que negar, no mostrar.
-- **Dashboard**: mes con días enviados, faltantes, hoy, feriados, sin servicio. Filtros por
-  estado, cambio de mes y de año, ir a meses sin data.
-- **Meal count**: el flujo central.
-  - Cargar un día completo: horarios, asistencia, comidas por alumno, firma, certificación.
-  - **Firma**: un punto no vale (el trazo tiene que superar los 30px). Borrar y rehacer.
-  - **Borrador local**: marcar medio roster, cerrar la pestaña, volver → tiene que estar.
-  - **Guardia de cambios sin guardar**: navegar con cambios pendientes, cerrar la pestaña.
-  - Bloqueos: día futuro, día no operativo, feriado, día ya enviado. Tienen que avisar **al
-    entrar**, no al mandar.
-  - Roster grande: buscar, marcar todos, rendimiento al tildar.
-  - **Doble submit** y submit con la conexión cortada a mitad.
-- **Detalle** (`/counts/[date]`): totales, buscador del roster, descargar el PDF, badge de
-  importado, y que **no aparezcan** los botones de admin.
-- **Menus**: listar, ver, descargar. Con y sin conexión.
-- **Requests**: crear uno de cada uno de los 8 tipos, ver los propios, ver la respuesta del
-  admin cuando llega.
+- **Alcance**: no puede ver ni tocar sitios que no son suyos. Probalo por **URL directa** y
+  **por API**, no solo por la UI, que es donde el bug se esconde.
+- Dashboard: cambio de sitio, mes, días abiertos/cerrados/feriados/aprobados.
+- **Cargar un count**: roster completo, marcar comidas, tiempos, firma, enviar. Después:
+  reabrir el día, ver si prefillea lo correcto, corregir, y ver que un día **aprobado no se
+  puede corregir**.
+- Menús: ver, descargar. **No debe ver Publish ni la papelera.**
+- Requests: crear de cada tipo, con nota y sin, ver respuesta y quién respondió.
 
 ### 5.3 Admin
 
-- **Users**: alta (con y sin sitios, admin y no admin), edición, activar/desactivar,
-  **no poder desactivarse a sí mismo**, link de reset (copiarlo y usarlo), buscador,
-  filtros combinados, paginación, mail duplicado.
-- **Sites**: listado con buscador e inactivos, alta con plantilla semanal y fechas del
-  programa, **generar días faltantes** (correrlo dos veces: la segunda no hace nada),
-  edición, **renombrar** (verificar que counts, roster y asignaciones sigan enganchados),
-  desactivar. Ficha de sitio: roster, import de roster con filas inválidas, alta y edición
-  de alumnos.
-- **Calendar**: pestañas Service days / Holidays. Abrir y cerrar días, comidas por día,
-  días bloqueados por tener count, **Bulk edit** → patrón semanal y cierre de rango,
-  **cierre masivo en varios sitios y su deshacer**, guardar y salir sin guardar.
-- **Holidays**: alta con rango y alcance (todos los sitios / selección), todo el día o
-  comidas puntuales, duplicados, edición, borrado, pestañas próximos/pasados, paginación.
-  Verificar que el nombre aparezca en la celda del calendario y del dashboard, y que
-  **borrarlo devuelva los días exactos**.
-- **Counts**: corregir (nota, prefilled, historial de qué cambió), **aprobar** (bloquea la
-  corrección con 409, manda el PDF al sitio, marca el check en el calendario), **deshacer la
-  aprobación**, **anular** (con motivo, el día vuelve a estar abierto) y **restaurar**.
-- **Requests**: inbox con estados, buscador global, filtros por sitio, responder (mail),
-  reabrir (limpia la respuesta), alta desde el inbox, paginación.
-- **Reports**: PDF diario, mensual por sitio, listado de claims guardados, descarga,
-  reconstrucción cuando Drive no tiene el archivo, envío por mail y link de firma —
-  **nunca los dos juntos**, y revocar un token de firma.
-- **Consolidados**: por mes y estado, excluir sitios con buscador y atajos, validar que
-  quede al menos uno, el job con su polling y su cancelar, y **el foundation id impreso**
-  (`CEID 1707` para TX, `DC-72-564` para OK).
-- **Settings**: reminders on/off, hora, días atrás, copias fijas, **preview** (no manda
-  nada), y que la hora se respete.
-
-### 5.4 Desarrollo (`miqueas@stoicsoftware.io`)
-
-- `/admin/monitoring`: listado agrupado, stack, buscador, paginación, marcar resuelto,
-  reaparición al volver a ocurrir.
-- Con un admin común: la entrada **no está** en el navbar y `/api/monitoring` contesta 404.
+- Sitios: crear, editar, desactivar, reactivar, regenerar calendario, cambiar el template
+  semanal, fechas de programa al revés.
+- **Estado del sitio (TX/OK)**: ver §9, es donde vivió el peor bug del proyecto.
+- Calendario: abrir/cerrar días, bulk edit, feriados (todos los sitios y algunos), rangos.
+- Alumnos: agregar, editar, "remove" (que **desactiva**, no borra), y **volver a agregar el
+  mismo nombre** → debe revivir la fila, no duplicarla.
+- Counts: aprobar, desaprobar, anular, restaurar. Verificar a quién le llega el mail de
+  aprobación: **solo staff del sitio**, no todos los admins.
+- Reportes: mensual, consolidado por estado, cancelar un job a mitad, revocar el link de firma.
+- Usuarios: crear con y sin mail, reenviar link, cambiar rol, desactivarse a sí mismo (no debe
+  poder), paginación, filtros.
+- Requests: responder, paginar, buscar por nota.
+- Settings (Reminder emails) y Client errors desde el **menú de perfil**, no del navbar.
 
 ---
 
 ## 6. Chequeos a nivel API
 
-Aparte de la UI, cada ruta de §3.2 con:
+Sin pasar por la UI. Con `fetch` y cookie de sesión.
 
-- **Sin sesión** → 401 (nunca 200, nunca un stack trace).
-- **Con sesión de staff sobre recursos de admin** → 403/404.
-- **Staff pidiendo un sitio que no es suyo** → negado.
-- **Body inválido**: campos faltantes, tipos equivocados, strings enormes, JSON roto → 422
-  con mensaje legible, nunca 500.
-- **Idempotencia**: mandar dos veces el mismo count, aprobar dos veces, anular dos veces.
-- `POST /api/reminders` sin el secreto → 401/503. Con el secreto pero fuera de hora →
-  `skipped: "not the hour"`.
-- `POST /api/monitoring` sin sesión → tiene que aceptar (es la única escritura abierta), con
-  esquema estricto y límite por IP: probar el límite.
-
-Un pasador rápido de todo esto es `BASE_URL=https://… npm run smoke` (28 chequeos), pero el
-smoke es contrato, no exploración: **no reemplaza este plan**.
-
----
-
-## 7. Lo que ya se sabe que falta — no reportarlo como bug
-
-| | |
-|---|---|
-| `MAIL_FROM=noreply@ifcares.org` no existe como usuario del Workspace | Google contesta `Invalid email or User ID`. **Ningún mail sale** hasta que se cree esa casilla o se apunte a una real. Verificable con `POST /api/mail/test` |
-| El cron de reminders no está creado | Los recordatorios no se disparan solos |
-| `NEXT_REDIRECT` en el monitor de errores | Falso positivo: Next implementa `redirect()` lanzando una excepción |
-| Maquetación del consolidado | El contenido está campo por campo; la plantilla oficial del formulario no está replicada |
-| Datos de contacto del sitio | `Site` no tiene dirección/teléfono/supervisor — falta que IF Cares confirme si el formulario los lleva |
-| Import histórico incompleto | ~24 de 56 sitios. Un sitio sin historia no es un bug de la app |
-| Feriados vacíos | 0 filas hasta que IF Cares mande los nombres del ciclo |
+1. **Matriz de autorización**: cada una de las 65 combinaciones, con las 4 sesiones (anónimo,
+   staff, staff allSites, admin). Anónimo → 401. Staff en ruta de admin → 403. **Nunca 500.**
+2. **IDOR**: agarrá un id de otro sitio/usuario/count y pedilo con sesión de staff. Todos los
+   `[id]` y `[token]`.
+3. **Método no soportado** → 405.
+4. **Body basura**: vacío, no-JSON, JSON truncado, tipos equivocados, campos de más, strings de
+   10.000 caracteres, `null` en cada campo. Nada de esto puede dar 500.
+5. **Validación**: cada mensaje de error tiene que **nombrar el campo** y ser una frase, no la
+   jerga de Zod.
+6. **Idempotencia y concurrencia**: enviar el mismo count dos veces en paralelo; aprobar dos
+   veces; anular y restaurar en carrera. **No puede quedar más de un count activo por sitio y
+   día** — hay un índice único parcial que lo garantiza; comprobá que la API no lo esquive.
+7. **Paginación**: página 0, negativa, gigante, tamaño 0.
+8. **`/api/reminders`** sin el header del secreto → 503/401, nunca corre.
 
 ---
 
-## 8. Cómo repartirlo entre agentes
+## 7. Regresión — los 32 hallazgos no vuelven
 
-El recorrido completo no entra en una sesión. Se reparte por **área**, no por pantalla, para
-que cada agente tenga contexto suficiente y no se pisen entre ellos:
+Cada uno tiene un test. La lista completa con su historia está en `TEST-RESULTS.md`; estos son
+los que **más caro salieron** y por eso van explícitos:
 
-| Agente | Área | Pantallas |
+- [ ] Claim consolidado agrupa por la **columna `Site.state`**, nunca por el nombre. Un sitio
+      con "TX" en el nombre y la columna vacía **no debe aparecer** en el claim de TX — y por
+      eso la columna tiene que estar cargada (§9).
+- [ ] "OK" es seleccionable en el consolidado.
+- [ ] Los links de reset apuntan al host público, **no a `localhost:8080`**.
+- [ ] `2026-02-30` es rechazada.
+- [ ] Los feriados se muestran en **todas** las fechas cubiertas, no solo donde hay service day.
+- [ ] El mail de aprobación va **solo al staff asignado**, no a los 15 admins `allSites`.
+- [ ] Un job de reporte cancelado **queda cancelado** (no se auto-completa después).
+- [ ] La firma exige el mismo trazo mínimo en el pad y en `/sign/[token]`.
+- [ ] Forgot-password: mismo tiempo de respuesta exista o no la cuenta.
+- [ ] Login de cuenta sin contraseña: misma respuesta que cualquier fallo.
+- [ ] "Remove" de alumno **desactiva**; re-agregar el mismo nombre **revive** la fila.
+- [ ] Los requests tienen **nota**, buscable en el inbox.
+- [ ] `/admin/requests` pagina, y muestra `respondedBy` / `respondedAt`.
+- [ ] Reabrir un día **no prefillea "sin comidas"** por contar días que no sirven nada.
+- [ ] `/admin/users` esconde el "desactivar" de la propia cuenta (el row trae `id`).
+- [ ] Un count activo se busca por `{siteId, date, voidedAt: null}` — **no existe** compuesto
+      `siteId_date`.
+- [ ] Publicar y eliminar menús está **acotado a la carpeta de menús**: apuntarlo a la carpeta
+      de reportes debe ser rechazado.
+
+---
+
+## 8. Integraciones — donde el sistema miente con cara de éxito
+
+**Esta es la sección que el barrido de cobertura no cubre.** Todo lo de acá devolvió "OK"
+alguna vez mientras no hacía nada. La regla: **no confiar en la pantalla, mirar el efecto
+real del otro lado.**
+
+### 8.1 Drive
+
+- [ ] **Publicar un menú y abrirlo en Drive.** Que el listado lo muestre no prueba que se
+      escribió: el listado sale de un cache.
+- [ ] **Generar un reporte y confirmar que el PDF está en la carpeta de Drive.** Este es el que
+      estuvo roto desde siempre: la app decía que generaba, y no archivaba nada.
+- [ ] **La carpeta destino no puede ser "Mi unidad" salvo que `GOOGLE_DRIVE_AS` esté cargado.**
+      Un service account no tiene cuota propia: toda escritura falla con `storageQuotaExceeded`
+      por más permisos que tenga. Verificá contra qué escribe y a nombre de quién queda el
+      archivo.
+- [ ] Eliminar un menú → va a la **papelera** de Drive, no se borra.
+- [ ] Cambiar algo a mano en Drive → **Refresh** lo refleja; sin Refresh, no.
+- [ ] Cortar el permiso del service account y ver que el error **nombra el arreglo correcto**
+      (permiso vs cuota son 403 distintos con soluciones opuestas).
+
+### 8.2 Mail
+
+- [ ] Un envío real, y **"Mostrar original"** en el destinatario. Leer el header `From:` crudo.
+      La vista de Gmail no sirve como evidencia.
+- [ ] El `From` tiene que ser el configurado. Si Gmail lo **reescribió** a la cuenta primaria,
+      falta registrar el alias como *send-as* en esa cuenta — crear el alias no alcanza.
+- [ ] `MAIL_AS` (a quién suplanta) y `MAIL_FROM` (lo que se ve) son **dos cosas distintas**.
+      Un alias sirve de remitente y **no** se puede suplantar.
+- [ ] Cambiar `MAIL_FROM` y comprobar que el siguiente envío usa el nuevo **sin reiniciar**
+      (el token está cacheado por identidad; si no lo estuviera, seguiría el viejo una hora).
+- [ ] **SPF, DKIM y DMARC** en los headers recibidos: los tres tienen que dar `pass`. Un
+      `dmarc=fail` no rompe nada visible y manda los links de contraseña a spam.
+- [ ] Los seis mails de la app, cada uno recibido de verdad: bienvenida, reset, respuesta de
+      request, count atrasado, count aprobado (con PDF adjunto), claim consolidado.
+- [ ] Con el mail caído, **la app sigue funcionando** y dice que no pudo avisar.
+
+### 8.3 Base de datos
+
+- [ ] Lo que muestra la UI **coincide con lo que hay en la tabla**. No alcanza con que la
+      pantalla sea coherente consigo misma.
+- [ ] Después de cada escritura, confirmá la fila: un count enviado, un alumno desactivado, un
+      request respondido, un sitio editado.
+- [ ] **Auditoría**: toda acción administrativa deja entrada en `AuditLog`.
+
+### 8.4 Infraestructura
+
+- [ ] `POST /api/reminders` con y sin secreto, dentro y fuera de la hora, con `?force=1`.
+- [ ] El cron de Railway existe y **efectivamente dispara**.
+- [ ] Todas las variables de entorno cargadas: `MAIL_FROM`, `MAIL_AS`, `GOOGLE_DRIVE_AS`,
+      `REMINDERS_SECRET`, `APP_URL`, las de Google, las de Supabase.
+
+---
+
+## 9. Integridad de datos — lo que la pantalla no delata
+
+Un dato mal cargado no se ve como bug hasta que sale en un reclamo de plata.
+
+- [ ] **Todo sitio activo tiene `state` cargado en la columna.** El badge de la UI cae al
+      nombre si la columna está vacía, así que **un sitio puede mostrar "TX" y quedar fuera del
+      claim de TX**. Pasó con 7 sitios reales. Query: sitios activos con `state = ''`.
+- [ ] Los totales del claim consolidado **cuadran con la suma de los counts** del mes. Sumalo
+      aparte y compará.
+- [ ] Un count **anulado no suma** en ningún reporte. Uno **aprobado sí** suma.
+- [ ] Ningún count con fecha imposible o fuera del programa (apareció uno en 2029).
+- [ ] Ningún alumno huérfano: `MealCountEntry` con `studentId` nulo por un borrado duro.
+- [ ] Feriados cargados para el ciclo. **Cero feriados es un dato faltante, no un estado
+      válido**: cada feriado sin cargar es un día que se reclama como atrasado.
+- [ ] Sitios basura (`Copy of ...`) inactivos, no activos.
+
+---
+
+## 10. Charters exploratorios
+
+Sin guion. Una hora cada uno, un tester, cuaderno abierto. **Anotá lo que te sorprenda,
+aunque no sepas si es un bug** — la mitad de los hallazgos caros empiezan como "qué raro".
+
+1. **Ser el staff de un sitio un día entero.** Entrar a la mañana, cargar el count, equivocarte,
+   corregir, pedir algo. Sin mirar la lista de arriba.
+2. **Romper el flujo de aprobación.** Aprobar, corregir, anular, restaurar, en todos los
+   órdenes posibles. Buscá el estado que no debería existir.
+3. **Dos personas, el mismo día, el mismo sitio.** Dos pestañas, dos sesiones, a la vez.
+4. **La primera vez.** Sitio nuevo, usuario nuevo, sin datos: ¿la app explica qué hacer o
+   muestra pantallas vacías?
+5. **Fin de mes.** Cerrar un mes, generar el claim, mandarlo, firmarlo. El recorrido que solo
+   pasa 12 veces al año y por eso nadie probó.
+6. **El camino del que se equivoca.** Fecha mal, sitio mal, alumno mal. ¿Se puede deshacer todo?
+
+---
+
+## 11. Lo que ya se sabe que falta — no reportarlo
+
+- **React #185 en `/counts/[date]`**: conocido, sin reproducción. Si lográs reproducirlo de
+  forma estable, **eso sí es un hallazgo grande**.
+- `NEXT_REDIRECT` en consola.
+- El remitente sale de `stoicsoftware.io` y no de `ifcares.org`: es deliberado hasta que IF
+  Cares cargue su delegación.
+- La pestaña Holidays no tiene selector de sitio: es intencional.
+
+---
+
+## 12. Cómo repartirlo
+
+Seis frentes paralelos. Cada uno con **su propio sitio y sus propios usuarios `ZZ `** — dos
+agentes sobre el mismo sitio se pisan y generan hallazgos falsos, ya pasó.
+
+| # | Frente | Secciones |
 |---|---|---|
-| 1 | Autenticación y acceso público | login, forgot, reset, guards, `/sign/[token]` |
-| 2 | Recorrido del staff | dashboard, meal-count, detalle, menus, requests |
-| 3 | Admin de personas y sitios | users, sites, ficha de sitio, roster |
-| 4 | Calendario | calendar, holidays, cierres masivos, generación |
-| 5 | Counts como admin | corregir, aprobar, anular, restaurar, historial |
-| 6 | Reportes | diario, mensual, consolidados, jobs, envío, firma |
-| 7 | Requests y settings | inbox, respuestas, reminders, preview |
-| 8 | API | los chequeos de §6, sin UI |
+| 1 | Auth, anónimo, sesiones, alcance por rol | §5.1, §6.1, §6.2 |
+| 2 | Counts: carga, corrección, anulación, aprobación | §5.2, §5.3, §7 |
+| 3 | Sitios, calendario, feriados, alumnos | §5.3, §9 |
+| 4 | Reportes, claims, firma, menús | §5.3, §8.1 |
+| 5 | **Integraciones y datos** (el más importante) | §8, §9 |
+| 6 | Responsive, teclado, tema, consola | §4.5–§4.8 |
 
-**Reglas para los agentes:**
-
-- Cada uno **solo escribe sobre `Training Only`** y deshace lo que hizo.
-- Los agentes 5 y 6 disparan mails: coordinar para que no corran a la vez.
-- Ninguno cambia código. Este es un pase de observación; los arreglos van después, con la
-  lista completa en la mano.
-- Cada uno entrega su parte con el formato de §9 y **no resume**: un hallazgo sin pasos
-  para reproducirlo no sirve.
-
-Para conducir el navegador, las herramientas de Chrome (`mcp__claude-in-chrome__*`) — cargar
-todas en **una sola** llamada a ToolSearch. Ojo con los diálogos nativos (`confirm`,
-`alert`): bloquean la extensión. La app usa sus propios diálogos, pero el `beforeunload` de
-la guardia de cambios sin guardar **sí es nativo** — probarlo al final del bloque.
+Los charters de §10 van **después**, con la cabeza puesta en lo que los otros encontraron.
 
 ---
 
-## 9. Cómo se reporta un hallazgo
+## 13. Cómo se reporta un hallazgo
 
-```markdown
-### [severidad] Título de una línea
+```
+### [Crítico|Alto|Medio|Bajo] Título de una línea
 
-- **Dónde**: pantalla o endpoint + rol
-- **Pasos**: 1. … 2. … 3. …
-- **Esperado**:
-- **Pasó**:
-- **Evidencia**: captura, respuesta de la API, o la fila de /admin/monitoring
-- **Alcance**: ¿pasa en los 3 anchos? ¿en los dos temas? ¿con otro rol?
+Dónde:     pantalla o ruta + commit desplegado
+Rol:       con qué cuenta
+Pasos:     1. 2. 3. — que otro pueda repetirlo sin preguntarte nada
+Esperado:  qué debería pasar
+Pasó:      qué pasó, textual (mensaje de error, status, captura)
+Evidencia: response crudo, header, fila de la tabla, línea de consola
 ```
 
-**Severidad:**
+**Severidad por consecuencia, no por esfuerzo de arreglo:**
 
-| | |
-|---|---|
-| **Bloqueante** | Pierde datos, deja pasar a quien no debe, o impide cargar un count |
-| **Alto** | Una función central no anda, o dice que hizo algo que no hizo |
-| **Medio** | Rodeo posible, o un estado de error que no explica nada |
-| **Bajo** | Cosmético, texto, alineación |
+- **Crítico**: plata mal reclamada, datos perdidos, alguien ve datos de otro sitio, nadie puede
+  entrar.
+- **Alto**: una función central no se puede usar; hay workaround pero duele.
+- **Medio**: molesta y se puede rodear.
+- **Bajo**: cosmético.
 
-La categoría **"dice que hizo algo que no hizo"** es la que más importa en esta app: ya
-aparecieron tres (la hora del reminder que no se aplicaba, la ventana por sitio ignorada, y
-la aprobación contestando éxito sin mandar el mail). Cualquier pantalla que confirme una
-acción merece que se verifique el efecto, no el cartel.
+Si dudás entre dos, **poné la más alta**. Bajar una severidad es barato; descubrir tarde que
+era crítica, no.
 
 ---
 
-## 10. Cuándo está terminado
+## 14. Cuándo está terminado
 
-- Las 19 pantallas recorridas con los 8 puntos de §4, en los 3 anchos y los 2 temas.
-- Las 40 rutas de API con los chequeos de §6.
-- Los 4 roles de §5.
-- `/admin/monitoring` sin errores nuevos al cerrar (descontando `NEXT_REDIRECT`).
-- Todo lo escrito sobre `Training Only` revertido.
-- Un único documento con todos los hallazgos ordenados por severidad, sin duplicados.
+Todo esto, junto:
 
-Lo que salga de acá alimenta la **Etapa 7 del ROADMAP** (testeo con staff real), que es
-distinta: esa es gente de IF Cares en sus propios dispositivos. Esta pasada es para que esa
-no se choque con nada evitable.
+1. Las 18 pantallas recorridas con las 8 dimensiones de §4.
+2. Los 65 pares método+ruta probados con las 4 sesiones (§6.1).
+3. **§8 entera verde, con evidencia del otro lado** — el archivo en Drive, el header del mail,
+   la fila en la tabla. Un "OK" de la pantalla no cuenta.
+4. **§9 entera verde**, con las queries corridas.
+5. Los 6 charters de §10 corridos y sus notas volcadas.
+6. La regresión de §7 completa.
+7. **Cero errores nuevos en `/admin/monitoring`.**
+8. Todo hallazgo Crítico y Alto **arreglado y re-verificado**, no solo anotado.
+
+Los Medios y Bajos pueden quedar en la lista con dueño y fecha. Los Críticos y Altos, no:
+tolerancia cero significa que ninguno viaja a producción.

@@ -11,10 +11,21 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // Legacy `?type=sites`: a RAW array of {name, spreadsheetId}, scoped to the user.
-export const GET = handle(async () => {
+//
+// `?includeInactive=1` is additive and admin only: without it a deactivated site
+// is unreachable from anywhere in the UI, which made deactivating one a
+// practically one way door.
+export const GET = handle(async (req) => {
   const session = await requireUser();
+  const wantsInactive = new URL(req.url).searchParams.get('includeInactive') === '1';
+
+  if (wantsInactive && session.user.role === 'ADMIN') {
+    const all = await prisma.site.findMany({ orderBy: { name: 'asc' } });
+    return legacyJson(all.map((site) => ({ ...toLegacySiteListItem(site), active: site.active })));
+  }
+
   const sites = await visibleSites(session);
-  return legacyJson(sites.map(toLegacySiteListItem));
+  return legacyJson(sites.map((site) => ({ ...toLegacySiteListItem(site), active: true })));
 });
 
 // Opening a site used to mean a row in a spreadsheet and then clicking two

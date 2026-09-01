@@ -24,7 +24,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiPost } from '@/lib/api-client';
-import { ALL_MEALS_PATH, SITES_PATH, invalidate, useCachedGet } from '@/lib/data-cache';
+import { ALL_MEALS_PATH, SITES_PATH, SITES_WITH_INACTIVE_PATH, invalidate, useCachedGet } from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
 import { shortSiteName, siteInitials, stateOf, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
@@ -56,11 +56,14 @@ function AdminSitesScreen() {
   const [draft, setDraft] = useState(emptySite);
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
   const today = todayYmd();
   const monthPrefix = today.slice(0, 7);
 
-  const siteList = useCachedGet(SITES_PATH);
+  // Deactivated sites are off the list by default - they are not part of the
+  // program any more - but there has to be a way back to one.
+  const siteList = useCachedGet(showInactive ? SITES_WITH_INACTIVE_PATH : SITES_PATH);
   const mealList = useCachedGet(ALL_MEALS_PATH);
 
   const sites = useMemo(
@@ -72,6 +75,10 @@ function AdminSitesScreen() {
   // disappear from the state filter.
   const stateByName = useMemo(
     () => new Map((siteList.data ?? []).map((site) => [site.name, stateOf(site)])),
+    [siteList.data]
+  );
+  const inactiveNames = useMemo(
+    () => new Set((siteList.data ?? []).filter((site) => site.active === false).map((site) => site.name)),
     [siteList.data]
   );
   const allMeals = mealList.data;

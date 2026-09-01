@@ -101,6 +101,7 @@ export function useCachedGet(path, { maxAge = DEFAULT_MAX_AGE, enabled = true } 
 // The paths shared across screens, named so an invalidation after a write is
 // impossible to typo.
 export const SITES_PATH = '/api/sites';
+export const SITES_WITH_INACTIVE_PATH = '/api/sites?includeInactive=1';
 export const ALL_MEALS_PATH = '/api/meal-counts/all';
 // Menus still come from Drive through the legacy Apps Script; they are the
 // slowest read in the product and change once a month.

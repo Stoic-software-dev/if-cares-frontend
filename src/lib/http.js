@@ -65,8 +65,19 @@ export function handle(fn) {
         // when there is none - a field left out entirely, where Zod has nothing
         // to say - is the field name worth showing, and then it is the whole
         // point of the message rather than a technical suffix on the end of one.
-        const message = first?.message && first.message !== 'Required' ? first.message : '';
-        return legacyError(message || (field ? `${field} is required.` : 'Invalid input.'), 422);
+        // A field left out entirely has no message worth showing: Zod says
+        // "Invalid input" because the value is undefined, which tells the reader
+        // nothing. That is the one case where naming the field IS the message.
+        const missing = first?.code === 'invalid_type' && first?.received === 'undefined';
+        const generic = !first?.message || /^(required|invalid input)\.?$/i.test(first.message);
+        return legacyError(
+          missing || generic
+            ? field
+              ? `${field} is required.`
+              : 'Invalid input.'
+            : first.message,
+          422
+        );
       }
       if (error?.code === 'P2002') {
         return legacyError('Duplicate entry.', 409);

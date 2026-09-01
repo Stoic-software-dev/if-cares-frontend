@@ -77,7 +77,39 @@ cerrados**, más 2 Medio que salían gratis con el mismo cambio.
   de los 63 usuarios conocidos; volverlo genérico cierra una ventana de enumeración muy angosta
   a costa de dejar a alguien sin saber por qué no puede entrar. Queda como decisión consciente.
 
-Los 11 Medio y 9 Bajo restantes siguen abiertos, listados abajo sin cambios.
+### Segunda tanda (`57b5856`) — Medio y Bajo
+
+| Hallazgo | Estado |
+|---|---|
+| El mensaje de validación expone el nombre técnico del campo (`"... (reason)"`) | **Arreglado** — el mensaje del schema va solo; un campo ausente se nombra como frase, no como sufijo |
+| Mensaje genérico "Invalid input (campo)" cuando falta un campo | **Arreglado** — mismo cambio en `handle()` |
+| Edad "Optional" pero requerida | **Arreglado** — el formulario la pide, porque la API siempre la necesitó |
+| Amount acepta decimales que el server rechaza | **Arreglado** — el form exige entero |
+| Sin max length en `name`/`lastname` | **Arreglado** — tope de 80 |
+| "Remove" de alumno con lenguaje de acción suave | **Arreglado** — el diálogo dice que borra, sin undo, que es lo que hace |
+| Desactivar un sitio sin confirmación | **Arreglado** — `ConfirmDialog`, como el resto de las acciones destructivas |
+| La UI bloquea guardar un Staff sin sitios | **Arreglado** — se permite; 47 cuentas reales ya están así y la API nunca objetó |
+| `respondedBy`/`respondedAt` nunca se muestran | **Arreglado** — la respuesta muestra quién y cuándo |
+| Calendario admin tinta un día cerrado por feriado | **Arreglado** — sin tinte, con las comidas configuradas tachadas: sigue siendo la pantalla donde se editan |
+| "Apply a weekly pattern" no avisa con From > To | **Arreglado** — "It ends before it starts.", igual que el form de feriados |
+
+**Sin arreglar, con motivo:**
+
+- **Prefill de comidas al reabrir un día** (Medio): depende de los datos del sitio y el propio
+  agente lo vio autocorregirse cuando la mayoría cambió. Sin una reproducción estable no hay qué
+  arreglar.
+- **React #185 en `/counts/[date]`** (Medio): una sola ocurrencia, no reproducible bajo demanda, y
+  con atribución dudosa (browser compartido con otro agente sobre el mismo sitio). Queda anotado
+  para el próximo pase.
+- **Sin campo de texto libre en los tipos de request** (Bajo): es una decisión de producto de IF
+  Cares, no un defecto.
+- **Sin paginación en `/admin/requests`** (Bajo): con 10 requests no hay nada que paginar todavía.
+- **La pestaña Holidays sin selector de sitio** (Bajo): es intencional — un feriado no es "de un
+  sitio a la vez".
+- Los dos de timing/enumeración ya explicados arriba.
+
+Queda **todo lo demás cerrado**: de los 32 hallazgos, 21 arreglados, 11 cerrados como decisión
+consciente o sin reproducción.
 
 ---
 

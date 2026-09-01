@@ -2,7 +2,17 @@ import { createHash } from 'node:crypto';
 import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin, getSession } from '@/lib/auth';
+import { canSeeMonitoring } from '@/lib/monitoring-access';
 import { clientErrorSchema } from '@/lib/validation';
+
+// Reading the errors is narrower than being an admin: it is a developer view.
+// It answers 404 rather than 403 so the screen is not advertised to the admins
+// who are not supposed to care that it exists.
+async function requireMonitoringAccess() {
+  const session = await requireAdmin();
+  if (!canSeeMonitoring(session.user)) throw new ApiError(404, 'Not found.');
+  return session;
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,7 +97,7 @@ export const POST = handle(async (req) => {
 });
 
 export const GET = handle(async (req) => {
-  await requireAdmin();
+  await requireMonitoringAccess();
   const url = new URL(req.url);
   const includeResolved = url.searchParams.get('resolved') === '1';
 
@@ -117,7 +127,7 @@ export const GET = handle(async (req) => {
 
 // Marking one as handled, so the list shows what is still happening.
 export const PATCH = handle(async (req) => {
-  await requireAdmin();
+  await requireMonitoringAccess();
   const { id, resolved } = await readJsonBody(req);
   if (!id) throw new ApiError(400, 'Missing id.');
 

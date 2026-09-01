@@ -10,6 +10,7 @@ import {
   UtensilsCrossed,
   Users,
 } from 'lucide-react';
+import { canSeeMonitoring } from '@/lib/monitoring-access';
 
 // One source of truth for navigation. `primary` items stay on the phone's
 // bottom bar and on the desktop bar at every width; the rest live in More.
@@ -32,8 +33,10 @@ const ADMIN_ITEMS = [
   { key: 'monitoring', label: 'Client errors', href: '/admin/monitoring', icon: Bug, primary: false },
 ];
 
-export function navItemsFor(admin) {
-  return admin ? ADMIN_ITEMS : STAFF_ITEMS;
+export function navItemsFor(admin, user) {
+  if (!admin) return STAFF_ITEMS;
+  // Client errors is a developer entry: everyone else never sees it exists.
+  return canSeeMonitoring(user) ? ADMIN_ITEMS : ADMIN_ITEMS.filter((item) => item.key !== 'monitoring');
 }
 
 // Which nav entry owns a given pathname, so the active state survives deep

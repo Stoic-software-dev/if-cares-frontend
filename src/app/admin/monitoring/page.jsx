@@ -14,6 +14,7 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch } from '@/lib/api-client';
+import { canSeeMonitoring } from '@/lib/monitoring-access';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 20;
@@ -229,7 +230,7 @@ function MonitoringScreen() {
 
 export default function MonitoringPage() {
   return (
-    <Protected adminOnly>
+    <Protected adminOnly allow={canSeeMonitoring}>
       <MonitoringScreen />
     </Protected>
   );

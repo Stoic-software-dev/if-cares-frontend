@@ -39,7 +39,7 @@ export default function AppShell({ children, width = 'default', className }) {
   const pathname = usePathname();
   const { user, logOut } = useAuth();
   const admin = isAdmin(user);
-  const items = navItemsFor(admin);
+  const items = navItemsFor(admin, user);
   const activeKey = activeKeyForPath(pathname);
 
   const [paletteOpen, setPaletteOpen] = useState(false);

@@ -38,7 +38,7 @@ export function CommandPalette({ open, onOpenChange }) {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const sections = navItemsFor(isAdmin(user)).map((item) => ({
+    const sections = navItemsFor(isAdmin(user), user).map((item) => ({
       id: `nav-${item.key}`,
       group: 'Go to',
       label: item.label,

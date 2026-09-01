@@ -59,11 +59,16 @@ async function deliverApproval(session, siteName, ymd) {
   if (!mailConfigured()) return 0;
 
   const site = await prisma.site.findUnique({ where: { name: siteName }, select: { id: true } });
+  // Only the people assigned to that site, which is what Summer does
+  // (getSiteUserEmailsForApproval). Administrators with every site are
+  // deliberately left out: they approve, and an approval that mails fifteen
+  // people every time a day is signed off is how a useful email becomes a rule
+  // in everyone's inbox.
   const users = await prisma.user.findMany({
     where: {
       active: true,
       email: { not: '' },
-      OR: [{ allSites: true }, { sites: { some: { siteId: site.id } } }],
+      sites: { some: { siteId: site.id } },
     },
     select: { name: true, email: true },
   });

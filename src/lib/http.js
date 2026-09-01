@@ -23,6 +23,22 @@ export function legacyError(message, status = 400) {
 
 // The existing UI posts JSON with Content-Type: text/plain;charset=utf-8 (GAS
 // CORS workaround), so bodies are read as text and parsed manually.
+// The address the app is reachable at, for links that travel outside the
+// browser (emails, copied reset links). Behind a proxy the request origin is
+// the internal listener - on Railway that is https://localhost:8080 - so the
+// configured APP_URL wins, then what the proxy forwarded, and only then the
+// origin, which is right when running locally.
+export function appBaseUrl(req) {
+  const configured = process.env.APP_URL?.replace(/\/$/, '');
+  if (configured) return configured;
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  if (host) {
+    const proto = req.headers.get('x-forwarded-proto')?.split(',')[0].trim() || 'https';
+    return `${proto}://${host}`;
+  }
+  return new URL(req.url).origin;
+}
+
 export async function readJsonBody(req) {
   const raw = await req.text();
   if (!raw) throw new ApiError(400, 'Empty request body.');

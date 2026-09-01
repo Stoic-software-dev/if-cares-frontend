@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/db';
-import { handle, readJsonBody, legacySuccess } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, legacySuccess } from '@/lib/http';
 import { forgotPasswordSchema } from '@/lib/validation';
 import { mailConfigured, sendMail } from '@/lib/gmail';
 import { passwordReset } from '@/lib/mail-templates';
@@ -29,7 +29,7 @@ export const POST = handle(async (req) => {
     // broken mail provider must not turn into a slow login screen, and must not
     // become a way to find out whether an address exists.
     if (mailConfigured()) {
-      const base = process.env.APP_URL?.replace(/\/$/, '') || new URL(req.url).origin;
+      const base = appBaseUrl(req);
       const link = `${base}/reset-password?token=${token}`;
       const message = passwordReset({ name: user.name, link });
       sendMail({ to: [user.email], ...message }).catch((error) => {

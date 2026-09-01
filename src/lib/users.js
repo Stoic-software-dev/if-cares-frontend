@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { prisma } from '@/lib/db';
+import { appBaseUrl } from '@/lib/http';
 
 const RESET_TTL_MS = 24 * 60 * 60 * 1000; // Admin-issued links last a day.
 
@@ -26,5 +27,5 @@ export async function issueResetLink(req, userId) {
       expiresAt: new Date(Date.now() + RESET_TTL_MS),
     },
   });
-  return `${new URL(req.url).origin}/reset-password?token=${token}`;
+  return `${appBaseUrl(req)}/reset-password?token=${token}`;
 }

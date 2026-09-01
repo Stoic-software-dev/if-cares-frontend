@@ -32,6 +32,26 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
+  const openForgot = () => {
+    setForgotEmail(email);
+    setForgotSent(false);
+    setForgotOpen(true);
+  };
+
+  const requestReset = async (event) => {
+    event.preventDefault();
+    setForgotBusy(true);
+    // The endpoint answers success even for an address nobody has, so this
+    // screen cannot be used to find out who has an account. Same answer either
+    // way, network failure included.
+    await apiPost('/api/auth/forgot-password', { email: forgotEmail.trim() }).catch(() => {});
+    setForgotBusy(false);
+    setForgotSent(true);
+  };
 
   useEffect(() => {
     if (!loading && user) router.replace('/dashboard');
@@ -150,7 +170,7 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={() => setForgotOpen(true)}
+              onClick={openForgot}
               className="mx-auto rounded-sm px-2 py-2 text-[13px] font-semibold text-primary outline-none transition-colors hover:text-primary-strong focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-primary/80"
             >
               Forgot your password?
@@ -168,10 +188,39 @@ export default function LoginPage() {
           <DialogHeader>
             <DialogTitle>Reset your password</DialogTitle>
             <DialogDescription>
-              Ask your administrator for a password link. They can send you one from the Users screen, and it
-              lets you set a new password right away.
+              {forgotSent
+                ? 'If that address belongs to an account, a link to set a new password is on its way. It expires in an hour.'
+                : 'Enter your email and the link to set a new password goes to your inbox.'}
             </DialogDescription>
           </DialogHeader>
+
+          {forgotSent ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>
+                Close
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={requestReset} className="flex flex-col gap-4">
+              <Field label="Email" htmlFor="forgot-email">
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@ifcares.org"
+                  value={forgotEmail}
+                  onChange={(event) => setForgotEmail(event.target.value)}
+                />
+              </Field>
+              <Button type="submit" loading={forgotBusy} size="touch">
+                {forgotBusy ? 'Sending' : 'Send the link'}
+              </Button>
+              <p className="text-[12px] text-muted-foreground">
+                No inbox handy? An administrator can hand you a link from the Users screen.
+              </p>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </main>

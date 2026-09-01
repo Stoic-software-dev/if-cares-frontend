@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients, MailError } from '@/lib/gmail';
 import { claimSent, signatureRequest } from '@/lib/mail-templates';
@@ -37,7 +37,7 @@ export const POST = handle(async (req, { params }) => {
     if (mode === 'signature') {
       if (report.signedAt) throw new ApiError(409, 'This claim is already signed.');
       if (!report.signToken) throw new ApiError(409, 'Create a signing link first.');
-      const base = process.env.APP_URL?.replace(/\/$/, '') || new URL(req.url).origin;
+      const base = appBaseUrl(req);
       const message = signatureRequest({
         period,
         state: report.state,

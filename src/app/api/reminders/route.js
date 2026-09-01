@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients } from '@/lib/gmail';
 import { countOverdue } from '@/lib/mail-templates';
@@ -182,7 +182,7 @@ export const POST = handle(async (req) => {
 
   let sent = 0;
   for (const message of messages) {
-    const base = process.env.APP_URL?.replace(/\/$/, '') || url.origin;
+    const base = appBaseUrl(req);
     const body = countOverdue({
       name: message.name,
       site: message.site,

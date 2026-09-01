@@ -2,7 +2,7 @@
 
 > Orden de ejecución sobre las cards STOIC-2196..2207. Detalle técnico en **SPECS.md**.
 > Estrategia: la app vieja (GAS + Sheets) opera en prod hasta un **único cutover al final**.
-> Sin dual-write. Actualizado: 2026-08-28, sincronizado contra el código.
+> Sin dual-write. Actualizado: 2026-08-31, sincronizado contra el código.
 >
 > Leyenda: `[x]` construido y verificado · `[~]` parcial, con el detalle de qué falta ·
 > `[ ]` sin construir. Los `[~]` y `[ ]` de las Etapas 2 a 6 están agrupados abajo en
@@ -26,6 +26,7 @@ De menor a mayor. Cada fase se testea antes de pasar a la siguiente.
 | **D** | Feriados con nombre, rango y alcance. | **hecha** |
 | **E** | PDF mensual, consolidados, jobs asíncronos y firma pública. | **hecha**, menos el envío por email, que es de la fase F |
 | **F** | Envío de mails y reminders diarios. | **construida**, operativa cuando exista la delegación de dominio |
+| **G** | Huecos del Apps Script + aprobación de counts (31-ago). | **hecha** |
 
 Las seis fases están **construidas y verificadas**. Después de la última se hizo un
 recorrido exploratorio sobre el build de producción: las 12 pantallas responden 200,
@@ -35,14 +36,28 @@ contraste WCAG AA sin fallos en claro y en oscuro sobre todas las pantallas nuev
 `npm run lint` limpio, `npm run build` compila, `npm run smoke` 26/26 y
 `npm run drive:selftest` 25/25.
 
+**Fase G (31-ago)**, de leer `gas-backup` entero contra el código:
+
+- El **foundation id** volvió al consolidado. `getFoundationIdByState` se negaba a armar un
+  claim sin él; estaba importado como `AppSetting foundationId.TX/.OK` desde julio y no lo
+  leía nadie, así que todos los claims que generó el 2.0 salieron sin él.
+- La **ventana de recordatorio por sitio** se respeta (25 de 64 sitios traen una del
+  master). Un sitio sin ventana entra igual: el legacy lo salteaba, y una celda vacía es
+  una forma demasiado silenciosa de apagar el aviso que evita que le pausen la entrega.
+- La **hora del recordatorio** se aplica, resuelta en `APP_TIMEZONE`. Era un setting que se
+  guardaba y nunca se comparaba con nada.
+- Las **fallas del servidor llegan a una persona** (`ALERT_EMAILS`), que es lo que hacían
+  `sendFailureAlert` y `sendPartialFailureAlert`.
+- **Aprobación de counts** — ver Etapa 4.
+
 Lo que quedó pendiente y **no depende de código**:
 
-- Cargar las credenciales de Drive y de Gmail, y la delegación de dominio
-  (`docs/DRIVE-STORAGE.md`, `docs/EMAIL.md`).
+- Crear el **servicio de cron** en Railway que postea a `/api/reminders` cada hora.
 - La **maquetación exacta** del formulario oficial del consolidado: el contenido está
   campo por campo, falta la plantilla o un PDF de muestra para calcarla.
-- Las decisiones de IF Cares: aprobación de counts, datos de contacto del sitio,
-  destinatarios y textos de los mails, nombres de los feriados del ciclo.
+- Las decisiones de IF Cares: datos de contacto del sitio, destinatarios y textos de los
+  mails, nombres de los feriados del ciclo. **La aprobación de counts ya está decidida
+  (va) y construida.**
 
 Fuera de este plan quedan las Etapas 7 (testing con staff real) y 8 (cutover), que son
 trabajo con el cliente.
@@ -59,9 +74,9 @@ trabajo con el cliente.
 
 ## Etapa 1 — Desbloqueos inmediatos (en paralelo, esta semana)
 
-- [ ] **Pushear `v2-backend`** (4 commits solo locales — riesgo de pérdida).
-- [ ] **Crear proyecto Supabase** (runbook `docs/SUPABASE-SETUP.md`, ~15 min) →
-      `migrate deploy`, seed, import completo. **Configurar backups ese mismo día.**
+- [x] **Pushear `v2-backend`** (18-ago).
+- [x] **Crear proyecto Supabase**: `vcixfuaqxnkwihzbqetq`, schema `regular_year`, 12
+      migraciones aplicadas y sin drift (verificado 31-ago). **Backups: pendiente.**
 - [ ] Pegar `gas-backup/migration-export.gs` en Apps Script + `MIGRATION_EXPORT_KEY`
       + redeploy → correr `import-history` con data real de punta a punta.
 - [ ] STOIC-2202: cerrar tokens + componentes base y **aprobación de las 5 pantallas
@@ -73,11 +88,10 @@ trabajo con el cliente.
       hojas "Copy of…") para que decidan caso por caso (cierre de STOIC-2196).
 - [ ] Actualizar el timeline con el cliente: el artifact aún dice cutover en agosto;
       las cards lo ponen al final. Acordar fecha tentativa de corte.
-- [ ] **[S] Definir con IF Cares si el 2.0 incorpora aprobación de counts** (Summer la
-      tiene: el admin aprueba cada count, queda quién/cuándo, se bloquea la edición y
-      salen PDF + mail al sitio). **No está en los requerimientos del Regular Year** y
-      agrega un paso operativo diario por sitio → decidir **antes** de cerrar el schema
-      de `MealCount` (toca counts, correcciones, PDFs y reportes).
+- [ ] **Crear el servicio de cron** en Railway (`curlimages/curl`, `0 * * * *`) que postea
+      a `/api/reminders`. Sin esto los recordatorios no se disparan nunca.
+- [x] **[S] Aprobación de counts: DECIDIDA el 31-ago — va.** Construida el mismo día;
+      el detalle de qué bloquea y qué no está en la Etapa 4.
 - [ ] **[S] Confirmar si el formulario en papel del Regular Year lleva datos del sitio**
       (dirección / teléfono / supervisor). Summer los guarda por sitio y los imprime en
       el PDF; hoy el modelo `Site` no tiene esos campos. Bloquea 2200 y 2203.
@@ -96,8 +110,8 @@ trabajo con el cliente.
       - Anulación de un count: `voidedAt` / `voidedById` / `voidReason` (baja lógica; sale
         de dashboard y reportes, la historia no se borra).
       - Respuesta al request: `responseComment` + `respondedBy/At` (hoy solo hay estado).
-      - Aprobación de counts (`approvalStatus`, `approvedAt`, `approvedById`) — **solo si
-        IF Cares la confirma** en Etapa 1.
+      - [x] Aprobación de counts (`approvedAt`, `approvedById`, `approvedByEmail`),
+        migración `20260901120000_meal_count_approval`.
 - [ ] STOIC-2197 restante: reset de password self-service **por email**, expiración
       de sesión por inactividad configurable, bloqueo de usuarios desactivados.
 - [ ] STOIC-2198 restante: reporte de reconciliación formal (sitio × mes, Sheets vs
@@ -149,7 +163,8 @@ trabajo con el cliente.
 - [x] **[S] Holidays Manager completo**: nombre, rango de fechas, alcance "todos los
       sitios" o selección múltiple, "todo el día" o comidas específicas, detección de
       duplicados, edición y borrado, tabs próximos/pasados con buscador y paginado
-      (`/admin/holidays`).
+      (`/admin/holidays`), que es la pestaña **Holidays** del calendario: no es un hermano
+      del calendario de servicio, es la otra mitad de la misma pregunta.
 
       Decisión de diseño: los feriados son **declarativos**. No borran `ServiceDay`, se
       restan al leer el calendario (`src/lib/holidays.js`). Por eso la celda puede decir
@@ -170,10 +185,23 @@ trabajo con el cliente.
       sola cuenta *activa* por sitio y fecha, así que el día puede guardar la que se
       descartó junto a la que la reemplazó. Al abrir ese día, un admin ve quién la anuló,
       cuándo y por qué, y puede **restaurarla**.
-- [ ] **[S] Aprobación de counts** — *solo si IF Cares la confirmó en Etapa 1*: acción de
-      aprobar por count, badge visible en calendario y detalle, bloqueo de edición al
-      aprobar (la anulación sigue disponible), y PDF + mail al staff del sitio como
-      follow-up asíncrono (Summer: `appscript/post/approveMealCount.gs`).
+- [x] **[S] Aprobación de counts**: `POST /api/meal-counts/approve` aprueba, `PUT` deshace,
+      las dos con auditoría. **Aprobar bloquea la corrección** — lo aprobado es lo que se
+      reclamó, y un número que todavía puede cambiar no es una aprobación; corregir un
+      count aprobado contesta 409 diciendo cuál de las dos salidas tomar. **Anular sigue
+      disponible**: un count cargado en el día equivocado está mal lo haya aprobado alguien
+      o no.
+
+      **La aprobación no condiciona los reportes.** Todo count no anulado entra al claim,
+      aprobado o no. Al revés, un día que nadie llegó a aprobar desaparecería del claim sin
+      que nadie se entere.
+
+      Al aprobar sale el PDF de lo aprobado por mail al staff **de ese sitio** — no a los
+      admins con todos los sitios, que son quienes aprueban — y la misma copia se archiva
+      en Drive. Corre antes de responder, no después: un request que termina es lo único
+      que el runtime garantiza ejecutar. Una falla ahí se alerta y nunca deshace la
+      aprobación. En el calendario el día aprobado lleva un **check**, no un quinto color:
+      un día aprobado sigue siendo un día enviado.
 
 ## Etapa 5 — PDFs y consolidación (STOIC-2203 / 2204)
 
@@ -216,11 +244,15 @@ trabajo con el cliente.
 - [x] **[S] Inbox usable con volumen**: buscador que cruza todos los campos, contador
       por pestaña y filtros por sitio además de estado.
 - [x] Reminders diarios de counts atrasados: on/off, horario, cuántos días atrás mirar y
-      copias fijas se configuran en `/admin/reminders`, **sin deploy**. Cada persona
-      recibe solo sus sitios, un feriado nunca cuenta como atrasado, y hay un **preview**
-      que corre la misma búsqueda sin mandar nada. La ejecución la dispara el cron de la
-      infraestructura contra `POST /api/reminders` con un secreto compartido, así que no
-      se puede disparar desde afuera.
+      copias fijas se configuran en `/admin/settings`, **sin deploy**. Cada persona recibe
+      solo sus sitios, un feriado nunca cuenta como atrasado, y hay un **preview** que
+      corre la misma búsqueda sin mandar nada. El cron llama **cada hora** con un secreto
+      compartido y **la ruta decide**: compara la hora local en `APP_TIMEZONE` contra el
+      setting, así el horario vive en la pantalla y el cambio de horario de verano no lo
+      corre. Se respeta además la **ventana de recordatorio de cada sitio**
+      (`reminderStart/End`, 25 de 64 la traen del master); un sitio sin ventana entra
+      igual, porque una celda vacía es una forma demasiado silenciosa de apagarle los
+      avisos a un sitio. Si algún envío falla, sale una alerta a `ALERT_EMAILS`.
 - [x] Resolver el destino de los archivos: **Drive API desde el backend** para
       **todos los PDFs**, no solo los menús (`src/lib/google-drive.js` para leer y
       escribir, `src/lib/pdf-archive.js` para archivar lo generado). La oficina sigue
@@ -238,10 +270,16 @@ trabajo con el cliente.
       cuarenta sitios es **una** fila. Pantalla `/admin/monitoring` para verlos, con
       stack, buscador, paginado y marcar como resuelto; volver a verse lo reabre. El
       endpoint acepta reportes sin sesión, porque el login también puede romperse, y por
-      eso tiene esquema estricto y límite por IP. Falta la **alerta por mail** (fase F).
-- [~] **Patrón de listados admin**: usuarios, sitios (20 por página, componente
-      `ui/pagination.jsx`) y requests lo tienen. Faltan feriados y reportes, que todavía
-      no existen como pantallas.
+      eso tiene esquema estricto y límite por IP.
+
+      Es una **herramienta de desarrollo**: la entrada del navbar, la pantalla y el lado de
+      lectura de la API responden solo a `NEXT_PUBLIC_MONITORING_EMAILS`, y la API contesta
+      **404 en vez de 403** para no anunciarle la pantalla a los admins que no tienen por
+      qué saber que existe. Un admin mirando stack traces no aprende nada y se preocupa al
+      pedo. Las **fallas del servidor** van por mail aparte (`src/lib/alerts.js`), que es lo
+      que hacían `sendFailureAlert`/`sendPartialFailureAlert` en el legacy.
+- [x] **Patrón de listados admin**: usuarios, sitios, requests, feriados y errores del
+      cliente comparten `ui/pagination.jsx` y el mismo buscador.
 - [x] **Confirmación explícita en acciones destructivas** (`ui/confirm-dialog.jsx`):
       estados confirmar → procesando → resultado y el aviso de qué se lleva puesto la
       acción. Aplica a anular, desactivar, cerrar días en varios sitios y salir con
@@ -271,7 +309,7 @@ trabajo con el cliente.
 - Decisiones sobre anomalías de data (2196).
 - Formato campo por campo del PDF en papel (2203).
 - Grupo de staff para testing (2206) y fecha de corte (2207).
-- **[S] ¿Va el flujo de aprobación de counts?** — bloquea el schema de `MealCount` (Etapa 2).
+- ~~¿Va el flujo de aprobación de counts?~~ — **decidido el 31-ago: va, y está construido.**
 - **[S] ¿El PDF lleva datos de contacto del sitio?** — bloquea el schema de `Site` y el
   formulario de alta de sitios (Etapas 2 y 4).
 - **[S] Destinatarios y textos de los mails** (aprobación si aplica, respuesta de

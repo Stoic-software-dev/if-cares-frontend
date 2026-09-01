@@ -75,7 +75,12 @@ completa en `prisma/full-schema-reference.sql`.
   `@@unique([siteId,name])` y `[siteId,number]`, `active` (reemplaza el prefijo "ZZ ").
 - `ServiceDay` — calendario por sitio: `date` + flags `brk/lunch/snk/sup`,
   `@@unique([siteId,date])`.
-- `MealCount` — `@@unique([siteId,date])`, `timeIn/timeOut` ("HH:MM:SS" 24 h),
+- `MealCount` — **una sola cuenta ACTIVA** por sitio y fecha, con un índice único
+  **parcial** (`WHERE "voidedAt" IS NULL`) creado en SQL crudo porque Prisma no puede
+  expresarlo: las anuladas quedan, así que un día puede guardar la que se descartó junto
+  a la que la reemplazó. Se lee con `findFirst({ siteId, date, voidedAt: null })`.
+  Anulación (`voidedAt/voidedById/voidReason`) y **aprobación**
+  (`approvedAt/approvedById/approvedByEmail`). `timeIn/timeOut` ("HH:MM:SS" 24 h),
   `signature`, `source` (`APP` | `GAS_IMPORT` — los importados ya submiteados existen
   como **stubs** para bloquear resubmit hasta que el import histórico los complete),
   `submittedBy`.
@@ -158,7 +163,7 @@ que Ver y Descargar son links directos, sin base64 ni decodificación en el clie
 Mientras `GOOGLE_SERVICE_ACCOUNT_*` esté vacío cae al GAS viejo, que es lo único que
 todavía lo invoca en runtime.
 
-### Estado al 28-ago-2026 (inventario contra el código)
+### Estado al 31-ago-2026 (inventario contra el código)
 
 Construido y verificado: auth completo (login, logout, me, forgot, reset), `sites` (GET),
 `sites/data`, `sites/service-days` (GET/PUT) y `sites/service-days/close` (POST/PUT, cierre
@@ -168,10 +173,22 @@ corrección), `meal-counts/correct`, `meal-counts/pdf` (diario, archivado en Dri
 `requests` (GET/POST) y `requests/[id]` (PATCH), `users` (GET/POST), `users/[id]`,
 `users/[id]/reset-link`, `reports/files` y `reports/files/download` (Drive), `health`.
 
-Sin construir: alta y edición de sitios (`/api/sites` es solo GET), anulación de counts,
-feriados, reportes mensuales y consolidados, jobs asíncronos, firma pública, envío de mail,
-reminders y monitoreo de errores del cliente. El orden de ataque está en
-`ROADMAP.md` → *Plan de ejecución*.
+Construido después del 28-ago y desplegado: `sites` (POST) y `sites/[id]` (PATCH/PUT) con
+generación de calendario, `sites/record`, `meal-counts/void` (POST/PUT/GET),
+**`meal-counts/approve` (POST aprueba, PUT deshace)**, `holidays` y `holidays/[id]`,
+`reports/monthly`, `reports/consolidated` (job + polling), `reports/generated` y
+`generated/[id]/send`, `sign/[token]`, `reminders` (GET/PATCH/POST) y `monitoring`
+(POST abierto, GET/PATCH solo para desarrollo).
+
+**Nada de la API del Apps Script quedó sin equivalente**: las 17 acciones GET y las 6 POST
+del legacy están mapeadas. Lo que no se trajo es por arquitectura, no por olvido —
+`updateAllMeals`/`checkAndUpdate`/`updateMaster` sincronizaban 56 planillas contra un
+master, `deleteOldDates` podaba `Sent Meals` a los 8 días (ahora la historia no se borra) y
+`createCopyAndHideRows` son las hojas "Copy of…" que produjeron las anomalías de data.
+
+Sin construir: **datos de contacto del sitio** en `Site` y en el PDF (depende de que IF
+Cares confirme si el formulario en papel los lleva) y el **reporte de reconciliación
+formal** de STOIC-2198.
 
 **Endpoints a construir** (paridad Summer + cards abiertas; mapeo detallado en
 `docs/V2-BACKEND.md` → *Planned endpoints*):
@@ -219,18 +236,18 @@ verdad hasta STOIC-2207.
 
 | Tema | Lo necesitan | Estado |
 |---|---|---|
-| Crear proyecto Supabase | Todo | **BLOQUEANTE #1** — runbook listo, ~15 min |
-| Proveedor de email | 2197 reset, 2203/2204 envío PDFs, 2205 requests+reminders | **Decidido: Gmail** (Workspace de ifcares.org), como hoy. Requiere Gmail API habilitada **más delegación en todo el dominio** con scope `gmail.send`, y una casilla dedicada para el `sub` (hoy el legacy manda desde el dueño del Apps Script y copia a marisela@). Pendiente: definir esa casilla. Alternativa si la delegación se traba: SMTP con contraseña de aplicación |
+| Crear proyecto Supabase | Todo | **Resuelto** (19-ago): proyecto `vcixfuaqxnkwihzbqetq`, schema `regular_year`, session pooler IPv4 (el host directo es solo IPv6 y Railway no lo alcanza) |
+| Proveedor de email | 2197 reset, 2203/2204 envío PDFs, 2205 requests+reminders | **Decidido: Gmail** del Workspace de ifcares.org. Service account con **delegación en todo el dominio** (Client ID numérico + scope `gmail.send`) suplantando una casilla **real** — un alias o un grupo no sirven como `sub`. Cargado en producción (`mailReady: true` el 31-ago); falta confirmar la delegación con un envío real |
 | Storage de archivos (PDFs generados, menús) | 2199, 2203, 2204 | **Resuelto**: Google Drive vía service account, un solo módulo para lectura y escritura (`docs/DRIVE-STORAGE.md`). Las firmas siguen como data URL en `MealCount.signature` |
-| Cron/scheduler (reminders diarios, refresh del pipeline) | 2198, 2205 | Railway cron / pg_cron / a definir |
-| Motor de PDF (¿puppeteer/react-pdf?) — replicar el form en papel campo por campo | 2203, 2204 | Spike pendiente |
-| Hosting v2 + staging público | 2206, 2207 | Railway candidato |
-| **Menús post-freeze**: si el GAS se apaga en el corte, se rompen | 2199 ("siguen igual"), 2207 | **Resuelto**: Drive API con service account (carpeta `1wagBWXeOi_8U5N7zvqUGhdv6AjH1yyki`). Falta cargar `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `_PRIVATE_KEY` en el entorno |
+| Cron/scheduler (reminders diarios, refresh del pipeline) | 2198, 2205 | **Definido**: servicio aparte en Railway (imagen `curlimages/curl`) con schedule `0 * * * *` que postea a `/api/reminders` con `x-reminders-secret`. Llama cada hora y **la ruta decide**: compara la hora local en `APP_TIMEZONE` contra el setting, así el horario se cambia desde la pantalla y el DST no lo corre. Pendiente: crear el servicio |
+| Motor de PDF — replicar el form en papel campo por campo | 2203, 2204 | **Resuelto a medias**: `pdf-lib` en el servidor, sin dependencias nuevas. El **contenido** sale campo por campo del generador viejo, incluido el **foundation id** (`AppSetting foundationId.TX/.OK`, que el legacy exigía). Falta la **maquetación exacta**: el legacy llenaba una plantilla de Sheets que no está en el repo |
+| Hosting v2 + staging público | 2206, 2207 | **Resuelto para producción**: Railway, branch `v2-mock`, `if-cares-frontend-production.up.railway.app`. Falta el **staging** con copia fresca (Etapa 7) |
+| **Menús post-freeze**: si el GAS se apaga en el corte, se rompen | 2199 ("siguen igual"), 2207 | **Resuelto y verificado en producción** (31-ago): Drive API con service account. El listado vuelve con la forma de `listMenus()`, no la del fallback a GAS |
 | Freeze del GAS (2207): listar y apagar triggers `updateAllMeals`, `sendReminderEmail`, `deleteOldDates`, `checkAndUpdate` | 2207 | Documentar en el plan de corte |
-| Observabilidad: error monitoring + alertas (v1 alertaba por mail); fix pendiente del import `logErrorMonitoring` en login | Transversal | Sin decidir — **Summer ya lo tiene** resuelto contra `monitoring-center` (§11); replicar el patrón es lo barato |
-| **¿Va el flujo de aprobación de counts?** (Summer lo tiene; el requerimiento del Regular Year no lo pide) | Schema de `MealCount`, correcciones, PDFs, reportes | **Decisión de IF Cares — bloquea Etapa 2** |
+| Observabilidad: error monitoring + alertas (v1 alertaba por mail) | Transversal | **Resuelto**: `POST /api/monitoring` agrupa por huella y `/admin/monitoring` los muestra — es una **herramienta de desarrollo**, visible solo para `NEXT_PUBLIC_MONITORING_EMAILS`, y la API contesta 404 al resto para no anunciarla. Las fallas del servidor van por mail a `ALERT_EMAILS` (`src/lib/alerts.js`), que es lo que hacían `sendFailureAlert`/`sendPartialFailureAlert` |
+| **¿Va el flujo de aprobación de counts?** | Schema de `MealCount`, correcciones, PDFs, reportes | **SÍ — decidido el 31-ago-2026 y construido.** Aprobar bloquea la corrección (409 explicando la salida), anular sigue disponible y la aprobación se puede deshacer. **No condiciona los reportes**: todo count no anulado entra al claim, aprobado o no, para que un día sin aprobar no desaparezca en silencio. Al aprobar sale el PDF por mail al staff **de ese sitio** (no a los admins con todos los sitios) y se archiva en Drive |
 | **¿El formulario en papel lleva dirección / teléfono / supervisor del sitio?** | Schema de `Site`, alta de sitios (2200), PDF (2203) | Confirmar con IF Cares junto con el formato del PDF |
-| Cola/estado de **jobs largos** (consolidado 1-3 min en Summer): tabla propia + polling, o servicio de colas | 2203, 2204 | Sin decidir — sin esto el mensual/consolidado muere en el timeout del hosting |
+| Cola/estado de **jobs largos** (consolidado 1-3 min en Summer) | 2203, 2204 | **Resuelto**: `src/lib/report-jobs.js`, el POST devuelve un id y la pantalla consulta cada 1,5 s. El registro vive en el proceso; lo que tiene que sobrevivir (el PDF en Drive y la fila en `GeneratedReport`) se persiste, así que un reinicio pierde el trabajo, no el documento |
 | Backups: configurar al crear Supabase, no en el cutover (2207 solo los verifica) | 2207 | — |
 
 ## 8. Requisitos no funcionales (de las cards)
@@ -291,7 +308,7 @@ que sirve de blueprint. Ruta de ejecución: **ROADMAP.md** (ítems marcados `[S]
 
 | # | Qué | Referencia Summer | Dónde entra |
 |---|---|---|---|
-| 1 | **Aprobación de counts**: aprobar por count, `approvedBy/At`, badge en calendario y detalle, bloqueo de edición al aprobar, y PDF + mail al staff del sitio como follow-up asíncrono | `appscript/post/approveMealCount.gs`, `components/calendar/DayMealDetails.jsx` | **Decisión de IF Cares** (no está en el requerimiento del RY) → Etapa 1, luego schema en Etapa 2 y UI en Etapa 4 |
+| 1 | **Aprobación de counts**: aprobar por count, `approvedBy/At`, badge en calendario y detalle, bloqueo de edición al aprobar, y PDF + mail al staff del sitio | `appscript/post/approveMealCount.gs`, `components/calendar/DayMealDetails.jsx` | **HECHO (31-ago-2026)** — migración `20260901120000_meal_count_approval`, `POST/PUT /api/meal-counts/approve`, check en el calendario y botón en el detalle |
 | 2 | **Anular un count** (admin, con confirmación y motivo): hoy un count en el sitio o la fecha equivocada no tiene salida — corregirlo no alcanza | `dashboard/page.jsx` (`handleDeleteMeal`) | Etapa 2 (schema) + Etapa 4 (UI) |
 | 3 | **Monitoreo de errores del cliente** (app, función, mensaje, stack, URL) contra un servicio central | `utils/index.js`, `api/monitoring/route.js` | Transversal |
 | 4 | **Guardia de cambios sin guardar**: `beforeunload` + intercepción de la navegación interna | `app/page.js` | Etapa 3 |

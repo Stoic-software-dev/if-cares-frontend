@@ -122,7 +122,9 @@ Variables principales de `.env` (nunca commitear valores):
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | Admin inicial del seed |
 | `MAIL_FROM` | Casilla desde la que se manda (Gmail, ver `docs/EMAIL.md`) |
 | `REMINDERS_SECRET` | Secreto compartido con el cron que dispara los recordatorios |
-| `APP_URL` | URL absoluta de la app, para los links dentro de los mails |
+| `APP_URL` | URL absoluta de la app, para los links de los mails y los de reset. Detrás de Railway el origin del request es el listener interno, así que sin esto los links salen a `localhost:8080` |
+| `ALERT_EMAILS` | A quién se le avisa cuando falla algo del servidor (una corrida de recordatorios, un claim). Vacío: solo queda en el log |
+| `NEXT_PUBLIC_MONITORING_EMAILS` | Quién ve la pantalla de errores del cliente. Es una herramienta de desarrollo; por defecto `miqueas@stoicsoftware.io` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `_PRIVATE_KEY` | Service account de Drive, el almacenamiento de todos los PDFs (`docs/DRIVE-STORAGE.md`) |
 | `GOOGLE_DRIVE_MENUS_FOLDER_ID` | Carpeta donde la oficina publica los menús (lectura) |
 | `GOOGLE_DRIVE_REPORTS_FOLDER_ID` | Carpeta donde la app archiva lo que genera (escritura) |
@@ -146,7 +148,7 @@ alrededor, el código las quita igual.
 | `npm run db:seed` | Admin inicial |
 | `npm run drive:selftest` | Cliente de Drive contra un fetch simulado, sin tocar Drive |
 | `npm run drive:doctor` | Diagnóstico de Drive con las credenciales reales; dice qué contesta Google |
-| `npm run smoke` | 26 chequeos de contrato contra la app corriendo |
+| `npm run smoke` | 28 chequeos de contrato contra la app corriendo (`BASE_URL=https://… npm run smoke` para apuntar a producción) |
 | `npx prisma migrate dev` | Aplica/crea migraciones en desarrollo |
 | `npx prisma studio` | Explorador visual de la base |
 

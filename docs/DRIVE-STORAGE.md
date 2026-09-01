@@ -8,7 +8,7 @@ Son dos flujos sobre el mismo módulo:
 
 | Flujo | Dirección | Carpeta |
 |---|---|---|
-| Menús que publica la oficina | lectura | `GOOGLE_DRIVE_MENUS_FOLDER_ID` |
+| Menús que publica la oficina | lectura, y escritura desde que se publican con el botón de la app | `GOOGLE_DRIVE_MENUS_FOLDER_ID` |
 | PDFs que genera la app (counts diarios hoy; reportes mensuales y consolidados cuando salgan) | escritura | `GOOGLE_DRIVE_REPORTS_FOLDER_ID` |
 
 ## Por qué se fue el Apps Script
@@ -83,7 +83,10 @@ al copiar del JSON.
 4. Del JSON, copiar `client_email` a `GOOGLE_SERVICE_ACCOUNT_EMAIL` y
    `private_key` a `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
 5. En Drive, compartir las dos carpetas con ese `client_email`:
-   - carpeta de **menús**: **Lector** alcanza, la app solo lee.
+   - carpeta de **menús**: **Editor**. Lector alcanzaba mientras la app solo
+     leía; desde que un admin puede publicar un menú desde **Menus → Publish
+     menu**, el service account escribe ahí. Con Lector la pantalla sigue
+     funcionando y solo falla el publicar, diciendo que hay que compartirla.
    - carpeta de **reportes**: **Editor**, porque ahí escribe.
 
 ## Verificación

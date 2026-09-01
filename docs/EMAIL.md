@@ -1,6 +1,7 @@
 # Mail: Gmail del Workspace de ifcares.org
 
-La app manda cuatro cosas: el link de reset de contraseña, la respuesta a un
+La app manda cinco cosas: la bienvenida a una cuenta nueva (con el link para que
+se ponga su propia contraseña), el link de reset de contraseña, la respuesta a un
 request, un claim consolidado (PDF adjunto o link de firma) y el recordatorio
 diario de counts atrasados.
 
@@ -35,8 +36,29 @@ todo lo demás funciona igual. Es el mismo criterio que se usó con Drive.
    (`noreply@ifcares.org`), no la cuenta personal de nadie: el día que esa persona
    se va, se cae el envío.
 
-Si el token falla con `unauthorized_client`, falta el paso 2. El módulo detecta
-ese caso y lo dice con esas palabras en vez de devolver un error genérico.
+### Cómo leer el error de Google
+
+Google contesta las dos fallas con jerga que manda a arreglar lo que no es. El
+módulo las distingue y las traduce:
+
+| Lo que dice Google | Qué significa | Qué falta |
+|---|---|---|
+| `invalid_grant: Invalid email or User ID` | La casilla de `MAIL_FROM` **no existe** en el Workspace | Crearla como usuario real y con licencia (paso 3) |
+| `unauthorized_client: ...not authorized...` | La casilla existe, pero **este service account no tiene permiso** de mandar como ella | La delegación del paso 2 |
+
+**Estado al 1-sep-2026**: faltan las dos. Probando el intercambio de token contra
+`sheet-reader@ifcares-summer.iam.gserviceaccount.com`:
+
+```
+noreply@ifcares.org   invalid_grant: Invalid email or User ID     -> no existe
+admin@ifcares.org     invalid_grant: Invalid email or User ID     -> no existe
+kenya@ifcares.org     unauthorized_client                         -> existe, sin delegación
+info@ifcares.org      unauthorized_client                         -> existe, sin delegación
+```
+
+O sea que además de crear `noreply@ifcares.org` hay que hacer el paso 2, porque
+ni siquiera las casillas que sí existen están habilitadas. Ese diagnóstico se
+reproduce pidiendo un token con distintos `sub` — no manda nada.
 
 ## Seguridad
 
@@ -52,8 +74,8 @@ ese caso y lo dice con esas palabras en vez de devolver un error genérico.
 
 ## Los reminders
 
-`/admin/reminders` controla on/off, horario, cuántos días atrás mirar y las copias
-fijas. Nada de eso requiere deploy.
+**Reminder emails** (en el menú de perfil, ruta `/admin/settings`) controla on/off,
+horario, cuántos días atrás mirar y las copias fijas. Nada de eso requiere deploy.
 
 - Cada persona recibe **solo sus sitios**.
 - Un día feriado nunca cuenta como atrasado.

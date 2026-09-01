@@ -154,7 +154,11 @@ function explain(status, detail) {
     return `That folder or file does not exist for ${account}. Check the id, and that the folder was shared with that exact address.`;
   }
   if (status === 403) {
-    return `${account} cannot reach that folder. Share the folder with that address, as Viewer for menus and Editor for reports.`;
+    // Reading a folder that was never shared answers 404, so a 403 is almost
+    // always a write against Viewer access. Menus used to be read only, and
+    // saying "Viewer is enough for menus" here now sends whoever is publishing
+    // one to set exactly the permission that is failing.
+    return `${account} is not allowed to do that in Drive. Share the folder with that address as Editor: publishing a menu and archiving a report both write to it.`;
   }
   return `Drive answered ${status}. ${message || detail.slice(0, 200)}`;
 }

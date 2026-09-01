@@ -232,6 +232,12 @@ export const signReportSchema = z.object({
   title: z.string().trim().max(120).optional(),
 });
 
+// Approving or undoing an approval: the day is the whole request.
+export const approveCountSchema = z.object({
+  site: z.string().trim().min(1, 'Pick a site.'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date.'),
+});
+
 export const voidCountSchema = z.object({
   site: z.string().min(1),
   date: ymd,

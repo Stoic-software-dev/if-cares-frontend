@@ -104,6 +104,9 @@ export async function loadMealCountDetail(session, siteName, ymd) {
     signature: count.signature,
     source: count.source,
     submittedBy: count.submittedByEmail,
+    approved: count.approvedAt
+      ? { at: count.approvedAt.toISOString(), by: count.approvedByEmail }
+      : null,
     corrected: count.corrections.length > 0,
     corrections: count.corrections.map((c, i, list) => ({
       by: c.correctedByEmail,

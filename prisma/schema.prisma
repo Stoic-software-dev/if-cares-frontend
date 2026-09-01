@@ -110,10 +110,19 @@ model MealCount {
   voidedById       String?
   voidedByEmail    String          @default("")
   voidReason       String          @default("")
+  // Approval: an administrator signs off on the count. It locks correction -
+  // what was approved is what was claimed - while voiding stays available,
+  // because a count filed on the wrong day is wrong whether or not anyone
+  // approved it. Reports read every count that is not voided, approved or not,
+  // so a pending approval can never silently drop a site from a claim.
+  approvedAt       DateTime?
+  approvedById     String?
+  approvedByEmail  String          @default("")
 
   site        Site                  @relation(fields: [siteId], references: [id])
   submittedBy User?                 @relation("MealCountSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   voidedBy    User?                 @relation("MealCountVoider", fields: [voidedById], references: [id], onDelete: SetNull)
+  approvedBy  User?                 @relation("MealCountApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   entries     MealCountEntry[]
   corrections MealCountCorrection[]
 
@@ -124,6 +133,7 @@ model MealCount {
   // both. Read an active count with findFirst({ siteId, date, voidedAt: null }).
   @@index([siteId, date])
   @@index([voidedAt])
+  @@index([approvedAt])
 }
 
 model MealCountEntry {
@@ -162,6 +172,7 @@ model User {
   sites            UserSite[]
   mealCounts       MealCount[]          @relation("MealCountSubmitter")
   voidedCounts     MealCount[]          @relation("MealCountVoider")
+  approvedCounts   MealCount[]          @relation("MealCountApprover")
   requests         Request[]            @relation("RequestAuthor")
   answeredRequests Request[]            @relation("RequestResponder")
   auditLogs        AuditLog[]

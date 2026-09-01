@@ -99,6 +99,10 @@ async function run() {
     'meal-counts/all is keyed by site with validDates and excludedDates',
     Boolean(siteData) && typeof siteData.validDates === 'object' && Array.isArray(siteData.excludedDates)
   );
+  check(
+    'the calendar map carries the approved days',
+    Array.isArray(siteData?.approvedDates)
+  );
 
   // The dashboard needs at least one site with a submitted count to render a
   // detail; pick it here so the next checks are meaningful.
@@ -140,6 +144,17 @@ async function run() {
     body: JSON.stringify({ site: 'NO SUCH SITE ZZZ', date: '2026-01-01', reason: 'smoke check' }),
   });
   check('voiding is deployed and refuses an unknown site', voidGuard.status === 404, `status ${voidGuard.status}`);
+
+  const approveGuard = await api('/api/meal-counts/approve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ site: 'NO SUCH SITE ZZZ', date: '2026-01-01' }),
+  });
+  check(
+    'approving is deployed and refuses an unknown site',
+    approveGuard.status === 404,
+    `status ${approveGuard.status}`
+  );
 
   const record = await json(`/api/sites/record?site=${encodeURIComponent(sites.body[0].name)}`);
   check(

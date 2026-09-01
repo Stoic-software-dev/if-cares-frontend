@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { BadgeCheck } from 'lucide-react';
 import { mealsFor } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
@@ -113,9 +114,15 @@ export default function MonthCalendar({ month, site, filter = 'all' }) {
                 <span className={cn('text-[13px] font-bold tabular-nums md:text-[15px]', style.number)}>
                   {cell.day}
                 </span>
-                {cell.status === 'submitted' && (
-                  <span className="hidden h-1.5 w-1.5 rounded-full bg-success md:block" aria-hidden="true" />
-                )}
+                {cell.status === 'submitted' &&
+                  (cell.approved ? (
+                    // An approved day is still a submitted day. The check is the
+                    // difference, not a fifth colour that would read as a state
+                    // of its own.
+                    <BadgeCheck className="hidden h-3.5 w-3.5 text-success md:block" aria-label="Approved" />
+                  ) : (
+                    <span className="hidden h-1.5 w-1.5 rounded-full bg-success md:block" aria-hidden="true" />
+                  ))}
                 {cell.status === 'missing' && (
                   <span className="hidden h-1.5 w-1.5 rounded-full bg-destructive md:block" aria-hidden="true" />
                 )}
@@ -176,6 +183,10 @@ export function CalendarLegend({ className }) {
           {item.label}
         </span>
       ))}
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+        <BadgeCheck className="h-3.5 w-3.5 text-success" />
+        Approved
+      </span>
     </div>
   );
 }

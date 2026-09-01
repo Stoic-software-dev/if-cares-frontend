@@ -53,6 +53,21 @@ export function countOverdue({ name, site, date, link }) {
   };
 }
 
+// The site hears that the day it filed was signed off, with the PDF of what was
+// approved attached, so the paper trail lives in their inbox and not only in the
+// app.
+export function countApproved({ name, site, date }) {
+  return {
+    subject: `Meal count approved: ${site}, ${date}`,
+    html: SHELL(`
+      <p>Hello ${name || 'there'},</p>
+      <p>The daily meal count and attendance for <b>${site}</b> on <b>${date}</b> has been
+      <b>approved</b>. A copy of what was approved is attached.</p>
+      <p>Nothing else is needed from you for that day.</p>
+    `),
+  };
+}
+
 export function claimSent({ period, state, fileName, note }) {
   return {
     subject: `Documentation of meals claimed, ${state ? `${state} ` : ''}${period}`,

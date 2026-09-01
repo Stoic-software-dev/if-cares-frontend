@@ -82,6 +82,10 @@ export function availableMonths(siteData, today = todayYmd()) {
  */
 export function buildMonth(year, month, siteData, today = todayYmd(), holidays = {}) {
   const submitted = new Set(siteData?.excludedDates ?? []);
+  // Approval rides along on a submitted day rather than being its own status:
+  // an approved day is still a submitted day, and turning it into a fifth colour
+  // would say the count is somewhere else.
+  const approved = new Set(siteData?.approvedDates ?? []);
   const valid = siteData?.validDates ?? {};
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   // Monday-first column of the 1st.
@@ -106,7 +110,14 @@ export function buildMonth(year, month, siteData, today = todayYmd(), holidays =
     } else if (holiday) status = 'holiday';
 
     if (status !== 'none') {
-      days[day] = { day, ymd, status, meals: meals ?? null, holiday: holiday ?? null };
+      days[day] = {
+        day,
+        ymd,
+        status,
+        meals: meals ?? null,
+        holiday: holiday ?? null,
+        approved: approved.has(ymd),
+      };
     } else {
       days[day] = { day, ymd, status, meals: null, holiday: null };
     }

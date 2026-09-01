@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Ban, Check, Download, History, MoreVertical, Pencil, ShieldAlert } from 'lucide-react';
+import { Ban, BadgeCheck, Check, Download, History, MoreVertical, Pencil, RotateCcw, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { apiGet, apiPost } from '@/lib/api-client';
+import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, invalidate } from '@/lib/data-cache';
 import { dateLabel } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
@@ -75,6 +75,7 @@ function CountDetailScreen() {
   const [voidReason, setVoidReason] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [voided, setVoided] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   const load = () => {
     setError('');
@@ -106,6 +107,38 @@ function CountDetailScreen() {
       toast.error(err.message);
     } finally {
       setDownloading(false);
+    }
+  };
+
+  // Approving is the administrator signing off on the day. It locks correction,
+  // mails the site a copy of what was approved, and files that copy in Drive.
+  const approve = async () => {
+    setApproving(true);
+    try {
+      const res = await apiPost('/api/meal-counts/approve', { site, date });
+      setCount((prev) => ({ ...prev, approved: res.data }));
+      toast.success(
+        res.data.notified
+          ? `Approved. ${res.data.notified} ${res.data.notified === 1 ? 'person' : 'people'} at the site were emailed.`
+          : 'Approved.'
+      );
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const undoApproval = async () => {
+    setApproving(true);
+    try {
+      await apiPut('/api/meal-counts/approve', { site, date });
+      setCount((prev) => ({ ...prev, approved: null }));
+      toast.success('Approval undone. The count can be corrected again.');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -145,6 +178,14 @@ function CountDetailScreen() {
                   <>, submitted by {count.submittedBy}</>
                 )}
                 {count.source === 'GAS_IMPORT' && <>, imported from the previous system</>}
+                {count.approved && (
+                  <>
+                    ,{' '}
+                    <span className="font-semibold text-success-text">
+                      approved by {count.approved.by}
+                    </span>
+                  </>
+                )}
                 {count.corrected && (
                   <>
                     ,{' '}
@@ -172,14 +213,21 @@ function CountDetailScreen() {
                   <Download />
                   {downloading ? 'Preparing' : 'Download PDF'}
                 </Button>
-                {admin && (
+                {admin && !count.approved && (
                   <Button
+                    variant="outline"
                     onClick={() =>
                       router.push(`/meal-count?date=${date}&site=${encodeURIComponent(site)}&correct=1`)
                     }
                   >
                     <Pencil />
                     Correct count
+                  </Button>
+                )}
+                {admin && !count.approved && (
+                  <Button onClick={approve} loading={approving}>
+                    <BadgeCheck />
+                    {approving ? 'Approving' : 'Approve'}
                   </Button>
                 )}
                 {(admin || count.corrected) && (
@@ -194,6 +242,12 @@ function CountDetailScreen() {
                         <DropdownMenuItem onClick={() => setHistoryOpen(true)}>
                           <History />
                           Correction history
+                        </DropdownMenuItem>
+                      )}
+                      {admin && count.approved && (
+                        <DropdownMenuItem onClick={undoApproval}>
+                          <RotateCcw />
+                          Undo approval
                         </DropdownMenuItem>
                       )}
                       {admin && (
@@ -331,7 +385,8 @@ function CountDetailScreen() {
 
             {admin && (
               <p className="text-[12px] text-muted-foreground">
-                Corrections keep the original values on record. Voiding removes the count from the dashboard and
+                Approving locks the count: what was approved is what was claimed, and the site gets a copy by
+                email. Corrections keep the original values on record. Voiding removes the count from the dashboard and
                 every report, and is meant for a count filed on the wrong day or site.
               </p>
             )}

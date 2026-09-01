@@ -42,11 +42,20 @@ export const POST = handle(async (req) => {
   if (!date) throw new ApiError(422, 'Invalid date.');
 
   // Voided counts are not corrected: they are not the count of record any more.
+  // What was approved is what was claimed. Correcting it after the fact would
+  // make the approval a signature on numbers that changed underneath it; the way
+  // out of a wrong approved count is to undo the approval, or to void it.
   const count = await prisma.mealCount.findFirst({
     where: { siteId: site.id, date, voidedAt: null },
     include: { entries: { orderBy: { number: 'asc' } } },
   });
   if (!count) throw new ApiError(404, 'No meal count was submitted for this date.');
+  if (count.approvedAt) {
+    throw new ApiError(
+      409,
+      `Approved by ${count.approvedByEmail} and locked. Undo the approval first, or void the count.`
+    );
+  }
 
   const timeIn = toCanonicalTime(body.timeIn);
   const timeOut = toCanonicalTime(body.timeOut);

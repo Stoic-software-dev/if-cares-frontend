@@ -149,6 +149,7 @@ alrededor, el código las quita igual.
 | `npm run drive:selftest` | Cliente de Drive contra un fetch simulado, sin tocar Drive |
 | `npm run drive:doctor` | Diagnóstico de Drive con las credenciales reales; dice qué contesta Google |
 | `npm run smoke` | 28 chequeos de contrato contra la app corriendo (`BASE_URL=https://… npm run smoke` para apuntar a producción) |
+| `POST /api/mail/test` | Manda un mail a la propia dirección y devuelve lo que contestó Google. Es la única forma de saber si la delegación de dominio anda |
 | `npx prisma migrate dev` | Aplica/crea migraciones en desarrollo |
 | `npx prisma studio` | Explorador visual de la base |
 

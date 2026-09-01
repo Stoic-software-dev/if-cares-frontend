@@ -36,6 +36,13 @@ export async function apiPost(path, body) {
   return parse(res);
 }
 
+// Uploads. The Content-Type header is deliberately not set: the browser has to
+// write it itself so the multipart boundary travels with it.
+export async function apiUpload(path, formData) {
+  const res = await fetch(path, { method: 'POST', body: formData });
+  return parse(res);
+}
+
 export async function apiPut(path, body) {
   const res = await fetch(path, {
     method: 'PUT',

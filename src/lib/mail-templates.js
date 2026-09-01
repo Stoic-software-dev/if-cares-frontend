@@ -29,6 +29,24 @@ export function passwordReset({ name, link, hours = 1 }) {
   };
 }
 
+// What a new account gets. It carries the same link the admin sees, so there is
+// nothing to copy and paste and nothing to explain over the phone: the person
+// finds out the account exists and sets their own password from the one mail.
+export function welcome({ name, link, sites = [], hours = 24 }) {
+  const where = sites.length ? sites.join(', ') : '';
+  return {
+    subject: 'Your IF Cares account is ready',
+    html: SHELL(`
+      <p>Hello ${name || 'there'},</p>
+      <p>An account was created for you in the IF Cares meal count app${where ? ` for <strong>${where}</strong>` : ''}.</p>
+      <p>Set your password with the link below to get in. It works once and expires in ${hours} hour${hours === 1 ? '' : 's'}.</p>
+      ${button(link, 'Set your password')}
+      <p>After that you sign in with this address and the password you chose. If the link has expired,
+      use "Forgot your password?" on the sign in screen and a new one is sent here.</p>
+    `),
+  };
+}
+
 export function requestAnswered({ name, type, detail, site, comment, resolvedBy }) {
   return {
     subject: `Your request was answered: ${type}`,

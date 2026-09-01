@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   Copy,
   KeyRound,
+  MailCheck,
   MoreVertical,
   Pencil,
   Plus,
@@ -51,7 +53,15 @@ import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 15;
-const EMPTY_FORM = { name: '', lastname: '', email: '', role: 'USER', allSites: false, sites: [] };
+const EMPTY_FORM = {
+  name: '',
+  lastname: '',
+  email: '',
+  role: 'USER',
+  allSites: false,
+  sites: [],
+  sendEmail: true,
+};
 
 function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -100,8 +110,8 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
         sites: form.sites,
       };
       if (mode === 'create') {
-        const res = await apiPost('/api/users', payload);
-        onSaved(res.data.user, res.data.resetLink);
+        const res = await apiPost('/api/users', { ...payload, sendEmail: form.sendEmail });
+        onSaved(res.data.user, res.data.resetLink, res.data.mail);
       } else {
         const res = await apiPatch(`/api/users/${initial.id}`, payload);
         onSaved(res.data, null);
@@ -121,7 +131,7 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
           <DialogTitle>{mode === 'create' ? 'Add user' : 'Edit user'}</DialogTitle>
           <DialogDescription>
             {mode === 'create'
-              ? 'The account is created without a password. You get a link to hand over.'
+              ? 'The account is created without a password. They get a link to set one themselves.'
               : 'Changes apply immediately.'}
           </DialogDescription>
         </DialogHeader>
@@ -248,6 +258,18 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
               </div>
             </div>
           )}
+          {mode === 'create' && (
+            <label className="flex items-center justify-between gap-4 rounded-md border border-input px-3 py-2.5">
+              <span className="flex flex-col gap-0.5">
+                <span className="text-[13px] font-medium text-foreground">Email the link to them</span>
+                <span className="text-[12px] leading-relaxed text-muted-foreground">
+                  A welcome message with the link to set their password. Turn it off to hand the link
+                  over yourself.
+                </span>
+              </span>
+              <Switch checked={form.sendEmail} onCheckedChange={(value) => set({ sendEmail: value })} />
+            </label>
+          )}
         </div>
 
         <DialogFooter>
@@ -264,6 +286,7 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
 }
 
 function ResetLinkDialog({ data, onClose }) {
+  const mail = data?.mail;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(data.link);
@@ -279,9 +302,28 @@ function ResetLinkDialog({ data, onClose }) {
         <DialogHeader>
           <DialogTitle>Password link for {data?.email}</DialogTitle>
           <DialogDescription>
-            Send this link to the user. It lets them set their own password and expires in 24 hours.
+            It lets them set their own password and expires in 24 hours.
           </DialogDescription>
         </DialogHeader>
+
+        {/* The link is shown either way. When the mail went out this is a
+            fallback nobody needs; when it did not, it is the only way in. */}
+        {mail?.sent && (
+          <div className="flex items-center gap-2.5 rounded-md bg-success-soft px-3 py-2.5">
+            <MailCheck className="h-4 w-4 shrink-0 text-success-text" />
+            <span className="text-[12.5px] text-success-text">Emailed to {mail.to}.</span>
+          </div>
+        )}
+
+        {mail && !mail.sent && mail.error && (
+          <div className="flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-soft p-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
+            <span className="text-[12.5px] leading-relaxed text-warning-text">
+              The email did not go out, so this link has to be handed over. {mail.error}
+            </span>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input readOnly value={data?.link ?? ''} className="font-mono text-[12px]" />
           <Button onClick={copy} className="shrink-0">
@@ -359,8 +401,8 @@ function AdminUsersScreen() {
 
   const sendResetLink = async (user) => {
     try {
-      const res = await apiPost(`/api/users/${user.id}/reset-link`, {});
-      setResetLink({ email: user.email, link: res.data.resetLink });
+      const res = await apiPost(`/api/users/${user.id}/reset-link`, { sendEmail: true });
+      setResetLink({ email: user.email, link: res.data.resetLink, mail: res.data.mail });
     } catch (err) {
       toast.error(err.message);
     }
@@ -618,10 +660,10 @@ function AdminUsersScreen() {
         initial={dialog?.initial}
         siteOptions={siteOptions}
         onClose={() => setDialog(null)}
-        onSaved={(row, link) => {
+        onSaved={(row, link, mail) => {
           upsertRow(row);
           toast.success(dialog?.mode === 'create' ? `${row.name} ${row.lastname} created` : 'User updated');
-          if (link) setResetLink({ email: row.email, link });
+          if (link) setResetLink({ email: row.email, link, mail });
         }}
       />
 

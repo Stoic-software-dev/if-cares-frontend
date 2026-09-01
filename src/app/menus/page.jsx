@@ -1,14 +1,27 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Download, Eye, FileText, UtensilsCrossed } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Download, Eye, FileText, Upload, UtensilsCrossed } from 'lucide-react';
+import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
+import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
+import { apiUpload } from '@/lib/api-client';
 import { MENUS_PATH, useCachedGet } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
 
@@ -50,7 +63,117 @@ function periodOf(file) {
 const urlFor = (file, { attachment } = {}) =>
   `/api/reports/files/download?fileId=${encodeURIComponent(fileId(file))}${attachment ? '&download=1' : ''}`;
 
+const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv';
+
+// Publishing a menu is dropping a file into the office's Drive folder. Doing it
+// from here means nobody needs Drive access, or to know which folder it was.
+function PublishDialog({ open, onClose, onPublished }) {
+  const [file, setFile] = useState(null);
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  const pick = (chosen) => {
+    setFile(chosen ?? null);
+    // The file's own name is almost always the right title, so it is offered
+    // rather than demanded.
+    setName(chosen ? chosen.name.replace(/\.[a-z0-9]+$/i, '') : '');
+  };
+
+  const close = () => {
+    if (saving) return;
+    pick(null);
+    onClose();
+  };
+
+  const publish = async () => {
+    if (!file) return;
+    setSaving(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('name', name.trim());
+      const res = await apiUpload(MENUS_PATH, form);
+      toast.success(`${res.data.name} published`);
+      pick(null);
+      onPublished();
+      onClose();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && close()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Publish a menu</DialogTitle>
+          <DialogDescription>
+            Everyone with an account sees it here as soon as it is published. A menu published under a
+            name that already exists replaces that one.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT}
+            className="hidden"
+            onChange={(event) => pick(event.target.files?.[0] ?? null)}
+          />
+
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className={cn(
+              'flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-4 py-7',
+              'text-center transition-colors hover:border-primary hover:bg-surface-sunken'
+            )}
+          >
+            <Upload className="h-5 w-5 text-muted-foreground" />
+            <span className="text-[13px] font-semibold text-foreground">
+              {file ? file.name : 'Choose a file'}
+            </span>
+            <span className="text-[12px] text-muted-foreground">
+              {file
+                ? `${(file.size / 1024 / 1024).toFixed(1)} MB, click to choose another`
+                : 'PDF, image, Word, Excel or CSV, up to 15 MB'}
+            </span>
+          </button>
+
+          {file && (
+            <Field label="Name it" htmlFor="menu-name" hint="What people see on the card.">
+              <Input
+                id="menu-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="September 2026 Menu"
+              />
+            </Field>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={close} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={publish} loading={saving} disabled={!file}>
+            {!saving && <Upload />}
+            Publish
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MenusScreen() {
+  const { user } = useAuth();
+  const admin = isAdmin(user);
+  const [publishing, setPublishing] = useState(false);
   const [query, setQuery] = useState('');
 
   // The listing is a Drive call, so it is cached for the session: coming back
@@ -80,9 +203,22 @@ function MenusScreen() {
               : 'Loading the menus'
           }
           actions={
-            files && files.length > 3 ? (
-              <SearchInput value={query} onChange={setQuery} placeholder="Find a menu" className="w-full sm:w-72" />
-            ) : null
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+              {files && files.length > 3 && (
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder="Find a menu"
+                  className="w-full sm:w-72"
+                />
+              )}
+              {admin && (
+                <Button onClick={() => setPublishing(true)} className="shrink-0">
+                  <Upload />
+                  Publish menu
+                </Button>
+              )}
+            </div>
           }
         />
 
@@ -104,12 +240,19 @@ function MenusScreen() {
               description={
                 query
                   ? `Nothing here matches “${query.trim()}”.`
-                  : 'New menus show up here as soon as the office publishes them.'
+                  : admin
+                    ? 'Publish one and everyone with an account sees it here.'
+                    : 'New menus show up here as soon as the office publishes them.'
               }
               action={
                 query ? (
                   <Button variant="outline" size="sm" onClick={() => setQuery('')}>
                     Clear search
+                  </Button>
+                ) : admin ? (
+                  <Button size="sm" onClick={() => setPublishing(true)}>
+                    <Upload />
+                    Publish a menu
                   </Button>
                 ) : null
               }
@@ -175,6 +318,8 @@ function MenusScreen() {
           </div>
         )}
       </div>
+
+      <PublishDialog open={publishing} onClose={() => setPublishing(false)} onPublished={load} />
     </AppShell>
   );
 }

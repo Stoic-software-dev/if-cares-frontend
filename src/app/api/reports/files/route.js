@@ -1,6 +1,13 @@
 import { handle, legacyJson, ApiError } from '@/lib/http';
-import { requireUser } from '@/lib/auth';
-import { listMenus, driveConfigured, DriveError } from '@/lib/google-drive';
+import { requireUser, requireAdmin } from '@/lib/auth';
+import {
+  listMenus,
+  driveConfigured,
+  menusFolderId,
+  uploadFile,
+  DriveError,
+} from '@/lib/google-drive';
+import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -56,4 +63,59 @@ export const GET = handle(async () => {
     if (error instanceof DriveError) throw new ApiError(502, error.message);
     throw new ApiError(502, 'The menus service is unavailable.');
   }
+});
+
+// Publishing a menu used to mean opening Drive and dropping a file in the right
+// folder, which is knowledge that lived in one person's head. This puts it in
+// the app: same folder, same result, and the listing above refreshes at once
+// instead of showing the old set for ten minutes.
+const MAX_BYTES = 15 * 1024 * 1024;
+const ALLOWED = /\.(pdf|png|jpe?g|gif|webp|docx?|xlsx?|csv)$/i;
+
+export const POST = handle(async (req) => {
+  const session = await requireAdmin();
+  if (!driveConfigured()) throw new ApiError(503, 'The Drive service account is not configured.');
+  const folderId = menusFolderId();
+  if (!folderId) throw new ApiError(503, 'No Drive folder is configured for menus.');
+
+  const form = await req.formData().catch(() => null);
+  const file = form?.get('file');
+  if (!file || typeof file.arrayBuffer !== 'function') throw new ApiError(422, 'Choose a file to publish.');
+  if (!file.size) throw new ApiError(422, 'That file is empty.');
+  if (file.size > MAX_BYTES) {
+    throw new ApiError(413, `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 15 MB.`);
+  }
+
+  // A name given in the form wins, so the office can publish "October 2026
+  // Menu.pdf" without renaming the file first. The extension always comes from
+  // the real file, so a rename cannot turn a PDF into something else.
+  const original = String(file.name ?? '').trim();
+  if (!ALLOWED.test(original)) {
+    throw new ApiError(422, 'Menus can be PDF, an image, a Word or Excel document, or a CSV.');
+  }
+  const extension = original.match(ALLOWED)[0];
+  const typed = String(form.get('name') ?? '').trim().replace(/[\\/:*?"<>|]/g, '').replace(ALLOWED, '');
+  const name = `${typed || original.replace(ALLOWED, '')}${extension}`;
+
+  let uploaded;
+  try {
+    uploaded = await uploadFile({
+      name,
+      folderId,
+      bytes: Buffer.from(await file.arrayBuffer()),
+      mimeType: file.type || 'application/octet-stream',
+    });
+  } catch (error) {
+    if (error instanceof DriveError) throw new ApiError(502, error.message);
+    throw error;
+  }
+
+  // The menu is live the moment it lands, so a stale list would be a lie.
+  cache = { at: 0, files: null };
+  await logAudit({ actor: session.user, action: 'menu.publish', entity: 'menu', entityId: uploaded.id });
+
+  return legacyJson({
+    result: 'success',
+    data: { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType },
+  });
 });

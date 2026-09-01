@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Building2, CornerDownLeft, Search } from 'lucide-react';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
-import { navItemsFor } from '@/components/shell/nav';
+import { accountItemsFor, navItemsFor } from '@/components/shell/nav';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { SITES_PATH, cachedGet } from '@/lib/data-cache';
 import { shortSiteName } from '@/lib/sites';
@@ -38,7 +38,10 @@ export function CommandPalette({ open, onOpenChange }) {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const sections = navItemsFor(isAdmin(user), user).map((item) => ({
+    const admin = isAdmin(user);
+    // The account entries left the bar but not the product, and the palette is
+    // where a page you visit twice a year should still be a word away.
+    const sections = [...navItemsFor(admin), ...accountItemsFor(admin, user)].map((item) => ({
       id: `nav-${item.key}`,
       group: 'Go to',
       label: item.label,

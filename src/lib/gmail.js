@@ -80,9 +80,19 @@ async function accessToken() {
   const payload = await res.json().catch(() => ({}));
   if (!res.ok || !payload.access_token) {
     const reason = payload.error_description || payload.error || '';
+    // Google reports the two ways this fails in words nobody can act on, and
+    // they need opposite fixes. "Invalid email or User ID" means the mailbox
+    // does not exist at all; "unauthorized_client" means it does exist but this
+    // service account was never authorized to send as it. Handing the raw
+    // string to an admin clicking Send sends them down the wrong path.
+    if (/invalid[ _]email or user ?id/i.test(reason)) {
+      throw new MailError(
+        `There is no mailbox ${creds.sender} in the Workspace. MAIL_FROM has to name a real, licensed user before anything can be sent as it.`
+      );
+    }
     if (/unauthorized_client|access_denied/i.test(reason)) {
       throw new MailError(
-        'Google refused the impersonation. The service account needs domain wide delegation for gmail.send, authorized by a Workspace admin.'
+        `${creds.sender} exists, but ${creds.email} is not allowed to send as it. A Workspace admin has to authorize that service account's client id for ${SCOPE} under domain wide delegation.`
       );
     }
     throw new MailError(reason || 'Google rejected the service account.');

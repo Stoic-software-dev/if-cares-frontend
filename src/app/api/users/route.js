@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { toUserRow, issueResetLink } from '@/lib/users';
+import { toUserRow, deliverResetLink } from '@/lib/users';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -26,10 +26,14 @@ const createUserSchema = z.object({
   role: z.enum(['ADMIN', 'USER']),
   allSites: z.boolean().default(false),
   sites: z.array(z.string()).default([]),
+  // Mailing the new account is the normal path; the admin can opt out when the
+  // address is not reachable yet and they would rather hand the link over.
+  sendEmail: z.boolean().default(true),
 });
 
 // STOIC-2200: create an account from the interface. The user arrives without a
-// password; the response carries a one-day reset link to hand them.
+// password; a one-day link is mailed to them with a welcome, and comes back in
+// the response too so the admin can hand it over when mail is not an option.
 export const POST = handle(async (req) => {
   const session = await requireAdmin();
   const body = createUserSchema.parse(await readJsonBody(req));
@@ -56,8 +60,8 @@ export const POST = handle(async (req) => {
     throw error;
   }
 
-  const resetLink = await issueResetLink(req, user.id);
+  const { link, mail } = await deliverResetLink(req, user, { send: body.sendEmail, welcoming: true });
   await logAudit({ actor: session.user, action: 'user.create', entity: 'user', entityId: user.id });
 
-  return legacyJson({ result: 'success', data: { user: toUserRow(user), resetLink } });
+  return legacyJson({ result: 'success', data: { user: toUserRow(user), resetLink: link, mail } });
 });

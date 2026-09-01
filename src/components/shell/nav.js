@@ -1,11 +1,11 @@
 import {
+  BellRing,
   Bug,
   Building2,
   CalendarDays,
   CalendarRange,
   FileText,
   Inbox,
-  SlidersHorizontal,
   UtensilsCrossed,
   Users,
 } from 'lucide-react';
@@ -27,14 +27,25 @@ const ADMIN_ITEMS = [
   { key: 'inbox', label: 'Requests', href: '/admin/requests', icon: Inbox, primary: false },
   { key: 'users', label: 'Users', href: '/admin/users', icon: Users, primary: false },
   { key: 'menus', label: 'Menus', href: '/menus', icon: UtensilsCrossed, primary: false },
-  { key: 'settings', label: 'Settings', href: '/admin/settings', icon: SlidersHorizontal, primary: false },
-  { key: 'monitoring', label: 'Client errors', href: '/admin/monitoring', icon: Bug, primary: false },
 ];
 
-export function navItemsFor(admin, user) {
-  if (!admin) return STAFF_ITEMS;
+// Not places the work happens: set once, and looked at when something is wrong.
+// They were taking room on the bar from the screens the job is actually done
+// on, so they sit under the profile menu, where an account-level switch is
+// looked for anyway. The command palette still finds them by name.
+const ACCOUNT_ITEMS = [
+  { key: 'settings', label: 'Reminder emails', href: '/admin/settings', icon: BellRing },
+  { key: 'monitoring', label: 'Client errors', href: '/admin/monitoring', icon: Bug },
+];
+
+export function navItemsFor(admin) {
+  return admin ? ADMIN_ITEMS : STAFF_ITEMS;
+}
+
+export function accountItemsFor(admin, user) {
+  if (!admin) return [];
   // Client errors is a developer entry: everyone else never sees it exists.
-  return canSeeMonitoring(user) ? ADMIN_ITEMS : ADMIN_ITEMS.filter((item) => item.key !== 'monitoring');
+  return canSeeMonitoring(user) ? ACCOUNT_ITEMS : ACCOUNT_ITEMS.filter((item) => item.key !== 'monitoring');
 }
 
 // Which nav entry owns a given pathname, so the active state survives deep

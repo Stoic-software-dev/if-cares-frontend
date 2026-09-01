@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { ChevronDown, LogOut, ShieldCheck } from 'lucide-react';
 import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
+import { accountItemsFor } from '@/components/shell/nav';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import {
   DropdownMenu,
@@ -10,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { canSeeMonitoring } from '@/lib/monitoring-access';
 import { cn } from '@/lib/utils';
 
 export function initialsOf(user) {
@@ -40,6 +43,7 @@ export function UserMenu() {
 
   const fullName = `${user.name} ${user.lastname}`.trim();
   const admin = isAdmin(user);
+  const accountItems = accountItemsFor(admin, user);
 
   return (
     <DropdownMenu>
@@ -69,6 +73,20 @@ export function UserMenu() {
             <ShieldCheck className="h-3.5 w-3.5" />
             Administrator
           </div>
+        )}
+
+        {accountItems.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {accountItems.map(({ key, label, href, icon: Icon }) => (
+              <DropdownMenuItem key={key} asChild>
+                <Link href={href}>
+                  <Icon />
+                  {label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </>
         )}
 
         <DropdownMenuSeparator />

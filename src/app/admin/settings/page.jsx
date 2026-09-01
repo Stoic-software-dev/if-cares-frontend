@@ -69,8 +69,8 @@ function RemindersScreen() {
     <AppShell>
       <div className="flex flex-col gap-5">
         <PageHeader
-          title="Settings"
-          subtitle="The daily nudge for counts that were not filed. Changing any of this takes effect immediately."
+          title="Reminder emails"
+          subtitle="The daily nudge to sites that have not filed their count. Changes take effect immediately."
         />
 
         {error && <ErrorState title="Couldn't load the settings" message={error} onRetry={load} />}
@@ -206,10 +206,8 @@ function RemindersScreen() {
             </div>
 
             <p className="text-[12px] leading-relaxed text-muted-foreground">
-              The scheduler calls every hour with a shared secret, so the reminder cannot be triggered from
-              outside. Which of those hours actually sends is the hour above, decided here: daylight saving
-              never moves it, and changing it takes no deploy. A site is only written to inside its own
-              reminder window.
+              The hour above is the one that sends, in the program&apos;s own timezone, and daylight saving
+              never moves it. Changing it here is enough: nothing has to be redeployed.
             </p>
           </>
         )}

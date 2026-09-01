@@ -24,21 +24,33 @@ const unquote = (value) => {
   return quoted && trimmed.at(-1) === trimmed[0] ? trimmed.slice(1, -1) : trimmed;
 };
 
+// MAIL_FROM may carry a display name - `IF Cares <someone@example.org>` - which
+// is what the recipient reads first. The header keeps the whole thing; the
+// mailbox being impersonated is only ever the address inside the angle
+// brackets, because that is the account Google is asked to act as.
+const addressOf = (value) => value.match(/<([^>]+)>/)?.[1]?.trim() || value;
+
 function credentials() {
   const email = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
   const privateKey = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, '\n');
   // The mailbox being sent as. Without it there is nobody to impersonate.
-  const sender = unquote(process.env.MAIL_FROM);
-  if (!email || !privateKey || !sender) return null;
-  return { email, privateKey, sender };
+  const header = unquote(process.env.MAIL_FROM);
+  if (!email || !privateKey || !header) return null;
+  return { email, privateKey, header, sender: addressOf(header) };
 }
 
 export function mailConfigured() {
   return credentials() !== null;
 }
 
+/** The full From header, display name and all. */
 export function mailFrom() {
   return unquote(process.env.MAIL_FROM);
+}
+
+/** Just the address, which is the account Google impersonates. */
+export function mailFromAddress() {
+  return addressOf(unquote(process.env.MAIL_FROM));
 }
 
 // Keyed by the mailbox it impersonates. Changing MAIL_FROM without that key
@@ -119,10 +131,22 @@ async function accessToken() {
 const encodeHeader = (value) =>
   /^[\x20-\x7E]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 
+// A display name has to be quoted, and encoded when it carries accents; the
+// address inside the brackets never is.
+function fromHeader() {
+  const value = mailFrom();
+  const match = value.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (!match) return value;
+  const name = match[1].replace(/^"|"$/g, '').trim();
+  if (!name) return match[2];
+  const encoded = /^[\x20-\x7E]*$/.test(name) ? `"${name.replace(/"/g, '')}"` : encodeHeader(name);
+  return `${encoded} <${match[2]}>`;
+}
+
 function buildMime({ to, cc, subject, html, text, attachments = [] }) {
   const boundary = `ifc-${Math.random().toString(36).slice(2)}-${Date.now()}`;
   const lines = [
-    `From: ${mailFrom()}`,
+    `From: ${fromHeader()}`,
     `To: ${to.join(', ')}`,
     ...(cc?.length ? [`Cc: ${cc.join(', ')}`] : []),
     `Subject: ${encodeHeader(subject)}`,

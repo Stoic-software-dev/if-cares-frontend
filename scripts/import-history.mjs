@@ -189,8 +189,12 @@ async function importSite(prisma, site, data) {
         skipDuplicates: true,
       });
 
-      const existing = await tx.mealCount.findUnique({
-        where: { siteId_date: { siteId: site.id, date } },
+      // One ACTIVE count per site and date: the unique index is partial
+      // (WHERE voidedAt IS NULL), which Prisma cannot express, so there is no
+      // siteId_date compound to look up. A voided count is not in the way of a
+      // new one, which is the point of voiding.
+      const existing = await tx.mealCount.findFirst({
+        where: { siteId: site.id, date, voidedAt: null },
         select: { id: true, source: true },
       });
 

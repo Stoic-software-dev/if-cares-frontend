@@ -37,7 +37,20 @@ function credentials() {
   // the escaped form (what the JSON gives you) and the real one are accepted.
   const privateKey = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, '\n');
   if (!email || !privateKey) return null;
-  return { email, privateKey };
+  // A service account owns no storage, so it cannot create a file in an
+  // ordinary My Drive folder however that folder is shared. A shared drive is
+  // the clean answer; when the folders cannot move, the other way in is to act
+  // as a real user who can already write there - the file becomes theirs and
+  // the quota is theirs too. Unset, nothing changes and the account acts as
+  // itself, which is still right for a shared drive.
+  const asUser = unquote(process.env.GOOGLE_DRIVE_AS);
+  return { email, privateKey, asUser };
+}
+
+/** The identity Drive writes are made as, for diagnostics. */
+export function driveActsAs() {
+  const creds = credentials();
+  return creds ? creds.asUser || creds.email : '';
 }
 
 /** True once the service account is configured, which is what retires the GAS fallback. */
@@ -55,14 +68,17 @@ export function reportsFolderId() {
   return unquote(process.env.GOOGLE_DRIVE_REPORTS_FOLDER_ID);
 }
 
-// Tokens last an hour; keeping the live one avoids a signing round trip per request.
-let token = { value: '', expiresAt: 0 };
+// Tokens last an hour; keeping the live one avoids a signing round trip per
+// request. Keyed by the identity it was issued for, so changing GOOGLE_DRIVE_AS
+// takes effect at once instead of after the cached hour.
+let token = { value: '', expiresAt: 0, subject: '' };
 
 async function accessToken() {
-  if (token.value && Date.now() < token.expiresAt) return token.value;
-
   const creds = credentials();
   if (!creds) throw new DriveError('The Drive service account is not configured.');
+
+  const subject = creds.asUser || creds.email;
+  if (token.value && token.subject === subject && Date.now() < token.expiresAt) return token.value;
 
   let assertion;
   try {
@@ -71,7 +87,7 @@ async function accessToken() {
     assertion = await new SignJWT({ scope: SCOPE })
       .setProtectedHeader({ alg: 'RS256' })
       .setIssuer(creds.email)
-      .setSubject(creds.email)
+      .setSubject(subject)
       .setAudience(TOKEN_URL)
       .setIssuedAt(now)
       .setExpirationTime(now + 3600)
@@ -93,6 +109,15 @@ async function accessToken() {
 
   const payload = await res.json().catch(() => ({}));
   if (!res.ok || !payload.access_token) {
+    const reason = [payload.error, payload.error_description].filter(Boolean).join(': ');
+    if (creds.asUser && /unauthorized_client|unauthorized to retrieve/i.test(reason)) {
+      throw new DriveError(
+        `${creds.email} is not allowed to act as ${creds.asUser}. A Workspace admin has to authorize that service account's client id for ${SCOPE} under domain wide delegation.`
+      );
+    }
+    if (creds.asUser && /invalid[ _]email or user ?id/i.test(reason)) {
+      throw new DriveError(`There is no mailbox ${creds.asUser} in the Workspace. GOOGLE_DRIVE_AS has to name a real user.`);
+    }
     throw new DriveError(payload.error_description || 'Drive rejected the service account.');
   }
 
@@ -100,6 +125,7 @@ async function accessToken() {
     value: payload.access_token,
     // A minute of margin so a token never expires mid request.
     expiresAt: Date.now() + Math.max(0, (payload.expires_in ?? 3600) - 60) * 1000,
+    subject,
   };
   return token.value;
 }
@@ -160,7 +186,7 @@ function explain(status, detail) {
   // afterwards. Sharing harder is the obvious reaction and it never works, so
   // this case has to say the actual fix.
   if (reason === 'storageQuotaExceeded' || /storage quota/i.test(message)) {
-    return `${account} has no storage of its own, so it cannot create files in an ordinary Drive folder however it is shared. Move this folder into a Shared drive and give that address Content manager: files in a Shared drive belong to the drive, not to the account writing them.`;
+    return `${account} has no storage of its own, so it cannot create files in an ordinary Drive folder however it is shared. Either move this folder into a Shared drive and give that address Content manager, or set GOOGLE_DRIVE_AS to a user who can already write here so the files are written as them.`;
   }
   if (status === 403) {
     // Reading a folder that was never shared answers 404, so a plain 403 is a

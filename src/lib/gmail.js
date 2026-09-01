@@ -83,7 +83,11 @@ async function accessToken() {
 
   const payload = await res.json().catch(() => ({}));
   if (!res.ok || !payload.access_token) {
-    const reason = payload.error_description || payload.error || '';
+    // Both halves matter: the code is `unauthorized_client`, but the sentence
+    // Google puts next to it says "Client is unauthorized to retrieve access
+    // tokens", which does not contain the code. Matching only the description
+    // let the raw jargon through on exactly the failure this is here to name.
+    const reason = [payload.error, payload.error_description].filter(Boolean).join(': ');
     // Google reports the two ways this fails in words nobody can act on, and
     // they need opposite fixes. "Invalid email or User ID" means the mailbox
     // does not exist at all; "unauthorized_client" means it does exist but this
@@ -94,7 +98,7 @@ async function accessToken() {
         `There is no mailbox ${creds.sender} in the Workspace. MAIL_FROM has to name a real, licensed user before anything can be sent as it.`
       );
     }
-    if (/unauthorized_client|access_denied/i.test(reason)) {
+    if (/unauthorized_client|access_denied|unauthorized to retrieve/i.test(reason)) {
       throw new MailError(
         `${creds.sender} exists, but ${creds.email} is not allowed to send as it. A Workspace admin has to authorize that service account's client id for ${SCOPE} under domain wide delegation.`
       );

@@ -206,8 +206,10 @@ function RemindersScreen() {
             </div>
 
             <p className="text-[12px] leading-relaxed text-muted-foreground">
-              The hour is enforced by the scheduler that calls the app, not by the app itself. It runs with a
-              shared secret, so the reminder cannot be triggered from outside.
+              The scheduler calls every hour with a shared secret, so the reminder cannot be triggered from
+              outside. Which of those hours actually sends is the hour above, decided here: daylight saving
+              never moves it, and changing it takes no deploy. A site is only written to inside its own
+              reminder window.
             </p>
           </>
         )}

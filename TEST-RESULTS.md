@@ -46,6 +46,41 @@ Ver §3 para el detalle completo, reproducible, de los 32.
 
 ---
 
+## 0. Estado de los arreglos (1-sep-2026)
+
+Pasada de arreglos hecha después del pase, en `18bcff8` + `af29cf5`. **9 de los 10 Alto
+cerrados**, más 2 Medio que salían gratis con el mismo cambio.
+
+| Hallazgo | Estado |
+|---|---|
+| Checklist de sitios ≠ PDF del consolidado | **Arreglado** — la lista lee `Site.state`, la misma columna que filtra el backend, así que checklist y PDF son el mismo conjunto por construcción |
+| "OK" nunca seleccionable | **Arreglado** — verificado en producción: TX 34, OK 14 sitios |
+| Firma pública acepta un punto | **Arreglado** — la regla de trazo mínimo vive en `src/lib/signature.js` y la usan las dos pantallas |
+| Sin UI para revocar un signing link | **Arreglado** — botón "Revoke link" en la fila del claim |
+| "Cancel" no frena el job | **Arreglado** — `cancelled` es terminal y el handler de completado se niega a pisarlo |
+| Responder un request manda el mail sin `await` ni alerta | **Arreglado** — awaited + `notifyFailure` |
+| Botón "Deactivate" de la propia cuenta | **Arreglado** — `/api/auth/me` devuelve `id` (verificado en producción) |
+| Editar un sitio no refresca el panel | **Arreglado** — `saveSite()` refresca los dos estados |
+| Desactivar un sitio lo hace irrecuperable | **Arreglado** — `?includeInactive=1` + switch "Show deactivated" |
+| Feriado invisible en días sin `ServiceDay` | **Arreglado** — un solo fix en `/api/meal-counts/all`, que alimenta el dashboard **y** el calendario admin |
+| *(Medio)* Fecha `2026-02-30` rueda a otra fecha | **Arreglado** — `ymdToUtcDate` valida el round-trip (verificado en producción: 422) |
+| *(Medio)* 8 sitios sin estado, invisibles en cualquier claim por estado | **Visibilizado** — la pantalla del consolidado ahora lo dice; asignarles estado es decisión de IF Cares |
+
+**Deliberadamente NO cambiado**, con motivo:
+
+- **El canal de tiempo de `forgot-password`**: se le agregó la alerta de falla, pero el envío
+  sigue *sin* `await` a propósito. Esperarlo pondría toda la latencia del mail sobre la rama
+  "esta cuenta existe" y convertiría una diferencia de ~50ms en una obvia — empeoraría
+  exactamente el hallazgo que se quería cerrar.
+- **El 403 distinto al loguearse con una cuenta que nunca configuró contraseña**: el mensaje
+  actual ("tu cuenta necesita un reset, hablá con tu administrador") le sirve a una persona real
+  de los 63 usuarios conocidos; volverlo genérico cierra una ventana de enumeración muy angosta
+  a costa de dejar a alguien sin saber por qué no puede entrar. Queda como decisión consciente.
+
+Los 11 Medio y 9 Bajo restantes siguen abiertos, listados abajo sin cambios.
+
+---
+
 ## 1. Cómo se ejecutó
 
 | Agente | Área | Duración | Hallazgos |

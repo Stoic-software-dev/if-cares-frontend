@@ -54,6 +54,20 @@ async function loadCounts({ year, month, siteIds }) {
 }
 
 /**
+ * The foundation the claim is filed under. The legacy generator read it from
+ * the master and refused to build a claim without it (`getFoundationIdByState`);
+ * `import-master` brings it in as AppSetting `foundationId.TX` / `.OK`. Only
+ * those two states have one, so a claim across every state prints without it
+ * rather than printing a wrong one.
+ */
+async function foundationIdFor(state) {
+  const key = `foundationId.${String(state ?? '').toUpperCase()}`;
+  if (!state) return '';
+  const row = await prisma.appSetting.findUnique({ where: { key } });
+  return row?.value ?? '';
+}
+
+/**
  * Part one of the consolidated claim: one row per site with its month totals.
  * Mirrors what the legacy generator wrote into the template, column for column.
  */
@@ -88,7 +102,14 @@ export async function consolidatedBySite({ year, month, state, excludeSites = []
     return sum;
   }, emptyTotals());
 
-  return { rows, totals, period: monthLabel(year, month), state: state ?? 'All', excluded: [...excluded] };
+  return {
+    rows,
+    totals,
+    period: monthLabel(year, month),
+    state: state ?? 'All',
+    foundationId: await foundationIdFor(state),
+    excluded: [...excluded],
+  };
 }
 
 /**
@@ -119,7 +140,13 @@ export async function consolidatedByDay({ year, month, state, excludeSites = [] 
     return sum;
   }, emptyTotals());
 
-  return { rows, totals, period: monthLabel(year, month), state: state ?? 'All' };
+  return {
+    rows,
+    totals,
+    period: monthLabel(year, month),
+    state: state ?? 'All',
+    foundationId: await foundationIdFor(state),
+  };
 }
 
 /** Every count a single site filed in a month, for the per site monthly report. */

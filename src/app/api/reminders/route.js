@@ -3,7 +3,8 @@ import { appBaseUrl, handle, readJsonBody, legacyJson, legacySuccess, ApiError }
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients } from '@/lib/gmail';
 import { countOverdue } from '@/lib/mail-templates';
-import { dateToYmd, todayYmd } from '@/lib/dates';
+import { dateToYmd, localHour, todayYmd } from '@/lib/dates';
+import { notifyFailure } from '@/lib/alerts';
 import { applyHolidays, loadHolidays } from '@/lib/holidays';
 import { logAudit } from '@/lib/audit';
 
@@ -94,6 +95,17 @@ export const PATCH = handle(async (req) => {
  * and by the preview, so what an administrator sees before turning it on is
  * exactly what would go out.
  */
+// The reminder window a site carries from the master (`Reminders` tab): outside
+// it, nobody there is nagged. A site with no window configured is always in -
+// the legacy skipped those, and an empty cell in a spreadsheet is too quiet a
+// way to switch off a site whose meals stop after three missed days.
+function withinReminderWindow(site, today) {
+  const start = site.reminderStart ? dateToYmd(site.reminderStart) : '';
+  const end = site.reminderEnd ? dateToYmd(site.reminderEnd) : '';
+  if (!start || !end) return true;
+  return today >= start && today <= end;
+}
+
 async function overdueRecipients(settings) {
   const today = todayYmd();
   const from = new Date(`${today}T00:00:00Z`);
@@ -103,7 +115,9 @@ async function overdueRecipients(settings) {
   const [days, counts, holidays, users] = await Promise.all([
     prisma.serviceDay.findMany({
       where: { date: { gte: from, lt: new Date(`${today}T00:00:00Z`) }, site: { active: true } },
-      include: { site: { select: { id: true, name: true } } },
+      include: {
+        site: { select: { id: true, name: true, reminderStart: true, reminderEnd: true } },
+      },
     }),
     prisma.mealCount.findMany({
       where: { date: { gte: from }, voidedAt: null },
@@ -122,6 +136,7 @@ async function overdueRecipients(settings) {
   for (const day of days) {
     const ymd = dateToYmd(day.date);
     if (filed.has(`${day.siteId}|${ymd}`)) continue;
+    if (!withinReminderWindow(day.site, today)) continue;
     const { meals } = applyHolidays(
       { brk: day.brk, lunch: day.lunch, snk: day.snk, sup: day.sup },
       holidays,
@@ -163,6 +178,15 @@ export const POST = handle(async (req) => {
   const settings = await readSettings();
   if (!preview && !settings.enabled) return legacyJson({ result: 'success', skipped: 'disabled' });
 
+  // The scheduler is expected to call every hour; which of those hours actually
+  // sends is the administrator's setting, enforced here. That keeps the choice
+  // in the screen instead of in a cron expression, and resolving the hour in
+  // APP_TIMEZONE means daylight saving never moves the reminder.
+  const forced = url.searchParams.get('force') === '1';
+  if (!preview && !forced && localHour() !== settings.hour) {
+    return legacyJson({ result: 'success', skipped: 'not the hour', hour: settings.hour });
+  }
+
   const { since, overdue, messages } = await overdueRecipients(settings);
 
   if (preview) {
@@ -181,6 +205,7 @@ export const POST = handle(async (req) => {
   if (!mailConfigured()) throw new ApiError(503, 'Email sending is not configured.');
 
   let sent = 0;
+  const failures = [];
   for (const message of messages) {
     const base = appBaseUrl(req);
     const body = countOverdue({
@@ -196,8 +221,18 @@ export const POST = handle(async (req) => {
       await sendMail({ to: [message.to], cc: settings.copyTo, ...body });
       sent += 1;
     } catch (error) {
-      console.warn(`[reminders] ${message.to}: ${error.message}`);
+      failures.push(`${message.to}: ${error.message}`);
     }
+  }
+
+  // A reminder that did not go out is the failure nobody notices, and three
+  // missed days pause a site's meal delivery.
+  if (failures.length) {
+    await notifyFailure({
+      area: 'Overdue reminders',
+      error: new Error(`${failures.length} of ${messages.length} messages could not be sent`),
+      context: { since, overdue: overdue.length, sent, first: failures[0] },
+    });
   }
 
   await logAudit({
@@ -205,8 +240,8 @@ export const POST = handle(async (req) => {
     action: 'reminders.run',
     entity: 'setting',
     entityId: SETTINGS_KEY,
-    payload: { overdue: overdue.length, sent },
+    payload: { overdue: overdue.length, sent, failed: failures.length },
   });
 
-  return legacyJson({ result: 'success', overdue: overdue.length, sent });
+  return legacyJson({ result: 'success', overdue: overdue.length, sent, failed: failures.length });
 });

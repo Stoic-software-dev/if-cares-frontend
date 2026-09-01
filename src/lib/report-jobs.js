@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { notifyFailure } from '@/lib/alerts';
 
 // A consolidated claim reads every count of a month across every site and then
 // renders a PDF. That is a minute or more of work, which is longer than any
@@ -54,6 +55,7 @@ export function startJob({ kind, label, work }) {
       job.finishedAt = Date.now();
     })
     .catch((error) => {
+      notifyFailure({ area: 'Report job', error, context: { job: job.id, label: job.label ?? '' } });
       job.status = 'error';
       job.error = error?.message || 'The report could not be built.';
       job.finishedAt = Date.now();

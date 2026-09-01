@@ -129,6 +129,12 @@ function drawTable(ctx, { columns, rows, startY, totalsRow }) {
   return y;
 }
 
+// The claim is filed by the foundation, and the state reads that number first.
+// The legacy template printed it as "Intrinsic Foundation <id>".
+function foundationLine(data) {
+  return data.foundationId ? `Intrinsic Foundation ${data.foundationId} - ` : '';
+}
+
 function drawHeading(ctx, { title, subtitle }) {
   const { page, bold, font, size } = ctx;
   let y = size.height - MARGIN;
@@ -268,7 +274,7 @@ export async function buildConsolidatedSitesPdf(data, options = {}) {
 
   let y = drawHeading(ctx, {
     title: 'Documentation of meals claimed, by site',
-    subtitle: `${data.state}, ${data.period}${
+    subtitle: `${foundationLine(data)}${data.state}, ${data.period}${
       data.excluded?.length ? `, ${data.excluded.length} sites excluded` : ''
     }`,
   });
@@ -299,7 +305,7 @@ export async function buildConsolidatedDaysPdf(data, options = {}) {
 
   let y = drawHeading(ctx, {
     title: 'Documentation of meals claimed, by day',
-    subtitle: `${data.state}, ${data.period}`,
+    subtitle: `${foundationLine(data)}${data.state}, ${data.period}`,
   });
 
   const columns = [

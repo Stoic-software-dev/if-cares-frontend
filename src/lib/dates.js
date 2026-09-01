@@ -44,6 +44,19 @@ export function todayYmd(tz = APP_TZ()) {
 
 // "h:mm:ss AM/PM" | "h:mm AM/PM" | "HH:MM:SS" | ISO datetime -> canonical
 // zero-padded 24h "HH:MM:SS" (the frontend extracts times with /\d{2}:\d{2}:\d{2}/).
+// The hour it is right now where the program runs. The reminder schedule is an
+// administrator setting, so the comparison has to happen in program time, which
+// also means daylight saving is handled here instead of drifting an hour twice
+// a year in a cron expression written in UTC.
+export function localHour(tz = APP_TZ()) {
+  const hour = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    hour12: false,
+  }).format(new Date());
+  return Number(hour) % 24;
+}
+
 export function toCanonicalTime(value) {
   if (!value) return '';
   const s = String(value).trim();

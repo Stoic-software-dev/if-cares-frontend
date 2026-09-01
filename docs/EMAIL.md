@@ -61,12 +61,25 @@ fijas. Nada de eso requiere deploy.
 - **Preview** corre exactamente la misma búsqueda que el envío y muestra a cuánta
   gente se le escribiría, sin mandar nada.
 
-El horario lo hace cumplir el scheduler de la infraestructura, no la app. En
-Railway se configura un cron que haga:
+El scheduler llama **cada hora** y la ruta decide: si la hora local en
+`APP_TIMEZONE` no es la configurada, contesta `skipped: "not the hour"` y no manda
+nada. Así el horario se cambia desde la pantalla y no desde la infraestructura, y
+el cambio de horario de verano no corre el recordatorio una hora.
+
+En Railway va un **servicio aparte** (imagen `curlimages/curl`) con schedule
+`0 * * * *`:
 
 ```
 curl -X POST "$APP_URL/api/reminders" -H "x-reminders-secret: $REMINDERS_SECRET"
 ```
+
+Para probar fuera de hora, `?force=1` saltea la comparación.
+
+Cada sitio además trae del master su **ventana de recordatorio**
+(`reminderStart` / `reminderEnd`): fuera de esa ventana no se le escribe a nadie
+de ese sitio. Un sitio sin ventana cargada entra siempre — el legacy lo salteaba,
+y una celda vacía en una planilla es una forma demasiado silenciosa de apagarle
+los avisos a un sitio.
 
 ## Límites
 

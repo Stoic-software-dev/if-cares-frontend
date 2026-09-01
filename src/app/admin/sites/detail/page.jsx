@@ -251,7 +251,11 @@ function SiteDetailScreen() {
       if (renamed) {
         window.location.replace(`/admin/sites/detail?site=${encodeURIComponent(draft.name.trim())}`);
       } else {
+        // Both, not just one: `record` feeds the edit dialog, `info` paints the
+        // Program details panel. Refreshing only the first left the admin looking
+        // at the old values right after a save that did work.
         loadRecord();
+        load();
       }
     } catch (err) {
       toast.error(err.message);

@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/db';
 import { handle, legacyJson } from '@/lib/http';
 import { requireUser, visibleSites } from '@/lib/auth';
-import { dateToYmd } from '@/lib/dates';
-import { applyHolidays, loadHolidays } from '@/lib/holidays';
+import { dateToYmd, datesBetween } from '@/lib/dates';
+import { applyHolidays, holidayNameFor, loadHolidays } from '@/lib/holidays';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +68,23 @@ export const GET = handle(async () => {
     }
     result[site.name].validDates[ymd] = meals;
     if (holiday) result[site.name].holidays[ymd] = holiday;
+  }
+
+  // A holiday covers the dates it says it covers, whether or not the site ever
+  // had a service day there. Reading only the ServiceDay rows meant a holiday
+  // over a weekend, or over a month whose calendar has not been generated yet,
+  // simply never appeared - while the holiday's own screen said it did.
+  for (const site of sites) {
+    for (const holiday of holidays) {
+      for (const ymd of datesBetween(holiday.startDate, holiday.endDate)) {
+        if (!holidayNameFor([holiday], site.id, ymd)) continue;
+        // A day that still serves something, or that already carries a count, is
+        // not the holiday's to label.
+        if (result[site.name].validDates[ymd]) continue;
+        if (countedBySite.get(site.id)?.has(ymd)) continue;
+        result[site.name].holidays[ymd] ??= holiday.name;
+      }
+    }
   }
 
   for (const [siteId, ymds] of countedBySite) {

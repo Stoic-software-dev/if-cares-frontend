@@ -5,6 +5,7 @@ import { requestStatusSchema } from '@/lib/validation';
 import { mailConfigured, sendMail } from '@/lib/gmail';
 import { requestAnswered } from '@/lib/mail-templates';
 import { requestDetailText } from '@/lib/requests-text';
+import { notifyFailure } from '@/lib/alerts';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -54,8 +55,14 @@ export const PATCH = handle(async (req, { params }) => {
       comment: responseComment,
       resolvedBy: session.user.email ?? '',
     });
-    sendMail({ to: [existing.requestedByEmail], ...message }).catch((error) => {
-      console.warn(`[mail] request answer to ${existing.requestedByEmail}: ${error.message}`);
+    // Awaited, and its failure reported: an answer the site never receives looks
+    // exactly like one that arrived, and the screen said "answered" either way.
+    await sendMail({ to: [existing.requestedByEmail], ...message }).catch((error) => {
+      notifyFailure({
+        area: 'Request answer email',
+        error,
+        context: { request: existing.id, to: existing.requestedByEmail, site: existing.site ?? '' },
+      });
     });
   }
 

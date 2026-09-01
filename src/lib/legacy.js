@@ -19,6 +19,11 @@ export function toLegacyAssignedSite(user) {
 // The exact user object the UI stores in localStorage['user'].
 export function toLegacyUser(user, expiresAt) {
   return {
+    // Additive to the legacy shape. Without it the screens cannot tell which row
+    // is the signed-in account: /admin/users compared `user.id` against a
+    // session object that never had one, so every admin was offered a
+    // "Deactivate" button on their own row that the server then refused.
+    id: user.id,
     name: user.name,
     lastname: user.lastname,
     email: user.email,
@@ -45,5 +50,10 @@ export function toLegacySiteListItem(site) {
   return {
     name: site.name,
     spreadsheetId: site.legacySpreadsheetId ?? site.id,
+    // Additive: legacy callers ignore it. `state` is the column the backend
+    // filters claims by, and the screens used to guess it from the name - which
+    // is how a consolidated claim came to promise one set of sites and print
+    // another.
+    state: site.state ?? '',
   };
 }

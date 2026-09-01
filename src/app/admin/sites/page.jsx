@@ -26,7 +26,7 @@ import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiPost } from '@/lib/api-client';
 import { ALL_MEALS_PATH, SITES_PATH, invalidate, useCachedGet } from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
-import { shortSiteName, siteInitials, siteState, sortSiteNames } from '@/lib/sites';
+import { shortSiteName, siteInitials, stateOf, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 // Per-site health for the current month, read from the same source the
@@ -67,6 +67,13 @@ function AdminSitesScreen() {
     () => (siteList.data ? sortSiteNames(siteList.data.map((site) => site.name)) : null),
     [siteList.data]
   );
+  // State comes from `Site.state`, not from the name prefix: a site created
+  // after the migration has no prefix and would otherwise show no state and
+  // disappear from the state filter.
+  const stateByName = useMemo(
+    () => new Map((siteList.data ?? []).map((site) => [site.name, stateOf(site)])),
+    [siteList.data]
+  );
   const allMeals = mealList.data;
   const error = siteList.error || mealList.error;
 
@@ -79,13 +86,13 @@ function AdminSitesScreen() {
     if (!sites) return [];
     const q = query.trim().toLowerCase();
     const mapped = sites
-      .filter((name) => (stateFilter === 'ALL' ? true : siteState(name) === stateFilter))
+      .filter((name) => (stateFilter === 'ALL' ? true : stateByName.get(name) === stateFilter))
       .filter((name) => (q ? name.toLowerCase().includes(q) : true))
       .map((name) => ({ name, stats: monthStats(allMeals?.[name], monthPrefix, today) }));
 
     if (sort === 'missing') mapped.sort((a, b) => b.stats.missing - a.stats.missing);
     return mapped;
-  }, [sites, allMeals, query, stateFilter, sort, monthPrefix, today]);
+  }, [sites, allMeals, query, stateFilter, sort, monthPrefix, today, stateByName]);
 
   const totals = useMemo(
     () =>
@@ -112,7 +119,10 @@ function AdminSitesScreen() {
     [rows, current]
   );
 
-  const states = useMemo(() => [...new Set((sites ?? []).map(siteState).filter(Boolean))].sort(), [sites]);
+  const states = useMemo(
+    () => [...new Set([...stateByName.values()].filter(Boolean))].sort(),
+    [stateByName]
+  );
 
   const createSite = async () => {
     if (draft.name.trim().length < 3) {
@@ -250,9 +260,9 @@ function AdminSitesScreen() {
                     <span className="truncate text-[14px] font-semibold text-foreground">
                       {shortSiteName(row.name)}
                     </span>
-                    {siteState(row.name) && (
+                    {stateByName.get(row.name) && (
                       <Badge size="sm" variant="neutral">
-                        {siteState(row.name)}
+                        {stateByName.get(row.name)}
                       </Badge>
                     )}
                   </span>

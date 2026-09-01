@@ -14,7 +14,24 @@ export function isYmd(value) {
 export function ymdToUtcDate(ymd) {
   if (!isYmd(ymd)) return null;
   const date = new Date(`${ymd}T00:00:00.000Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  // V8 rolls a day that does not exist in its month FORWARD instead of
+  // rejecting it: '2026-02-30' quietly becomes March 2, and every route that
+  // takes a date would then act on a day nobody asked for. A date that does not
+  // survive the round trip is not the date that was requested.
+  return dateToYmd(date) === ymd ? date : null;
+}
+
+/** Every calendar date from `from` to `to`, inclusive. Both are 'YYYY-MM-DD'. */
+export function datesBetween(from, to) {
+  const start = ymdToUtcDate(from);
+  const end = ymdToUtcDate(to);
+  if (!start || !end || start > end) return [];
+  const out = [];
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    out.push(dateToYmd(cursor));
+  }
+  return out;
 }
 
 export function dateToYmd(date) {

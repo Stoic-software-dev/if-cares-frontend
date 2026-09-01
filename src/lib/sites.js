@@ -14,6 +14,19 @@ export function siteState(name = '') {
   return match?.[2]?.toUpperCase() ?? '';
 }
 
+/**
+ * The state a site belongs to. `Site.state` is the real column and the only
+ * thing the backend filters claims by; the name prefix is a fallback for the
+ * cosmetic badges, where a site imported before the column existed should still
+ * show something. Anything that has to AGREE with the backend - a claim, a
+ * filter that feeds one - must read the column and never the name.
+ */
+export function stateOf(site) {
+  if (typeof site === 'string') return siteState(site);
+  const column = (site?.state ?? '').trim().toUpperCase();
+  return column || siteState(site?.name ?? '');
+}
+
 export function siteYear(name = '') {
   const match = name.match(PREFIX);
   return match?.[1] ?? '';

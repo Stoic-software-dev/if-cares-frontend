@@ -50,11 +50,17 @@ export function startJob({ kind, label, work }) {
   Promise.resolve()
     .then(() => work(report))
     .then((result) => {
+      // A cancelled job stays cancelled. `work()` cannot be interrupted, so it
+      // may well finish after the cancel - but its result must not resurrect the
+      // job, or the screen says "cancelled" while the document lands in Drive
+      // and in the claims list anyway.
+      if (job.status === 'cancelled') return;
       job.status = 'completed';
       job.result = result ?? null;
       job.finishedAt = Date.now();
     })
     .catch((error) => {
+      if (job.status === 'cancelled') return;
       notifyFailure({ area: 'Report job', error, context: { job: job.id, label: job.label ?? '' } });
       job.status = 'error';
       job.error = error?.message || 'The report could not be built.';
@@ -89,13 +95,20 @@ export function listJobs() {
 
 export function cancelJob(id) {
   const job = jobs.get(id);
-  // The work itself cannot be interrupted, but a cancelled job stops being
-  // waited on and stops occupying the screen.
+  // The work itself cannot be interrupted - it is a promise already in flight -
+  // so cancelling is a decision about its RESULT: `cancelled` is a terminal
+  // status that the completion handler refuses to overwrite. Whatever the job
+  // was building is abandoned rather than saved.
   if (job && job.status === 'processing') {
-    job.status = 'error';
+    job.status = 'cancelled';
     job.error = 'Cancelled.';
     job.finishedAt = Date.now();
     return true;
   }
   return false;
+}
+
+/** Whether a job has been cancelled, so long work can bail out early. */
+export function isCancelled(id) {
+  return jobs.get(id)?.status === 'cancelled';
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Copy, Download, FileSignature, Layers, Loader2, Send, X } from 'lucide-react';
+import { Ban, CheckCircle2, Copy, Download, FileSignature, Layers, Loader2, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -24,9 +24,9 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { apiGet, apiPost } from '@/lib/api-client';
+import { apiDelete, apiGet, apiPost } from '@/lib/api-client';
 import { SITES_PATH, useCachedGet } from '@/lib/data-cache';
-import { shortSiteName, siteState, sortSiteNames } from '@/lib/sites';
+import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const MONTHS = [
@@ -67,19 +67,32 @@ function ConsolidatedScreen() {
   const pollRef = useRef(null);
 
   const siteList = useCachedGet(SITES_PATH);
-  const allSites = useMemo(
-    () => (siteList.data ? sortSiteNames(siteList.data.map((entry) => entry.name)) : []),
-    [siteList.data]
-  );
+  const siteRows = useMemo(() => siteList.data ?? [], [siteList.data]);
+
+  // Which sites a claim covers is decided by `Site.state`, the same column the
+  // backend filters by. This screen used to derive it from the site NAME, so a
+  // TX claim showed 24 sites and the PDF printed 35: sites the admin ticked went
+  // missing and sites the admin never saw were claimed anyway.
+  const allSites = useMemo(() => sortSiteNames(siteRows.map((row) => row.name)), [siteRows]);
   const states = useMemo(
-    () => [...new Set(allSites.map(siteState).filter(Boolean))].sort(),
-    [allSites]
+    () => [...new Set(siteRows.map((row) => (row.state ?? '').trim().toUpperCase()).filter(Boolean))].sort(),
+    [siteRows]
   );
 
   const inScope = useMemo(
-    () => (state ? allSites.filter((name) => siteState(name) === state) : allSites),
-    [allSites, state]
+    () =>
+      sortSiteNames(
+        siteRows
+          .filter((row) => (state ? (row.state ?? '').trim().toUpperCase() === state : true))
+          .map((row) => row.name)
+      ),
+    [siteRows, state]
   );
+
+  // A site with no state is in no state's claim - not here and not in the
+  // backend. Saying so is the difference between a number the admin can trust
+  // and one they have to reconcile by hand later.
+  const stateless = useMemo(() => siteRows.filter((row) => !(row.state ?? '').trim()).length, [siteRows]);
   const included = inScope.filter((name) => !excluded.includes(name));
 
   const loadReports = useCallback(() => {
@@ -160,6 +173,21 @@ function ConsolidatedScreen() {
     }
   };
 
+  const revokeSignLink = async (report) => {
+    setBusyId(report.id);
+    try {
+      await apiDelete(`/api/reports/generated/${report.id}`);
+      toast.success('Signing link revoked', {
+        description: 'The link stops opening. Nothing already signed is undone.',
+      });
+      loadReports();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const send = async () => {
     setSendBusy(true);
     try {
@@ -229,7 +257,17 @@ function ConsolidatedScreen() {
               </Field>
             </div>
 
-            <Field label="State" htmlFor="claim-state" hint="A claim is filed per state.">
+            <Field
+              label="State"
+              htmlFor="claim-state"
+              hint={
+                stateless
+                  ? `A claim is filed per state. ${stateless} ${
+                      stateless === 1 ? 'site has' : 'sites have'
+                    } no state on file and can only be claimed under Every state.`
+                  : 'A claim is filed per state.'
+              }
+            >
               <NativeSelect
                 id="claim-state"
                 value={state}
@@ -414,6 +452,17 @@ function ConsolidatedScreen() {
                       >
                         {busyId !== report.id && (report.hasSignLink ? <Copy /> : <FileSignature />)}
                         {report.hasSignLink ? 'New link' : 'Signing link'}
+                      </Button>
+                    )}
+                    {report.hasSignLink && !report.signedAt && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={busyId === report.id}
+                        onClick={() => revokeSignLink(report)}
+                      >
+                        {busyId !== report.id && <Ban />}
+                        Revoke link
                       </Button>
                     )}
                   </div>

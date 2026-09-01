@@ -4,6 +4,7 @@ import { appBaseUrl, handle, readJsonBody, legacySuccess } from '@/lib/http';
 import { forgotPasswordSchema } from '@/lib/validation';
 import { mailConfigured, sendMail } from '@/lib/gmail';
 import { passwordReset } from '@/lib/mail-templates';
+import { notifyFailure } from '@/lib/alerts';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -32,8 +33,13 @@ export const POST = handle(async (req) => {
       const base = appBaseUrl(req);
       const link = `${base}/reset-password?token=${token}`;
       const message = passwordReset({ name: user.name, link });
+      // Deliberately NOT awaited, for the reason above: awaiting a mail send
+      // here would put its whole latency on the "this address exists" branch and
+      // turn a ~50ms timing difference into a plainly measurable one. The
+      // failure still reaches the team through the alert instead of a log line
+      // nobody reads.
       sendMail({ to: [user.email], ...message }).catch((error) => {
-        console.warn(`[mail] password reset to ${user.email}: ${error.message}`);
+        notifyFailure({ area: 'Password reset email', error, context: { to: user.email } });
       });
     }
 

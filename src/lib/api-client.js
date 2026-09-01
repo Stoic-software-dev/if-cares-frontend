@@ -45,6 +45,11 @@ export async function apiPut(path, body) {
   return parse(res);
 }
 
+export async function apiDelete(path) {
+  const res = await fetch(path, { method: 'DELETE' });
+  return parse(res);
+}
+
 export async function apiPatch(path, body) {
   const res = await fetch(path, {
     method: 'PATCH',

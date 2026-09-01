@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import BrandMark from '@/components/shell/BrandMark';
 import { cn } from '@/lib/utils';
+import { isSigned } from '@/lib/signature';
 
 // The one screen in the app that anyone can open. Whoever signs a consolidated
 // claim is an authorized representative of the sponsor, not a user of the
@@ -56,7 +57,9 @@ function SignScreen() {
   }, [claim]);
 
   const submit = async () => {
-    const signature = hasInk && !padRef.current?.isEmpty() ? padRef.current.toDataURL('image/png') : '';
+    // A dot is not a signature here either - this is the document that gets
+    // filed with the state.
+    const signature = isSigned(padRef.current) ? padRef.current.toDataURL('image/png') : '';
     if (!signature || name.trim().length < 2) {
       setAttempted(true);
       return;
@@ -124,7 +127,7 @@ function SignScreen() {
   }
 
   const nameError = attempted && name.trim().length < 2 ? 'Type the name of whoever is signing.' : undefined;
-  const inkError = attempted && !hasInk ? 'Sign inside the box.' : undefined;
+  const inkError = attempted && !hasInk ? 'Sign inside the box - a single dot is not a signature.' : undefined;
 
   return (
     <Shell wide>
@@ -218,7 +221,7 @@ function SignScreen() {
               <SignatureCanvas
                 ref={padRef}
                 penColor="#0f172a"
-                onEnd={() => setHasInk(true)}
+                onEnd={() => setHasInk(isSigned(padRef.current))}
                 canvasProps={{ width, height: 160, className: 'block touch-none' }}
               />
             </div>

@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Check, Eraser, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isSigned } from '@/lib/signature';
 
-// A tap leaves a dot, and a dot is not a signature: ink only counts once the
-// stroke has real length, which is what the paper form means by signing.
-const MIN_STROKE_LENGTH = 30;
+// The rule lives in @/lib/signature so the public claim-signing page enforces
+// exactly the same thing this screen does.
 
 export function SignatureField({ onChange, invalid, className }) {
   const padRef = useRef(null);
@@ -25,13 +25,7 @@ export function SignatureField({ onChange, invalid, className }) {
   }, []);
 
   const evaluate = () => {
-    const length = padRef.current.toData().reduce((total, stroke) => {
-      for (let i = 1; i < stroke.length; i++) {
-        total += Math.hypot(stroke[i].x - stroke[i - 1].x, stroke[i].y - stroke[i - 1].y);
-      }
-      return total;
-    }, 0);
-    const valid = length >= MIN_STROKE_LENGTH;
+    const valid = isSigned(padRef.current);
     setSigned(valid);
     onChange(valid ? () => padRef.current.toDataURL('image/png') : null);
   };

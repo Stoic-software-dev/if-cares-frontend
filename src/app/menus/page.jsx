@@ -1,13 +1,14 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Download, Eye, FileText, Upload, UtensilsCrossed } from 'lucide-react';
+import { Download, Eye, FileText, RefreshCw, Trash2, Upload, UtensilsCrossed } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { apiUpload } from '@/lib/api-client';
+import { apiDelete, apiGet, apiUpload } from '@/lib/api-client';
 import { MENUS_PATH, useCachedGet } from '@/lib/data-cache';
 import { cn } from '@/lib/utils';
 
@@ -174,6 +175,8 @@ function MenusScreen() {
   const { user } = useAuth();
   const admin = isAdmin(user);
   const [publishing, setPublishing] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
 
   // The listing is a Drive call, so it is cached for the session: coming back
@@ -184,6 +187,25 @@ function MenusScreen() {
     if (data === undefined) return null;
     return Array.isArray(data) ? data : [];
   }, [data]);
+
+  // The server caches the Drive listing for ten minutes, so a menu removed
+  // straight from Drive keeps showing up here. Busting that first is what makes
+  // a refresh mean something.
+  const hardRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await apiGet(`${MENUS_PATH}?refresh=1`).catch(() => {});
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const remove = async () => {
+    await apiDelete(`${MENUS_PATH}?fileId=${encodeURIComponent(fileId(removing))}`);
+    toast.success(`${titleOf(removing)} removed`);
+    await load();
+  };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -213,10 +235,22 @@ function MenusScreen() {
                 />
               )}
               {admin && (
-                <Button onClick={() => setPublishing(true)} className="shrink-0">
-                  <Upload />
-                  Publish menu
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={hardRefresh}
+                    loading={refreshing}
+                    className="shrink-0"
+                    title="Re-read the Drive folder now"
+                  >
+                    {!refreshing && <RefreshCw />}
+                    Refresh
+                  </Button>
+                  <Button onClick={() => setPublishing(true)} className="shrink-0">
+                    <Upload />
+                    Publish menu
+                  </Button>
+                </>
               )}
             </div>
           }
@@ -281,6 +315,21 @@ function MenusScreen() {
                     <span className="absolute right-3 top-3 rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted-foreground">
                       {extensionOf(file)}
                     </span>
+                    {admin && (
+                      <button
+                        type="button"
+                        onClick={() => setRemoving(file)}
+                        aria-label={`Remove ${titleOf(file)}`}
+                        className={cn(
+                          'absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border border-border',
+                          'bg-card text-muted-foreground opacity-0 transition-[opacity,color,border-color] duration-fast',
+                          'hover:border-destructive-text hover:text-destructive-text focus-visible:opacity-100',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100'
+                        )}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <div
                       aria-hidden="true"
                       className="flex h-24 w-[74px] translate-y-2 flex-col gap-1.5 rounded-t-sm border border-b-0 border-border bg-card p-2.5 shadow-e1 transition-transform duration-slow ease-out group-hover:-translate-y-0.5"
@@ -320,6 +369,16 @@ function MenusScreen() {
       </div>
 
       <PublishDialog open={publishing} onClose={() => setPublishing(false)} onPublished={load} />
+
+      <ConfirmDialog
+        open={Boolean(removing)}
+        onOpenChange={(open) => !open && setRemoving(null)}
+        title={`Remove ${removing ? titleOf(removing) : ''}?`}
+        description="It stops being listed here for everyone."
+        consequences={['The file goes to the Drive trash, where it can be restored for 30 days.']}
+        confirmLabel="Remove"
+        onConfirm={remove}
+      />
     </AppShell>
   );
 }

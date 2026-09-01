@@ -5,6 +5,7 @@ import {
   driveConfigured,
   menusFolderId,
   uploadFile,
+  trashFile,
   DriveError,
 } from '@/lib/google-drive';
 import { logAudit } from '@/lib/audit';
@@ -47,10 +48,14 @@ async function listFromGas() {
   throw lastError;
 }
 
-export const GET = handle(async () => {
+export const GET = handle(async (req) => {
   await requireUser();
 
-  if (cache.files && Date.now() - cache.at < TTL_MS) return legacyJson(cache.files);
+  // A menu removed straight from Drive is invisible to this cache, so the
+  // listing keeps showing it for up to the whole TTL and looks broken.
+  // `?refresh=1` is the way out for anyone who just changed the folder by hand.
+  const forced = new URL(req.url).searchParams.get('refresh') === '1';
+  if (!forced && cache.files && Date.now() - cache.at < TTL_MS) return legacyJson(cache.files);
 
   try {
     const files = driveConfigured() ? await listMenus() : await listFromGas();
@@ -118,4 +123,34 @@ export const POST = handle(async (req) => {
     result: 'success',
     data: { id: uploaded.id, name: uploaded.name, mimeType: uploaded.mimeType },
   });
+});
+
+// Unpublishing. Scoped to the menus folder, so this cannot be pointed at
+// anything else the service account can reach, and it trashes rather than
+// deletes: the wrong menu removed on a Friday is recoverable.
+export const DELETE = handle(async (req) => {
+  const session = await requireAdmin();
+  if (!driveConfigured()) throw new ApiError(503, 'The Drive service account is not configured.');
+
+  const fileId = new URL(req.url).searchParams.get('fileId');
+  if (!fileId) throw new ApiError(400, 'Missing fileId parameter.');
+
+  let trashed;
+  try {
+    trashed = await trashFile(fileId, { folderId: menusFolderId() });
+  } catch (error) {
+    if (error instanceof DriveError) throw new ApiError(502, error.message);
+    throw error;
+  }
+
+  cache = { at: 0, files: null };
+  await logAudit({
+    actor: session.user,
+    action: 'menu.unpublish',
+    entity: 'menu',
+    entityId: fileId,
+    payload: { name: trashed.name },
+  });
+
+  return legacyJson({ result: 'success', data: { id: fileId, name: trashed.name } });
 });

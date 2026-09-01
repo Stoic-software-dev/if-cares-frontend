@@ -276,6 +276,28 @@ export async function downloadFile(fileId, { folderId = '' } = {}) {
   return { body: res.body, name: meta.name, mimeType: meta.mimeType || 'application/pdf' };
 }
 
+/**
+ * Moves a file to the Drive trash. Deliberately not a real delete: a menu
+ * removed by mistake is recoverable from the trash for thirty days, and the
+ * only thing the app needs is for it to stop being listed.
+ *
+ * `folderId` scopes it the way `downloadFile` is scoped: without it the
+ * endpoint would let a caller trash any file the account can reach.
+ */
+export async function trashFile(fileId, { folderId = '' } = {}) {
+  const meta = await getMetadata(fileId);
+  if (folderId && !(meta.parents ?? []).includes(folderId)) {
+    throw new DriveError('That file is not available here.');
+  }
+  await request(`${DRIVE_FILES}/${encodeURIComponent(fileId)}`, {
+    method: 'PATCH',
+    search: { supportsAllDrives: 'true' },
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
+  return { id: fileId, name: meta.name };
+}
+
 // Folder ids are stable, so looking the same one up on every write is waste.
 const folderCache = new Map();
 

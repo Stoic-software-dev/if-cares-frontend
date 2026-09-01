@@ -17,9 +17,11 @@ export const GET = handle(async () => {
   return legacyJson({ result: 'success', data: users.map(toUserRow) });
 });
 
+// Bounded on purpose: a 10,000 character name is not a name, it just breaks
+// every table it lands in.
 const createUserSchema = z.object({
-  name: z.string().trim().min(1),
-  lastname: z.string().trim().min(1),
+  name: z.string().trim().min(1, 'Type a first name.').max(80),
+  lastname: z.string().trim().min(1, 'Type a last name.').max(80),
   email: z.string().trim().toLowerCase().email(),
   role: z.enum(['ADMIN', 'USER']),
   allSites: z.boolean().default(false),

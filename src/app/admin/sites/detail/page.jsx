@@ -80,7 +80,10 @@ function StudentDialog({ open, mode, initial, site, onClose, onSaved }) {
   }, [open, initial]);
 
   const nameValid = name.trim().length > 1;
-  const ageValid = age === '' || (Number(age) >= 0 && Number(age) <= 120);
+  // Age is not optional in practice: the API needs an age or a birthdate, and
+  // this dialog never collects a birthdate. Saying "Optional" and then refusing
+  // to save was the worst of both.
+  const ageValid = age !== '' && Number(age) >= 0 && Number(age) <= 120;
 
   const save = async () => {
     if (!nameValid || !ageValid) {
@@ -138,7 +141,7 @@ function StudentDialog({ open, mode, initial, site, onClose, onSaved }) {
         <Field
           label="Age"
           htmlFor="student-age"
-          hint="Optional."
+          hint="Used to group the roster by age."
           error={attempted && !ageValid ? 'Use an age between 0 and 120.' : undefined}
         >
           <Input
@@ -206,6 +209,7 @@ function SiteDetailScreen() {
   const [attempted, setAttempted] = useState(false);
   const [savingSite, setSavingSite] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const loadRecord = useCallback(() => {
@@ -374,7 +378,7 @@ function SiteDetailScreen() {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       destructive={record.active}
-                      onClick={() => setActive(!record.active)}
+                      onClick={() => (record.active ? setConfirmDeactivate(true) : setActive(true))}
                       disabled={deactivating}
                     >
                       <Power />
@@ -447,7 +451,7 @@ function SiteDetailScreen() {
               </div>
 
               <p className="text-[12px] leading-relaxed text-muted-foreground">
-                Site contact details and the alta of new sites arrive with the sites module (SPECS.md 11.2).
+                Contact details for the site - address, phone, supervisor - are not stored yet: IF Cares has to confirm whether the paper form carries them.
                 Everything on this screen reads from the live database.
               </p>
             </TabsContent>
@@ -515,7 +519,7 @@ function SiteDetailScreen() {
                       title={roster.length === 0 ? 'The roster is empty' : 'No student matches'}
                       description={
                         roster.length === 0
-                          ? 'Add students one by one, or import the roster when the sites module ships.'
+                          ? 'Add students one by one with the button above.'
                           : `Nothing matches “${query.trim()}”.`
                       }
                       action={
@@ -573,13 +577,27 @@ function SiteDetailScreen() {
       </Dialog>
 
       <ConfirmDialog
+        open={confirmDeactivate}
+        onOpenChange={setConfirmDeactivate}
+        title={`Deactivate ${shortSiteName(site)}?`}
+        description="The site stops being part of the program: it leaves the dashboard, the calendars and every claim."
+        consequences={[
+          'Nothing is deleted. The roster, the calendar and every count filed stay exactly as they are.',
+          'It comes back from this same screen, or from Show deactivated on the sites list.',
+        ]}
+        confirmLabel="Deactivate site"
+        onConfirm={() => setActive(false)}
+      />
+
+      <ConfirmDialog
         open={Boolean(removing)}
         onOpenChange={(open) => !open && setRemoving(null)}
         title={`Remove ${removing?.name ?? ''} from the roster?`}
-        description="The student stops appearing on new meal counts for this site."
+        description="This deletes the student. There is no undo, and no list of removed students to restore from."
         consequences={[
           'Counts already submitted keep this student exactly as they were filed.',
           'The roster renumbers itself alphabetically afterwards.',
+          'Adding them back later means typing them in again, as a new student.',
         ]}
         confirmLabel="Remove student"
         onConfirm={async () => {

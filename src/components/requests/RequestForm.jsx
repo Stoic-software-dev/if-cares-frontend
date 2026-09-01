@@ -26,7 +26,10 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
 
   const needsTime = type === TYPE_WITH_TIME;
   const needsAmount = type !== '' && !needsTime;
-  const valid = site !== '' && type !== '' && (needsTime ? time !== '' : amount !== '' && Number(amount) > 0);
+  // The API takes an integer. Letting 2.5 through the client only to have the
+  // server reject it with "Invalid input (amount)" helped nobody.
+  const amountValid = amount !== '' && Number.isInteger(Number(amount)) && Number(amount) > 0;
+  const valid = site !== '' && type !== '' && (needsTime ? time !== '' : amountValid);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -113,7 +116,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
           label="Amount"
           htmlFor="request-amount"
           hint="How many units the site needs."
-          error={attempted && (amount === '' || Number(amount) <= 0) ? 'Enter a number above zero.' : undefined}
+          error={attempted && !amountValid ? 'Enter a whole number above zero.' : undefined}
         >
           <Input
             id="request-amount"
@@ -123,7 +126,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             placeholder="10"
-            aria-invalid={attempted && (amount === '' || Number(amount) <= 0)}
+            aria-invalid={attempted && !amountValid}
             className="h-12"
           />
         </Field>

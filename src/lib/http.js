@@ -60,8 +60,13 @@ export function handle(fn) {
       }
       if (error instanceof ZodError) {
         const first = error.issues?.[0];
-        const where = first?.path?.length ? ` (${first.path.join('.')})` : '';
-        return legacyError(`${first?.message || 'Invalid input.'}${where}`, 422);
+        const field = first?.path?.length ? first.path.join('.') : '';
+        // The schema's own message is written for the person reading it. Only
+        // when there is none - a field left out entirely, where Zod has nothing
+        // to say - is the field name worth showing, and then it is the whole
+        // point of the message rather than a technical suffix on the end of one.
+        const message = first?.message && first.message !== 'Required' ? first.message : '';
+        return legacyError(message || (field ? `${field} is required.` : 'Invalid input.'), 422);
       }
       if (error?.code === 'P2002') {
         return legacyError('Duplicate entry.', 409);

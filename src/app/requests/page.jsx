@@ -143,10 +143,18 @@ function RequestsScreen() {
                         {requestDetail(request)}, {requestDate(request.createdAt)}
                         {sites.length > 1 && `, ${shortSiteName(request.site)}`}
                       </span>
-                      {/* The answer from the office, once responses are stored. */}
+                      {/* An answer with no name on it reads like the app talking. */}
                       {request.responseComment && (
-                        <span className="mt-1 rounded-sm bg-muted px-2.5 py-1.5 text-[12px] leading-relaxed text-foreground">
-                          {request.responseComment}
+                        <span className="mt-1 flex flex-col gap-1 rounded-sm bg-muted px-2.5 py-1.5">
+                          <span className="text-[12px] leading-relaxed text-foreground">
+                            {request.responseComment}
+                          </span>
+                          {request.respondedBy && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {request.respondedBy}
+                              {request.respondedAt ? `, ${requestDate(request.respondedAt)}` : ''}
+                            </span>
+                          )}
                         </span>
                       )}
                     </div>

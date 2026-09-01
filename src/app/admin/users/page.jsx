@@ -78,8 +78,11 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
   );
 
   const emailValid = /.+@.+\..+/.test(form.email.trim());
-  const sitesValid = form.allSites || form.role === 'ADMIN' || form.sites.length > 0;
-  const valid = form.name.trim() && form.lastname.trim() && emailValid && sitesValid;
+  // A staff account with no site assigned is valid and common - 47 of the real
+  // accounts are exactly that, and the API has never objected. Requiring one
+  // here meant an admin fixing a typo on any of them had to invent a site
+  // assignment just to be allowed to save.
+  const valid = form.name.trim() && form.lastname.trim() && emailValid;
 
   const save = async () => {
     if (!valid) {
@@ -198,13 +201,8 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
             <div className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] font-medium text-foreground">Sites</span>
-                <span
-                  className={cn(
-                    'text-[12px]',
-                    attempted && !sitesValid ? 'font-semibold text-destructive-text' : 'text-muted-foreground'
-                  )}
-                >
-                  {form.sites.length} selected
+                <span className="text-[12px] text-muted-foreground">
+                  {form.sites.length === 0 ? 'No site yet' : `${form.sites.length} selected`}
                 </span>
               </div>
 

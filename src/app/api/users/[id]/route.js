@@ -9,8 +9,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const updateUserSchema = z.object({
-  name: z.string().trim().min(1).optional(),
-  lastname: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1, 'Type a first name.').max(80).optional(),
+  lastname: z.string().trim().min(1, 'Type a last name.').max(80).optional(),
   email: z.string().trim().toLowerCase().email().optional(),
   role: z.enum(['ADMIN', 'USER']).optional(),
   allSites: z.boolean().optional(),

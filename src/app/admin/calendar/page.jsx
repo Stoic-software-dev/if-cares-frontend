@@ -70,6 +70,7 @@ function CalendarScreen() {
   // Holidays are read, never written into the calendar, so this screen has to
   // ask for them to be able to tell a holiday apart from a closed day.
   const [holidays, setHolidays] = useState({});
+  const [effective, setEffective] = useState({});
 
 
   useEffect(() => {
@@ -98,6 +99,10 @@ function CalendarScreen() {
         setDays(map);
         setLocked(new Set(allMeals?.[site]?.excludedDates ?? []));
         setHolidays(allMeals?.[site]?.holidays ?? {});
+        // What the day serves AFTER holidays are subtracted. This screen edits
+        // the raw calendar, so it keeps showing what is configured - but a day a
+        // holiday closes entirely must not read as a day that serves meals.
+        setEffective(allMeals?.[site]?.validDates ?? {});
         setDirty(false);
       })
       .catch((err) => setError(err.message));
@@ -131,10 +136,14 @@ function CalendarScreen() {
         meals: days?.get(ymd) ?? null,
         locked: locked.has(ymd),
         holiday: holidays[ymd] ?? '',
+        // A holiday covers the day and nothing is left open: the configured
+        // meals stay visible and editable, but muted, so the cell never claims
+        // the site serves that day.
+        closedByHoliday: Boolean(holidays[ymd]) && !effective[ymd],
       });
     }
     return cells;
-  }, [cursor, days, locked, holidays]);
+  }, [cursor, days, locked, holidays, effective]);
 
   const monthStats = useMemo(() => {
     const prefix = `${cursor.year}-${String(cursor.month).padStart(2, '0')}`;
@@ -398,7 +407,9 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
           aria-label={`${cell.ymd}, ${cell.holiday ? cell.holiday : open ? 'service day' : 'closed'}`}
           className={cn(
             'relative flex h-16 w-full flex-col rounded-md border p-1.5 text-left outline-none transition-colors md:h-[96px] md:p-2',
-            open ? 'border-primary-border bg-primary-soft' : 'border-border bg-card',
+            open && !cell.closedByHoliday
+              ? 'border-primary-border bg-primary-soft'
+              : 'border-border bg-card',
             isToday && 'ring-1 ring-primary',
             cell.locked ? 'cursor-default' : 'hover:border-primary focus-visible:ring-2 focus-visible:ring-ring'
           )}
@@ -425,14 +436,19 @@ function DayCell({ cell, isToday, onToggle, onMeals }) {
           )}
 
           {open && (
-            <span className="mt-auto flex flex-wrap gap-1">
+            <span className={cn('mt-auto flex flex-wrap gap-1', cell.closedByHoliday && 'opacity-50')}>
               {served.length === 0 ? (
                 <span className="text-[10px] font-semibold text-destructive-text">No meal</span>
               ) : (
                 served.map((meal) => (
                   <span
                     key={meal.key}
-                    className="rounded-xs bg-card/70 px-1 text-[10px] font-semibold text-primary-strong dark:text-primary"
+                    className={cn(
+                      'rounded-xs px-1 text-[10px] font-semibold',
+                      cell.closedByHoliday
+                        ? 'bg-muted text-muted-foreground line-through'
+                        : 'bg-card/70 text-primary-strong dark:text-primary'
+                    )}
                   >
                     {meal.short}
                   </span>
@@ -512,7 +528,11 @@ function PatternDialog({ open, onOpenChange, defaultMeals, cursor, onApply }) {
           <Field label="From" htmlFor="pattern-from">
             <Input id="pattern-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </Field>
-          <Field label="To" htmlFor="pattern-to">
+          <Field
+            label="To"
+            htmlFor="pattern-to"
+            error={from && to && from > to ? 'It ends before it starts.' : undefined}
+          >
             <Input id="pattern-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
           </Field>
         </div>

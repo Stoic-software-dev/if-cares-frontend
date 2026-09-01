@@ -26,15 +26,19 @@ export const GET = handle(async () => {
   return legacyJson(students.map(toLegacyStudent));
 });
 
-async function assertNameUnique(siteId, name, excludeId) {
-  const clash = await prisma.student.findFirst({
+async function findByName(siteId, name, excludeId) {
+  return prisma.student.findFirst({
     where: {
       siteId,
       name: { equals: name, mode: 'insensitive' },
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },
-    select: { id: true },
+    select: { id: true, active: true },
   });
+}
+
+async function assertNameUnique(siteId, name, excludeId) {
+  const clash = await findByName(siteId, name, excludeId);
   if (clash) throw new ApiError(409, 'Full name must be unique');
 }
 
@@ -48,10 +52,32 @@ export const POST = handle(async (req) => {
   if (!site || !site.active) throw new ApiError(422, 'Site not found.');
   await requireSiteAccess(session, site.name);
 
-  await assertNameUnique(site.id, body.name);
+  // Removing a student deactivates them rather than deleting the row, so adding
+  // the same name back is the same person returning - not a name collision to
+  // refuse.
+  const existing = await findByName(site.id, body.name);
+  if (existing?.active) throw new ApiError(409, 'Full name must be unique');
 
   const birthdate = body.birthdate ? ymdToUtcDate(body.birthdate) : null;
   const age = body.age ?? (birthdate ? ageFromBirthdate(birthdate) : null);
+
+  if (existing) {
+    const revived = await prisma.$transaction(async (tx) => {
+      const number = await nextRosterNumber(tx, site.id);
+      return tx.student.update({
+        where: { id: existing.id },
+        data: { active: true, age, birthdate, number },
+      });
+    });
+    await logAudit({
+      actor: session.user,
+      action: 'student.reactivate',
+      entity: 'student',
+      entityId: revived.id,
+      payload: { name: revived.name, site: site.name },
+    });
+    return legacySuccess();
+  }
 
   let student;
   for (let attempt = 0; attempt < 2; attempt++) {

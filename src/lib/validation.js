@@ -82,6 +82,9 @@ export const requestSchema = z.object({
   requestType: z.enum(REQUEST_TYPES),
   amount: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional()),
   time: z.preprocess(emptyToUndefined, z.string().optional()),
+  // The number says how many; this says what. Optional, because a request for
+  // twelve condiments explains itself.
+  note: z.string().trim().max(600, 'Keep it under 600 characters.').default(''),
   selectedSite: z.string().min(1, 'Please select a Site.'),
 });
 

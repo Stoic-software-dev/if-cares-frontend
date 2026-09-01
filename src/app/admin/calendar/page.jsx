@@ -116,11 +116,15 @@ function CalendarScreen() {
     if (!days || days.size === 0) return { brk: false, lunch: true, snk: false, sup: false };
     const tally = new Map();
     for (const meals of days.values()) {
+      // A day that serves nothing is not a pattern worth copying. Counting them
+      // is how opening a day came to prefill "No meal": a site with enough
+      // closed-but-present days had emptiness as its most common shape.
+      if (!meals.brk && !meals.lunch && !meals.snk && !meals.sup) continue;
       const key = JSON.stringify(meals);
       tally.set(key, (tally.get(key) ?? 0) + 1);
     }
     const [best] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
-    return JSON.parse(best[0]);
+    return best ? JSON.parse(best[0]) : { brk: false, lunch: true, snk: false, sup: false };
   }, [days]);
 
   const monthCells = useMemo(() => {

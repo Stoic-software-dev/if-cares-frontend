@@ -196,6 +196,10 @@ model Request {
   id               String        @id @default(cuid())
   type             String // one of the 8 UI literals, zod-validated
   amount           Int?
+  // What the site actually needs. Seven of the eight types only carry a number,
+  // which says how many but never what: "Dietary Restrictions: 1" is not a
+  // request anybody can act on.
+  note             String        @default("")
   time             String? // canonical "HH:MM:SS", null when not applicable
   status           RequestStatus @default(NEW)
   siteId           String

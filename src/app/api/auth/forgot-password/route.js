@@ -14,7 +14,14 @@ const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // Always answers success so account existence is never leaked, whether or not
 // the address belongs to anyone and whether or not the mail went out.
+// Both branches answer no faster than this. The "account exists" path does real
+// work - a random token and a row written - and the other does none, which left
+// a ~50ms gap that told anyone measuring which addresses have an account. The
+// floor costs a fixed wait on a screen nobody is watching the clock on.
+const ANSWER_FLOOR_MS = 400;
+
 export const POST = handle(async (req) => {
+  const startedAt = Date.now();
   const { email } = forgotPasswordSchema.parse(await readJsonBody(req));
   const user = await prisma.user.findUnique({ where: { email } });
   if (user && user.active) {
@@ -44,6 +51,10 @@ export const POST = handle(async (req) => {
     }
 
     await logAudit({ actor: user, action: 'auth.forgot_password', entity: 'user', entityId: user.id });
+  }
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < ANSWER_FLOOR_MS) {
+    await new Promise((resolve) => setTimeout(resolve, ANSWER_FLOOR_MS - elapsed));
   }
   return legacySuccess();
 });

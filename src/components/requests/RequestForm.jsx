@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { apiPost } from '@/lib/api-client';
 import { REQUEST_TYPES, TYPE_WITH_TIME } from '@/lib/requests';
 import { shortSiteName } from '@/lib/sites';
@@ -20,6 +21,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
   const [site, setSite] = useState(defaultSite || sites[0] || '');
   const [type, setType] = useState('');
   const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
   const [time, setTime] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -43,11 +45,13 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
         requestType: type,
         selectedSite: site,
         ...(needsAmount ? { amount: Number(amount) } : {}),
+        note: note.trim(),
         ...(needsTime ? { time } : {}),
       });
       toast.success('Request sent to the IF Cares team');
       setType('');
       setAmount('');
+      setNote('');
       setTime('');
       setAttempted(false);
       onSent?.();
@@ -131,6 +135,21 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
           />
         </Field>
       )}
+
+      <Field
+        label="Anything else"
+        htmlFor="request-note"
+        hint="Optional. What the site needs, in your own words."
+      >
+        <Textarea
+          id="request-note"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={600}
+          rows={3}
+          placeholder="Two children need gluten free lunches from Monday."
+        />
+      </Field>
 
       {needsTime && (
         <Field

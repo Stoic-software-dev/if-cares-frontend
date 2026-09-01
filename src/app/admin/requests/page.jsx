@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { SearchInput } from '@/components/ui/search-input';
+import { Pagination } from '@/components/ui/pagination';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +30,9 @@ import { requestDate, requestDetail } from '@/lib/requests';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
+// Ten fit on a screen without the toolbar scrolling out of reach.
+const PAGE_SIZE = 10;
+
 function InboxScreen() {
   const [inbox, setInbox] = useState(null);
   const [error, setError] = useState('');
@@ -36,6 +40,7 @@ function InboxScreen() {
   const [query, setQuery] = useState('');
   const [siteFilter, setSiteFilter] = useState('ALL');
   const [busyId, setBusyId] = useState('');
+  const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState(null);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -79,18 +84,32 @@ function InboxScreen() {
     [inbox]
   );
 
-  const visible = useMemo(() => {
+  const matching = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (inbox ?? []).filter((request) => {
       if (status !== 'ALL' && request.status !== status) return false;
       if (siteFilter !== 'ALL' && request.site !== siteFilter) return false;
       if (!q) return true;
-      return [request.type, request.site, request.requestedBy, requestDetail(request)]
+      return [request.type, request.site, request.requestedBy, request.note ?? '', requestDetail(request)]
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
   }, [inbox, status, siteFilter, query]);
+
+  // Ten requests fit on a screen; a school year of them does not. Any change to
+  // what is being listed starts the listing over, so page 4 of a filter that now
+  // returns two rows is never an empty screen.
+  useEffect(() => {
+    setPage(1);
+  }, [status, siteFilter, query]);
+
+  const pageCount = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const visible = useMemo(
+    () => matching.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    [matching, current]
+  );
 
   // Optimistic: the row moves the moment it is clicked and rolls back with the
   // reason if the server disagrees.
@@ -269,6 +288,9 @@ function InboxScreen() {
                     <span className="text-[12px] text-muted-foreground">
                       {requestDetail(request)}, {request.requestedBy}
                     </span>
+                    {request.note && (
+                      <span className="mt-1 text-[12.5px] leading-relaxed text-foreground">{request.note}</span>
+                    )}
                   </div>
 
                   <span className="truncate text-[13px] text-muted-foreground lg:block">
@@ -280,6 +302,18 @@ function InboxScreen() {
                   </span>
 
                   <StatusBadge status={request.status} />
+
+                  {request.responseComment && (
+                    <span className="col-span-full flex flex-col gap-1 rounded-sm bg-muted px-2.5 py-1.5">
+                      <span className="text-[12px] leading-relaxed text-foreground">{request.responseComment}</span>
+                      {request.respondedBy && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {request.respondedBy}
+                          {request.respondedAt ? `, ${requestDate(request.respondedAt)}` : ''}
+                        </span>
+                      )}
+                    </span>
+                  )}
 
                   <div className="flex flex-wrap gap-2 lg:justify-end">
                     {request.status === 'NEW' && (
@@ -320,6 +354,16 @@ function InboxScreen() {
                 </div>
               ))}
             </div>
+
+            <Pagination
+              page={current}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              total={matching.length}
+              pageSize={PAGE_SIZE}
+              label="requests"
+              className="border-t border-border px-4 py-3"
+            />
           </div>
         )}
       </div>

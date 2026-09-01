@@ -69,13 +69,16 @@ export const DELETE = handle(async (req, { params }) => {
   const student = await findStudentOr404(params.id);
   await requireSiteAccess(session, student.site.name);
 
-  // Hard delete, matching legacy behavior; meal-count history keeps its snapshot
-  // rows (MealCountEntry.studentId is set to null by the FK).
-  await prisma.student.delete({ where: { id: student.id } });
+  // Not a hard delete. The roster reads `active`, so the student disappears from
+  // it and from every new count exactly as before - but the row survives, which
+  // means the entries of counts already filed keep pointing at a real student
+  // instead of having their studentId nulled by the FK. Adding the same name
+  // back later reactivates this row rather than colliding with it.
+  await prisma.student.update({ where: { id: student.id }, data: { active: false } });
 
   await logAudit({
     actor: session.user,
-    action: 'student.delete',
+    action: 'student.deactivate',
     entity: 'student',
     entityId: student.id,
     payload: { name: student.name, site: student.site.name },

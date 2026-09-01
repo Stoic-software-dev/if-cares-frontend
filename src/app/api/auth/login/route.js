@@ -23,7 +23,11 @@ export const POST = handle(async (req) => {
     return legacyError(BAD_CREDENTIALS, 401);
   }
   if (!user.passwordHash) {
-    return legacyError('Your account needs a password reset. Contact your administrator.', 403);
+    // Same answer as any other failed sign in. Telling this apart is telling a
+    // stranger the address has an account and has never been used; the person it
+    // actually happens to gets where they need to go through "Forgot your
+    // password?", which issues a link for an account with no password just fine.
+    return legacyError(BAD_CREDENTIALS, 401);
   }
   const valid = await verifyPassword(body.password, user.passwordHash);
   if (!valid) {

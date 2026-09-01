@@ -33,10 +33,16 @@ const addressOf = (value) => value.match(/<([^>]+)>/)?.[1]?.trim() || value;
 function credentials() {
   const email = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
   const privateKey = unquote(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, '\n');
-  // The mailbox being sent as. Without it there is nobody to impersonate.
+  // What the recipient sees. Without it there is nobody to send as.
   const header = unquote(process.env.MAIL_FROM);
   if (!email || !privateKey || !header) return null;
-  return { email, privateKey, header, sender: addressOf(header) };
+  // The account Google is asked to act as, which is NOT always the address the
+  // mail comes from. An alias is a perfectly good sender and cannot be
+  // impersonated - Google answers "Invalid email or User ID" for one - so a
+  // noreply@ alias needs a real mailbox behind it. MAIL_AS names that mailbox;
+  // unset, the From address is assumed to be a real one and is used for both.
+  const sender = unquote(process.env.MAIL_AS) || addressOf(header);
+  return { email, privateKey, header, sender };
 }
 
 export function mailConfigured() {
@@ -48,9 +54,9 @@ export function mailFrom() {
   return unquote(process.env.MAIL_FROM);
 }
 
-/** Just the address, which is the account Google impersonates. */
-export function mailFromAddress() {
-  return addressOf(unquote(process.env.MAIL_FROM));
+/** The mailbox Google is asked to act as, for diagnostics. */
+export function mailActsAs() {
+  return credentials()?.sender ?? '';
 }
 
 // Keyed by the mailbox it impersonates. Changing MAIL_FROM without that key

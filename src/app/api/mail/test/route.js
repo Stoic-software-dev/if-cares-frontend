@@ -1,6 +1,6 @@
 import { handle, legacyJson } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { mailConfigured, mailFrom, sendMail } from '@/lib/gmail';
+import { mailConfigured, mailFrom, mailActsAs, sendMail } from '@/lib/gmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,11 +33,14 @@ export const POST = handle(async () => {
       subject: 'IF Cares: mail is working',
       html: '<p>If you are reading this, the app can send email as IF Cares.</p>',
     });
-    return legacyJson({ result: 'success', data: { ok: true, to, from: mailFrom() } });
+    return legacyJson({ result: 'success', data: { ok: true, to, from: mailFrom(), as: mailActsAs() } });
   } catch (error) {
     return legacyJson({
       result: 'success',
-      data: { ok: false, to, from: mailFrom(), error: error.message },
+      // `as` is the half that fails: when From is an alias, the mailbox behind
+      // it is what Google actually rejected, and the message names an address
+      // that is nowhere in the settings unless this is shown too.
+      data: { ok: false, to, from: mailFrom(), as: mailActsAs(), error: error.message },
     });
   }
 });

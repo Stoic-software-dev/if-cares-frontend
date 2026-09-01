@@ -41,13 +41,17 @@ export function mailFrom() {
   return unquote(process.env.MAIL_FROM);
 }
 
-let token = { value: '', expiresAt: 0 };
+// Keyed by the mailbox it impersonates. Changing MAIL_FROM without that key
+// would keep sending as the old address for up to an hour, which reads as "the
+// setting did not take" and is the worst moment for it: right after someone
+// changed it to fix exactly this.
+let token = { value: '', expiresAt: 0, sender: '' };
 
 async function accessToken() {
-  if (token.value && Date.now() < token.expiresAt) return token.value;
-
   const creds = credentials();
   if (!creds) throw new MailError('Email sending is not configured.');
+
+  if (token.value && token.sender === creds.sender && Date.now() < token.expiresAt) return token.value;
 
   let assertion;
   try {
@@ -101,6 +105,7 @@ async function accessToken() {
   token = {
     value: payload.access_token,
     expiresAt: Date.now() + Math.max(0, (payload.expires_in ?? 3600) - 60) * 1000,
+    sender: creds.sender,
   };
   return token.value;
 }

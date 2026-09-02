@@ -15,6 +15,7 @@
     "db:import:master": "node scripts/import-master.mjs",
     "db:import:history": "node scripts/import-history.mjs",
     "db:parity": "node scripts/verify-parity.mjs",
+    "db:reconcile": "node scripts/reconcile-history.mjs",
     "smoke": "node scripts/smoke.mjs",
     "drive:selftest": "node scripts/drive-selftest.mjs",
     "drive:doctor": "node scripts/drive-doctor.mjs"

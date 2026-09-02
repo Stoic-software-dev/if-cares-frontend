@@ -3,7 +3,10 @@
 > Fuente de verdad funcional: cards de Jira **STOIC-2196 a STOIC-2207** (hijas de STOIC-8 "IfCares")
 > y el documento de requerimientos "IF Cares - Regular Year App 2.0".
 > Este archivo consolida lo **técnico**: arquitectura, modelo de datos, convenciones y decisiones.
-> Última actualización: 2026-08-28 (relevamiento de paridad con la app Summer — §11).
+> Última actualización: **2026-09-02** — §4 sincronizado campo por campo contra
+> `prisma/schema.prisma`: de los deltas de schema que figuraban pendientes, el único que
+> sigue abierto son los datos de contacto del sitio, y el único de las cards son los
+> horarios por tipo de comida. Los dos esperan una respuesta del cliente, no código.
 
 ---
 
@@ -94,47 +97,60 @@ completa en `prisma/full-schema-reference.sql`.
 - `AppSetting` — key-value (foundation ids TX/OK, config de reminders, etc.).
 - `PasswordResetToken` — sha256 del token, expiración, un solo uso.
 
-**Deltas de schema PENDIENTES** (exigidos por las cards, hacer antes de STOIC-2199/2201/2204):
+**Deltas de schema — estado al 2-sep-2026** (verificado campo por campo contra
+`prisma/schema.prisma`; esta lista estaba entera como "pendiente" y ya casi no lo es):
 
-- **Correcciones de counts** (STOIC-2201): versionado explícito — nunca pisar el valor
-  original; quién, cuándo, valor anterior; flag visible de "corregido". (AuditLog solo
-  no alcanza: los reportes deben tomar el valor corregido y la UI marcarlo.)
-- **Firmas** (STOIC-2199): hoy `signature` es un campo de texto; definir captura
-  (canvas) + almacenamiento binario (candidato: Supabase Storage).
-- **Reportes generados** (STOIC-2204): tabla para PDFs consolidados guardados
-  (mes, estado, archivo, firma incorporada) recuperables sin regenerar.
-- **Config de notificaciones** (STOIC-2205): destinatarios/horario/on-off en
-  `AppSetting` o tabla propia.
-- Horarios de servicio por meal type (STOIC-2199 los pide por tipo; hoy hay un
-  `timeIn/timeOut` global por count — confirmar con el form real).
+- ✅ **Correcciones de counts** (STOIC-2201): `MealCountCorrection` guarda `previous`
+  (los valores originales completos), quién y cuándo. El valor original nunca se pisa y
+  la UI marca el count como corregido, con el historial visible.
+- ✅ **Firmas** (STOIC-2199): captura por canvas con trazo mínimo compartido entre el form
+  diario y la firma pública (`lib/signature.js`), y la firma se guarda **como imagen en la
+  base**. Eso es lo que hace que un claim firmado se reproduzca aunque el archivo no esté
+  en Drive; no hizo falta Supabase Storage.
+- ✅ **Reportes generados** (STOIC-2204): `GeneratedReport` con mes, estado, archivo,
+  token de firma y la firma incorporada; recuperable sin regenerar y reconstruible desde
+  los counts si Drive no lo tiene.
+- ✅ **Config de notificaciones** (STOIC-2205): en `AppSetting` (`reminders`), editable
+  desde la pantalla sin deploy. Se sumó `reminders.lastPing`, el latido del scheduler.
+- ⬜ **Horarios de servicio por meal type**: lo único que falta de este bloque. Hoy hay un
+  `timeIn/timeOut` global por count. **Es una pregunta al cliente antes que trabajo de
+  código**: depende de si el formulario en papel los separa por comida.
 
-**Deltas de schema de paridad Summer** (relevamiento 28-ago, detalle funcional en §11):
+**Deltas de schema de paridad Summer** (relevamiento 28-ago, detalle funcional en §11).
+**Estado al 2-sep: construidos todos menos los datos de contacto del sitio**, que siguen
+esperando la confirmación del formulario en papel. Lo que sigue queda como registro de por
+qué se pidió cada uno:
 
-- `Holiday` — **entidad nueva**: `name`, `startDate`/`endDate` (rango), alcance de sitios
+- ✅ `Holiday` — **entidad nueva**: `name`, `startDate`/`endDate` (rango), alcance de sitios
   (todos / N sitios) y alcance de comidas (todas / subconjunto `brk|lunch|snk|sup`),
   `createdBy/At`. Hoy el calendario son `ServiceDay` sueltos: no hay forma de nombrar un
   feriado, aplicarlo a un rango, ni quitarlo de todos los sitios en una acción (3.6).
   `ServiceDay` sigue siendo la proyección efectiva que consultan dashboard y submit.
-- `Site` — **plantilla semanal** (qué comidas se sirven cada día de la semana) +
+- ✅ `Site` — **plantilla semanal** (qué comidas se sirven cada día de la semana) +
   `programStart` / `programEnd`, para **generar** los `ServiceDay` del ciclo en vez de
   cargarlos día a día (3.5; equivale a la tab `Meal Schedules` de Summer).
-- `Site` — **datos de contacto**: `address`, `telephone`, `supervisor` (Summer los imprime
-  en el PDF). Sujeto a confirmar el formulario en papel del Regular Year.
-- `MealCount` — **anulación**: `voidedAt`, `voidedById`, `voidReason`. Baja lógica: el día
+- ⬜ `Site` — **datos de contacto**: `address`, `telephone`, `supervisor` (Summer los imprime
+  en el PDF). **Lo único pendiente de este bloque**; sujeto a confirmar el formulario en
+  papel del Regular Year.
+- ✅ `MealCount` — **anulación**: `voidedAt`, `voidedById`, `voidReason`. Baja lógica: el día
   vuelve a `validDates`, sale de reportes, la fila y sus entries quedan para auditoría.
   Sin esto, un count en el sitio/fecha equivocada es irreparable (corregir no alcanza).
-- `MealCount` — **aprobación** (condicional a la decisión de IF Cares): `approvalStatus`
-  (`PENDING|APPROVED`), `approvedAt`, `approvedById`. Aprobado ⇒ bloquea corrección;
-  anular sigue disponible.
-- `Request` — **respuesta**: `responseComment`, `respondedById`, `respondedAt` (hoy solo
-  cambia `status`, el solicitante nunca ve el porqué).
-- `GeneratedReport` — agregar el estado de firma (`signedAt`, `signedName`, `signatureRef`)
-  y el token público de la pantalla de firma (§11, ítem *firma del consolidado*).
-- `AppSetting` — además de reminders: destinatarios por tipo de mail (aprobación,
-  respuesta de request, envío de PDFs) para no hardcodear direcciones.
-- **Jobs** (`ReportJob` o cola equivalente): `id` provisto por el cliente, `status`
-  (`processing|completed|error`), `resultRef`, `error`, timestamps — necesario para los
-  PDFs largos (§11, ítem *jobs asíncronos*).
+- ✅ `MealCount` — **aprobación**: decidida el 31-ago y construida el mismo día, como
+  `approvedAt` / `approvedById` / `approvedByEmail` (migración
+  `20260901120000_meal_count_approval`) en vez del enum que se había bocetado: la fecha ya
+  responde "¿está aprobado?" sin un segundo campo que pueda contradecirla. Aprobado bloquea
+  la corrección; anular sigue disponible.
+- ✅ `Request` — **respuesta**: `responseComment`, `respondedById`, `respondedAt`, más el
+  campo `note` libre del solicitante (`20260901180000_request_note`), que faltaba: antes
+  "Dietary Restrictions: 1" era todo el mensaje que llegaba.
+- ✅ `GeneratedReport` — con estado de firma (`signedAt`, `signedBy`, `signedTitle`,
+  `signature`) y el token público de un solo uso de la pantalla de firma.
+- ✅ `AppSetting` — reminders (on/off, hora, días atrás, copias fijas) y `reminders.lastPing`.
+  Los destinatarios no se hardcodearon: la aprobación resuelve el staff del sitio desde la
+  base y las fallas del servidor van a `ALERT_EMAILS`.
+- ✅ **Jobs**: `src/lib/report-jobs.js`, en proceso y con polling. No hizo falta tabla: lo
+  que tiene que sobrevivir a un reinicio es el PDF en Drive y la fila en `GeneratedReport`,
+  no el registro del trabajo. Un reinicio pierde el trabajo, nunca el documento.
 
 ## 5. API (paridad legacy)
 

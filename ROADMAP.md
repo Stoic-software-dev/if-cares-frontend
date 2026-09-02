@@ -2,7 +2,8 @@
 
 > Orden de ejecución sobre las cards STOIC-2196..2207. Detalle técnico en **SPECS.md**.
 > Estrategia: la app vieja (GAS + Sheets) opera en prod hasta un **único cutover al final**.
-> Sin dual-write. Actualizado: 2026-08-31, sincronizado contra el código.
+> Sin dual-write. Actualizado: **2026-09-02**, sincronizado contra el código, el schema y
+> la base de producción (varios ítems figuraban pendientes estando hechos).
 >
 > Leyenda: `[x]` construido y verificado · `[~]` parcial, con el detalle de qué falta ·
 > `[ ]` sin construir. Los `[~]` y `[ ]` de las Etapas 2 a 6 están agrupados abajo en
@@ -50,9 +51,21 @@ contraste WCAG AA sin fallos en claro y en oscuro sobre todas las pantallas nuev
   `sendFailureAlert` y `sendPartialFailureAlert`.
 - **Aprobación de counts** — ver Etapa 4.
 
+**Al 2-sep**, después de reescribir `TEST.md` y correrlo entero (matriz de autorización
+de 66 pares método+ruta, IDOR con ids reales, concurrencia, integraciones con evidencia
+del otro lado del sistema y una pasada de integridad de datos), quedan **3 hallazgos
+arreglados** —tres rutas que respondían 500 ante un body JSON `null`, y el alta de sitios
+que no exigía el estado, que era la causa exacta del peor bug del proyecto— y **1 abierto**:
+un React #185 en `/counts/[date]` sin reproducción. Detalle en `TEST-RESULTS.md`.
+
+El **import histórico terminó** y está **reconciliado contra las planillas**: 56 sitios,
+7.718 días, 368.996 filas, cero diferencias incluidos los totales por tipo de comida
+(`npm run db:reconcile`).
+
 Lo que quedó pendiente y **no depende de código**:
 
-- Crear el **servicio de cron** en Railway que postea a `/api/reminders` cada hora.
+- El **servicio de cron** en Railway existe y está bien configurado, pero **no ejecuta**;
+  ver Etapa 1.
 - La **maquetación exacta** del formulario oficial del consolidado: el contenido está
   campo por campo, falta la plantilla o un PDF de muestra para calcarla.
 - Las decisiones de IF Cares: datos de contacto del sitio, destinatarios y textos de los
@@ -77,8 +90,11 @@ trabajo con el cliente.
 - [x] **Pushear `v2-backend`** (18-ago).
 - [x] **Crear proyecto Supabase**: `vcixfuaqxnkwihzbqetq`, schema `regular_year`, 12
       migraciones aplicadas y sin drift (verificado 31-ago). **Backups: pendiente.**
-- [ ] Pegar `gas-backup/migration-export.gs` en Apps Script + `MIGRATION_EXPORT_KEY`
-      + redeploy → correr `import-history` con data real de punta a punta.
+- [x] Pegar `gas-backup/migration-export.gs` en Apps Script + `MIGRATION_EXPORT_KEY`
+      + redeploy → correr `import-history` con data real de punta a punta. **Corrido
+      completo el 2-sep**: 56 sitios, 7.718 días, 368.996 filas de alumno, de ago-2024
+      a sep-2026. Reconciliado contra las planillas con `npm run db:reconcile`: cero
+      diferencias, incluidos los totales por tipo de comida.
 - [ ] STOIC-2202: cerrar tokens + componentes base y **aprobación de las 5 pantallas
       clave con IF Cares** (dependencia externa más riesgosa — perseguirla).
 - [x] Decidir proveedor de **email** y **storage** de archivos: **Gmail** del Workspace de
@@ -88,8 +104,15 @@ trabajo con el cliente.
       hojas "Copy of…") para que decidan caso por caso (cierre de STOIC-2196).
 - [ ] Actualizar el timeline con el cliente: el artifact aún dice cutover en agosto;
       las cards lo ponen al final. Acordar fecha tentativa de corte.
-- [ ] **Crear el servicio de cron** en Railway (`curlimages/curl`, `0 * * * *`) que postea
-      a `/api/reminders`. Sin esto los recordatorios no se disparan nunca.
+- [~] **Servicio de cron** en Railway (`curlimages/curl`, `0 * * * *`) que postea a
+      `/api/reminders`. **Creado el 2-sep** (`if-cares-reminders-cron`) con la imagen, el
+      horario, el comando y las variables cargadas y verificadas por API. **No está
+      ejecutando**: el contenedor no corre en ningún tick. La única vez que corrió fue con
+      un comando mal armado (la imagen trae `ENTRYPOINT ["curl"]` y Railway agrega el start
+      command como argumentos, así que quedaba `curl curl …`); eso ya está corregido, pero
+      desde entonces no se ejecutó más. Falta mirar el dashboard, que muestra estado que la
+      API no expone.
+      Mientras tanto la app ya delata el problema sola: ver el latido del scheduler abajo.
 - [x] **[S] Aprobación de counts: DECIDIDA el 31-ago — va.** Construida el mismo día;
       el detalle de qué bloquea y qué no está en la Etapa 4.
 - [ ] **[S] Confirmar si el formulario en papel del Regular Year lleva datos del sitio**
@@ -98,24 +121,42 @@ trabajo con el cliente.
 
 ## Etapa 2 — Cerrar la base (STOIC-2196 / 2197 / 2198)
 
-- [ ] Deltas de schema pendientes: correcciones versionadas, firmas (storage),
-      reportes generados, config de notificaciones, horarios por meal type.
-- [ ] **[S] Deltas de schema de paridad Summer** (detalle en SPECS.md §4 y §11):
-      - `Holiday` con nombre + rango de fechas + alcance (todos los sitios / selección)
-        + alcance por comida — hoy solo existe `ServiceDay` suelto por fecha.
-      - Plantilla semanal por sitio (qué comidas se sirven cada día de la semana) +
-        `programStart` / `programEnd`, para **generar** el calendario en vez de cargarlo día a día.
-      - Datos de contacto del sitio (`address`, `telephone`, `supervisor`) — condicionado
-        a la confirmación de Etapa 1.
-      - Anulación de un count: `voidedAt` / `voidedById` / `voidReason` (baja lógica; sale
-        de dashboard y reportes, la historia no se borra).
-      - Respuesta al request: `responseComment` + `respondedBy/At` (hoy solo hay estado).
+- [~] Deltas de schema: **construidos todos menos uno** (verificado contra
+      `prisma/schema.prisma` el 2-sep). `MealCountCorrection` guarda el valor anterior y
+      quién corrigió; `GeneratedReport` guarda los consolidados con su firma;
+      `AppSetting` lleva la config de notificaciones; la firma se guarda como imagen en la
+      base, que es lo que hace que un claim firmado se reproduzca aunque falte el archivo
+      en Drive. **Falta**: horarios de servicio por tipo de comida — hoy el count guarda un
+      solo `timeIn`/`timeOut` para todo el día. Es una pregunta al cliente antes que
+      trabajo de código: depende de si el formulario en papel los separa.
+- [~] **[S] Deltas de schema de paridad Summer** (detalle en SPECS.md §4 y §11):
+      **todos construidos salvo los datos de contacto del sitio**, que siguen esperando la
+      confirmación de la Etapa 1.
+      - [x] `Holiday` + `HolidaySite` con nombre, rango de fechas, alcance por sitios y
+        alcance por comida.
+      - [x] Plantilla semanal por sitio + `programStart` / `programEnd`, que **generan** el
+        calendario en vez de cargarlo día a día.
+      - [ ] Datos de contacto del sitio (`address`, `telephone`, `supervisor`) — **lo único
+        que falta de este bloque**, condicionado a la confirmación de Etapa 1.
+      - [x] Anulación de un count: `voidedAt` / `voidedById` / `voidReason` (baja lógica;
+        sale de dashboard y reportes, la historia no se borra).
+      - [x] Respuesta al request: `responseComment` + `respondedBy/At`, más el campo `note`
+        libre del solicitante (migración `20260901180000_request_note`).
       - [x] Aprobación de counts (`approvedAt`, `approvedById`, `approvedByEmail`),
         migración `20260901120000_meal_count_approval`.
-- [ ] STOIC-2197 restante: reset de password self-service **por email**, expiración
-      de sesión por inactividad configurable, bloqueo de usuarios desactivados.
-- [ ] STOIC-2198 restante: reporte de reconciliación formal (sitio × mes, Sheets vs
-      base) + refresco programado de la copia para desarrollo.
+- [x] STOIC-2197 restante: **hecho**. Reset self-service por email (`/api/auth/forgot-password`
+      → link firmado de 1 h, con piso de respuesta de 400 ms para que la rama "esta cuenta
+      existe" no se delate por tiempo), expiración de sesión configurable por
+      `SESSION_TTL_HOURS` (cookie deslizante, 8 h por defecto), y bloqueo de usuarios
+      desactivados: `getSession()` releé el usuario de la base en cada request, así que
+      desactivar a alguien lo saca en el acto y no cuando venza su token.
+- [~] STOIC-2198 restante: **reconciliación hecha** (`npm run db:reconcile`,
+      `scripts/reconcile-history.mjs`): sitio × mes, planillas vs base, comparando días,
+      filas y los totales de cada tipo de comida — que son los números con los que se arma
+      un claim. Corrido el 2-sep sobre los 56 sitios: **cero diferencias**. Separa aparte
+      los counts cargados por la app después del import y los anulados, para que no
+      ensucien la señal. Sale con código 1 si algo no cuadra, así que sirve de compuerta
+      antes del cutover. **Falta**: el refresco programado de la copia para desarrollo.
 
 ## Etapa 3 — Camino crítico de UI (STOIC-2199)
 
@@ -151,11 +192,12 @@ trabajo con el cliente.
       (`POST /api/sites`, `PATCH/PUT /api/sites/[id]`, `GET /api/sites/record?site=`),
       más la importación de roster con validación fila a fila y la edición de alumnos.
       Renombrar es seguro: counts, roster y asignaciones apuntan al sitio, no a su nombre.
-- [ ] **[S] Pantallas de sitios como las de Summer** (`dashboard/sites` + `dashboard/site/[siteName]`):
-      listado con buscador y toggle "mostrar inactivos" + contador de activos; ficha en
-      modo lectura/edición con confirmación al cambiar el nombre (el nombre es la
-      identidad que matchea `assignedSite` y los counts → el rename tiene que propagar);
-      desactivar desde la ficha. Campos de contacto del sitio si Etapa 1 los confirma.
+- [~] **[S] Pantallas de sitios como las de Summer**: **hechas** en `/admin/sites` y
+      `/admin/sites/detail` — listado con buscador, filtro por estado, toggle de inactivos
+      y paginado; ficha con pestañas Overview y Roster, edición en diálogo, generación de
+      días faltantes y desactivación con confirmación. El rename propaga solo, porque
+      counts, roster y asignaciones apuntan al id del sitio y no a su nombre.
+      **Falta** únicamente lo que depende del cliente: los campos de contacto del sitio.
 - [x] Calendarios: días operativos/no operativos por sitio, comidas por día, patrón
       semanal, y cierre de un rango en varios sitios en una sola operación
       (`POST /api/sites/service-days/close`: 1,9 s para los 56 sitios contra los ~6 min
@@ -211,10 +253,11 @@ trabajo con el cliente.
 - [~] Motor de PDF: `pdf-lib` en el servidor, sin dependencias nuevas. El **contenido** de los consolidados sale campo por campo del generador viejo (`gas-backup/report/generateReports.gs`). La **maquetación exacta** del formulario oficial no está replicada: el legacy llenaba una plantilla de Google Sheets que no está en el repo. Hace falta esa plantilla o un PDF de muestra para calcarla.
 - [x] PDF de count diario + **PDF mensual por sitio** (`GET /api/reports/monthly?site=&year=&month=`), los dos archivados en Drive.
 - [x] Envío por email desde la app: un claim se manda con el PDF adjunto, o se manda el **link de firma** en vez del archivo. Nunca los dos juntos, para que un documento que se manda a leer no termine firmado por quien no corresponde.
-- [~] **[S] Guardar y recuperar**: todo consolidado que se construye queda guardado en
+- [x] **[S] Guardar y recuperar**: todo consolidado que se construye queda guardado en
       `GeneratedReport` y archivado en Drive, y se descarga después desde la pantalla de
       claims. Si Drive no lo tiene, se **reconstruye desde los counts**, así que un claim
-      nunca queda inaccesible. Falta la parte de **enviar por email** (fase F).
+      nunca queda inaccesible. El envío por email ya está (fase F) y se verificó con un
+      envío real el 1-sep.
 - [x] Consolidados por mes × estado: los 2 reportes (`claim-part1` por sitio,
       `claim-part2` por día), sin tope de sitios, guardados y recuperables, con el paso
       de firma. Medido: 34 sitios de TX en 3,4 s.
@@ -263,7 +306,7 @@ trabajo con el cliente.
 
 ## Transversal — [S] se construye junto con las etapas, no al final
 
-- [~] **Monitoreo de errores del cliente**: `POST /api/monitoring` recibe mensaje, stack,
+- [x] **Monitoreo de errores del cliente**: `POST /api/monitoring` recibe mensaje, stack,
       pantalla y origen; el error boundary lo reporta y un handler global cubre lo que
       nunca llega a React (listeners, timers, promesas rechazadas). Se agrupan por huella
       (mensaje + primer frame + pantalla) con contador, así que la misma pantalla rota en
@@ -284,6 +327,15 @@ trabajo con el cliente.
       estados confirmar → procesando → resultado y el aviso de qué se lleva puesto la
       acción. Aplica a anular, desactivar, cerrar días en varios sitios y salir con
       cambios sin guardar.
+- [x] **Latido del scheduler** (2-sep): cada llamada al endpoint de reminders que trae el
+      secreto correcto sella `AppSetting reminders.lastPing`, **antes** de cualquiera de
+      los motivos por los que esa corrida podría no hacer nada, y la pantalla de Reminder
+      emails dice cuándo llamó por última vez (en amarillo si pasaron más de dos horas).
+      Un recordatorio que deja de llegar se ve igual que uno que no tenía nada que decir, y
+      la diferencia importa: tres días sin count pausan la entrega de comida de un sitio.
+      Salió de no poder verificar el cron desde afuera — los logs de la plataforma llegan
+      con ~25 minutos de retraso y el estado del deploy no refleja el exit code del
+      contenedor. La respuesta a eso es que lo diga la propia app.
 
 ## Etapa 7 — Testing con staff real (STOIC-2206)
 

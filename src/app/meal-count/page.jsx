@@ -36,9 +36,15 @@ const EVERY_MEAL = { brk: true, lunch: true, snk: true, sup: true };
  * A day that names no meal at all gets all four rather than none. That is not a
  * nicety: 89% of the service days that came over from the spreadsheets carry all
  * four flags as false, because the flags did not survive the export, and with
- * "none" this form renders the attendance column alone. A site filing a late
- * count for one of those days could record who was there and not one meal they
- * ate, and the count would submit looking complete.
+ * "none" this form renders the attendance column alone. Somebody could record
+ * who was there and not one meal they ate, and the count would submit looking
+ * complete.
+ *
+ * Most of those days are already filed, so they never reach this form. The one
+ * that does is a day whose count was voided: voiding hands the day back as open,
+ * with the service day's own flags, which is exactly where the empty ones live.
+ * Voiding is the documented way out of a count filed on the wrong day, so the
+ * path is a normal one, not a corner.
  *
  * Showing everything is the safe direction: the person filling it in is at the
  * point of service and ticks what actually happened. Showing nothing quietly

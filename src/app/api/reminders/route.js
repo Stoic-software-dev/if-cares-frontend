@@ -20,6 +20,22 @@ export const dynamic = 'force-dynamic';
 // shared secret. This route decides who is overdue and writes the messages.
 
 const SETTINGS_KEY = 'reminders';
+const LAST_PING_KEY = 'reminders.lastPing';
+
+/** When the scheduler last reached this route with a valid secret. */
+async function touchLastPing() {
+  const now = new Date().toISOString();
+  await prisma.appSetting.upsert({
+    where: { key: LAST_PING_KEY },
+    create: { key: LAST_PING_KEY, value: now },
+    update: { value: now },
+  });
+}
+
+async function readLastPing() {
+  const row = await prisma.appSetting.findUnique({ where: { key: LAST_PING_KEY } });
+  return row?.value ?? null;
+}
 
 const DEFAULTS = {
   enabled: false,
@@ -45,7 +61,7 @@ export const GET = handle(async () => {
   const settings = await readSettings();
   return legacyJson({
     result: 'success',
-    data: { ...settings, mailReady: mailConfigured() },
+    data: { ...settings, mailReady: mailConfigured(), lastPingAt: await readLastPing() },
   });
 });
 
@@ -173,6 +189,14 @@ export const POST = handle(async (req) => {
   } else {
     if (!secret) throw new ApiError(503, 'Reminders are not configured to run.');
     if (provided !== secret) throw new ApiError(401, 'Bad reminder secret.');
+    // Every real call from the scheduler leaves a mark, before any of the
+    // reasons this run might do nothing. A reminder that stops arriving looks
+    // exactly like a reminder with nothing to say, and the difference matters:
+    // three missed days pauses a site's meal delivery. Without this the only
+    // way to tell a dead scheduler from a quiet one is to read platform logs,
+    // which is precisely what nobody does until something has already gone
+    // wrong.
+    await touchLastPing();
   }
 
   const settings = await readSettings();

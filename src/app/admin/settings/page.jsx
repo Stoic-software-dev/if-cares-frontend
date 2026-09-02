@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, BellRing, Eye, Save } from 'lucide-react';
+import { AlertTriangle, BellRing, Eye, Radio, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -13,10 +13,61 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 
 function hourLabel(hour) {
   const period = hour >= 12 ? 'PM' : 'AM';
   return `${hour % 12 === 0 ? 12 : hour % 12}:00 ${period}`;
+}
+
+// A reminder that stops arriving reads exactly like a reminder with nothing to
+// say. This is the difference, on the screen where someone would look: the
+// scheduler either called recently or it did not.
+function SchedulerHeartbeat({ lastPingAt }) {
+  const at = lastPingAt ? new Date(lastPingAt) : null;
+  const minutesAgo = at ? Math.floor((Date.now() - at.getTime()) / 60000) : null;
+  // It is asked to call every hour; twice that and something is wrong.
+  const stale = minutesAgo === null || minutesAgo > 130;
+
+  const when = () => {
+    if (minutesAgo === null) return 'never';
+    if (minutesAgo < 2) return 'just now';
+    if (minutesAgo < 60) return `${minutesAgo} minutes ago`;
+    const hours = Math.floor(minutesAgo / 60);
+    if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  };
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 rounded-lg border p-4',
+        stale ? 'border-warning-border bg-warning-soft' : 'border-border bg-card'
+      )}
+    >
+      {stale ? (
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
+      ) : (
+        <Radio className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+      )}
+      <div className="flex flex-col gap-0.5">
+        <span className={cn('text-[13px] font-semibold', stale ? 'text-warning-text' : 'text-foreground')}>
+          {lastPingAt ? `The scheduler last called ${when()}` : 'The scheduler has never called'}
+        </span>
+        <span
+          className={cn(
+            'text-[12.5px] leading-relaxed',
+            stale ? 'text-warning-text/90' : 'text-muted-foreground'
+          )}
+        >
+          {stale
+            ? 'It is meant to call every hour. If this stays stale, the reminders are not running at all, whatever the settings above say.'
+            : 'It calls every hour and this page records each call, so a scheduler that dies stops being invisible.'}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function RemindersScreen() {
@@ -43,7 +94,9 @@ function RemindersScreen() {
     setSaving(true);
     try {
       const res = await apiPatch('/api/reminders', patch);
-      setSettings({ ...res.data, mailReady: settings.mailReady });
+      // PATCH answers with the settings only; the two read-only facts on this
+      // screen come from GET and would blank out on every save otherwise.
+      setSettings({ ...res.data, mailReady: settings.mailReady, lastPingAt: settings.lastPingAt });
       setCopyTo((res.data.copyTo ?? []).join(', '));
       toast.success('Reminders saved');
     } catch (err) {
@@ -204,6 +257,8 @@ function RemindersScreen() {
                 </div>
               )}
             </div>
+
+            <SchedulerHeartbeat lastPingAt={settings.lastPingAt} />
 
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               The hour above is the one that sends, in the program&apos;s own timezone, and daylight saving

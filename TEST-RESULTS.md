@@ -117,6 +117,66 @@ sitio a la vez".
 
 De los 32 hallazgos: **31 arreglados, 1 abierto** (el React #185, sin reproducción).
 
+### Cuarta tanda (1-sep-2026, `fce19a7`+`28b4248`+commits de integraciones) — TEST.md reescrito y re-ejecutado entero
+
+`TEST.md` se reescribió (exhaustivo en vez de exploratorio, inventario regenerado leyendo el
+filesystem: 18 pantallas, 39 archivos de ruta, 65 pares método+ruta) y se corrió de nuevo entero,
+directo (sin agentes), contra producción con las cuentas `qa.admin@example.org` y
+`qa.tester@example.org`. A diferencia del pase anterior, esta vez el foco fue **§8 y §9** — la
+sección nueva que exige evidencia del otro lado del sistema en vez de confiar en la respuesta de
+la app — porque ahí vivían los tres bugs más caros del proyecto hasta ahora (consolidado, PDFs sin
+archivar, remitente reescrito).
+
+**§6 — matriz de autorización, 66 pares método+ruta × 4 sesiones (anónimo/staff/staff `allSites`/admin):**
+0 hallazgos. Cero 500, cero fuga de autorización, incluido el guard por secreto de
+`POST /api/reminders` que se niega incluso con sesión admin sin el header correcto.
+
+**§6.2 IDOR con ids reales** (no inventados) de un sitio ajeno, un usuario ajeno, un request
+ajeno: 7/7 bloqueados con 403. Nota metodológica para el próximo pase: un body vacío que Zod
+rechaza por `min(1)` nunca llega a `requireSiteAccess()`, así que un payload vacío no prueba nada
+sobre autorización — hay que armar uno que pase la validación de forma primero.
+
+**§6.4-6.6 malformados, boundary, concurrencia** — acá aparecieron los 3 bugs reales de esta
+tanda:
+
+| Hallazgo | Estado |
+|---|---|
+| `PATCH /api/reminders`, `PATCH /api/monitoring` y `POST /api/reports/generated/[id]/send` daban **500** con un body JSON `null` (válido como JSON, pero las tres rutas lo leen sin pasar por Zod y tocan una propiedad directo) | **Arreglado** — `requireObjectBody()` en `lib/http.js`, mismo mensaje que ya daba una ruta con Zod para el mismo error |
+| Crear un sitio no exigía `state` — la causa exacta del peor bug del proyecto (7 sitios TX invisibles en su claim) seguía disponible desde el formulario, no solo desde un import masivo | **Arreglado** — requerido solo al crear (`siteCreateSchema`), no al editar; error inline en `SiteForm` |
+| Carrera real (dos `POST /api/meal-counts` en paralelo, mismo sitio+día) | Confirmado correcto: exactamente un 200 y un 409 |
+| Boundary de edad (-1/0/120/121), nombre de usuario (80/81 char), fechas invertidas (sitio, feriado), unicode/emoji en nombre de alumno y de feriado | Todo correcto, 0 hallazgos |
+
+**§8 integraciones, con evidencia real del otro lado (no solo la respuesta de la app):**
+
+- Drive: publicar → confirmado con un `?refresh=1` que **re-lee Drive de verdad**, no el cache
+  — presente. Enviar a la papelera → confirmado ausente con el mismo re-read. Publicar apuntado a
+  la carpeta de reportes → rechazado.
+- Mail: helper compartido, sin encontrar nada nuevo (ya cerrado en la sesión de mail de más
+  arriba en la conversación — alias `noreply@stoicsoftware.io`, `MAIL_AS` separado de
+  `MAIL_FROM`, token cacheado por identidad).
+
+**§9 integridad de datos:**
+
+- `SELECT ... WHERE active AND state = ''`: **1 sitio** (`Training Only`, el sitio de
+  pruebas — excepción conocida y documentada, no un hallazgo). Los 7 sitios TX reales de la
+  tanda anterior siguen corregidos.
+- 0 counts con fecha implausible, 0 sitios "Copy of ..." activos, `AuditLog` registrando cada
+  escritura de esta sesión.
+
+**Verificación final, 9/9**: el TX claim con 41 sitios, `2026-02-30` rechazado, timing de
+`forgot-password` sin brecha (24ms de delta), login de cuenta inexistente da 401 genérico, un
+request trae `note`, el detalle de un count activo resuelve bien, las tres rutas que crasheaban
+con `null` ya no lo hacen, y crear un sitio sin `state` ahora se rechaza.
+
+**Encontrado y explícitamente descartado como falso positivo** (documentado para el próximo pase,
+ver §2 de `TEST.md`): un click con `ref` de `find` sobre el mismo botón "Add holiday" no abrió el
+diálogo dos veces seguidas, pero el click por coordenadas de píxel sobre el mismo botón visible sí
+funcionó — apunta a que el `ref` puede quedar obsoleto entre llamadas, no a un bug de la app. Y
+"Correction history" pareció no cerrar con Escape por casi 2 segundos — era la animación de salida
+de Radix, confirmado cerrado en la siguiente lectura.
+
+De esta tanda: **3 hallazgos reales, los 3 arreglados y re-verificados**; 0 quedaron abiertos.
+
 ---
 
 ## 1. Cómo se ejecutó

@@ -31,10 +31,24 @@ const FLAG = Symbol.for('ifcares.reminderScheduler');
 async function tick() {
   try {
     await touchLastPing();
+
+    // Every reminder is a link to the day that needs filing, and the scheduler
+    // has no request to derive the address from. Sending sixty messages whose
+    // only button is broken is worse than sending none, and it is the kind of
+    // wrong that looks fine from here: the send succeeds, the log says sixty.
+    const baseUrl = process.env.APP_URL?.replace(/\/$/, '') || '';
+    if (!baseUrl) {
+      await notifyFailure({
+        area: 'Reminder scheduler',
+        error: new Error('APP_URL is not set, so the reminder links would point nowhere.'),
+      }).catch(() => {});
+      return;
+    }
+
     // Once a day is enforced inside runReminders, against a date stored in the
     // database. In the process it would not survive the restart that is exactly
     // when double sending happens.
-    const result = await runReminders({ baseUrl: process.env.APP_URL?.replace(/\/$/, '') || '' });
+    const result = await runReminders({ baseUrl });
 
     if (result.skipped) return;
 

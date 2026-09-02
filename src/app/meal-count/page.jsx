@@ -28,6 +28,26 @@ import { cn } from '@/lib/utils';
 
 const ATTENDANCE = { key: 'att', label: 'Attendance', short: 'Att' };
 const EMPTY_MARKS = { att: false, brk: false, lunch: false, snk: false, sup: false };
+const EVERY_MEAL = { brk: true, lunch: true, snk: true, sup: true };
+
+/**
+ * Which meal columns to show for a day.
+ *
+ * A day that names no meal at all gets all four rather than none. That is not a
+ * nicety: 89% of the service days that came over from the spreadsheets carry all
+ * four flags as false, because the flags did not survive the export, and with
+ * "none" this form renders the attendance column alone. A site filing a late
+ * count for one of those days could record who was there and not one meal they
+ * ate, and the count would submit looking complete.
+ *
+ * Showing everything is the safe direction: the person filling it in is at the
+ * point of service and ticks what actually happened. Showing nothing quietly
+ * makes the truth unrecordable.
+ */
+function mealsOrAll(meals) {
+  if (!meals) return EVERY_MEAL;
+  return Object.values(meals).some(Boolean) ? meals : EVERY_MEAL;
+}
 
 // Drafts live only in this browser and only until the count is submitted. They
 // exist because a phone can die, lose signal or be backgrounded halfway through
@@ -154,7 +174,7 @@ function MealCountScreen() {
             snk: data.entries.some((e) => e.snack),
             sup: data.entries.some((e) => e.supper),
           };
-          setDayMeals(Object.values(served).some(Boolean) ? served : { brk: true, lunch: true, snk: true, sup: true });
+          setDayMeals(mealsOrAll(served));
           setTimeIn(data.timeIn ? data.timeIn.slice(0, 5) : '');
           setTimeOut(data.timeOut ? data.timeOut.slice(0, 5) : '');
         })
@@ -201,7 +221,7 @@ function MealCountScreen() {
           return;
         }
 
-        setDayMeals(open);
+        setDayMeals(mealsOrAll(open));
         setRoster(rows);
 
         // A draft from this device wins over an empty roster: a reload, a

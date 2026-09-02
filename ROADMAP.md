@@ -15,6 +15,23 @@
 > una línea sin el detalle que Summer ya probó en producción. Inventario completo,
 > equivalencias y lo que se descartó por ser propio del dominio Summer: **SPECS.md §11**.
 
+## Repaso contra las cards de Jira (2-sep)
+
+Las 6 cards de IfCares que están en **Testing** se leyeron criterio por criterio contra el
+código, no contra este archivo. Salieron **5 huecos reales** que ningún doc registraba:
+
+| Card | Hueco | Estado |
+|---|---|---|
+| 2201 / 2203 | El count corregido solo se distinguía en el detalle. La card pide "a simple vista **en el dashboard**", y el PDF pide "la marca de corregido" | **Arreglado** (`9256f86`). El mensual además tenía `corrected` hardcodeado en `false` |
+| 2200 | "Importar o cargar el roster" no existía: solo se podía agregar de a un alumno | **Arreglado** (`d41fdaa`), verificado 9/9 en producción |
+| 2199 | "Se capturan los horarios de servicio **por meal type**" — hoy hay un solo `timeIn`/`timeOut` | **Abierto**, ver abajo |
+| 2203 | "Poder mandar por email **cualquier PDF** exportado" — hoy solo el consolidado se puede mandar | **Abierto** |
+| 2198 | "El log de registros rechazados revisado y cada caso con decisión de IF Cares" | **Abierto**, es conversación con el cliente |
+
+Lección para la próxima: este archivo describía un estado mucho más avanzado que el real en
+unas cosas y mucho más atrasado en otras. **Las cards son la fuente de verdad**, no el
+resumen de fases de acá abajo.
+
 ## Plan de ejecución — lo que falta, en orden de dificultad
 
 De menor a mayor. Cada fase se testea antes de pasar a la siguiente.

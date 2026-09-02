@@ -328,6 +328,13 @@ trabajo con el cliente.
       (`reminderStart/End`, 25 de 64 la traen del master); un sitio sin ventana entra
       igual, porque una celda vacía es una forma demasiado silenciosa de apagarle los
       avisos a un sitio. Si algún envío falla, sale una alerta a `ALERT_EMAILS`.
+- [x] **La ventana de recordatorio se edita desde la app** (2-sep): estaba en el
+      formulario de ningún lado. La ruta la leía, pero las dos fechas solo entraban por la
+      pestaña `Reminders` del master, así que el día del freeze quedaban congeladas para
+      los 25 sitios que la traen. Ahora están en el formulario del sitio, al crear y al
+      editar. Verificado en producción con control: con la ventana en 2020 el sitio
+      desaparece del preview (1 día atrasado con 5 destinatarios pasa a 0) y con una
+      ventana que incluye hoy vuelve con los mismos 5.
 - [x] Resolver el destino de los archivos: **Drive API desde el backend** para
       **todos los PDFs**, no solo los menús (`src/lib/google-drive.js` para leer y
       escribir, `src/lib/pdf-archive.js` para archivar lo generado). La oficina sigue

@@ -48,7 +48,13 @@ async function loadCounts({ year, month, siteIds }) {
       voidedAt: null,
       ...(siteIds ? { siteId: { in: siteIds } } : {}),
     },
-    include: { entries: true, site: { select: { id: true, name: true, siteNumber: true, state: true } } },
+    include: {
+      entries: true,
+      site: { select: { id: true, name: true, siteNumber: true, state: true } },
+      // Only whether it was corrected, not the stored previous values: the
+      // reports print the current numbers and say that they changed.
+      _count: { select: { corrections: true } },
+    },
     orderBy: { date: 'asc' },
   });
 }
@@ -160,7 +166,7 @@ export async function siteMonth({ site: siteName, year, month }) {
     date: dateToYmd(count.date),
     timeIn: count.timeIn,
     timeOut: count.timeOut,
-    corrected: false,
+    corrected: count._count.corrections > 0,
     students: count.entries.length,
     ...addEntries(emptyTotals(), count.entries),
   }));

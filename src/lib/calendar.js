@@ -86,6 +86,9 @@ export function buildMonth(year, month, siteData, today = todayYmd(), holidays =
   // an approved day is still a submitted day, and turning it into a fifth colour
   // would say the count is somewhere else.
   const approved = new Set(siteData?.approvedDates ?? []);
+  // Same reasoning as approval: a corrected day is still a submitted day. It
+  // carries a mark, not a colour of its own.
+  const corrected = new Set(siteData?.correctedDates ?? []);
   const valid = siteData?.validDates ?? {};
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   // Monday-first column of the 1st.
@@ -117,6 +120,7 @@ export function buildMonth(year, month, siteData, today = todayYmd(), holidays =
         meals: meals ?? null,
         holiday: holiday ?? null,
         approved: approved.has(ymd),
+        corrected: corrected.has(ymd),
       };
     } else {
       days[day] = { day, ymd, status, meals: null, holiday: null };

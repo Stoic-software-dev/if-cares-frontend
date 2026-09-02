@@ -245,7 +245,9 @@ export async function buildSiteMonthPdf(data) {
   });
 
   const columns = [
-    { label: 'Date', width: 120, value: (row) => dayLabel(row.date) },
+    // The asterisk rides on the date rather than taking a column of its own: on
+    // a month where nothing was corrected, an empty column reads as a mistake.
+    { label: 'Date', width: 120, value: (row) => `${dayLabel(row.date)}${row.corrected ? ' *' : ''}` },
     { label: 'Time in', width: 70, value: (row) => timeLabel(row.timeIn) },
     { label: 'Time out', width: 70, value: (row) => timeLabel(row.timeOut) },
     { label: 'Att', width: 52, align: 'right', value: (row) => row.att, total: (t) => t.att },
@@ -258,10 +260,17 @@ export async function buildSiteMonthPdf(data) {
 
   y = drawTable(ctx, { columns, rows: data.days, startY: y, totalsRow: data.totals });
 
+  const correctedDays = data.days.filter((day) => day.corrected).length;
   ctx.page.drawText(
     `${data.days.length} ${data.days.length === 1 ? 'day' : 'days'} filed`,
     { x: MARGIN, y: y - 16, size: 8.5, font: ctx.font, color: MUTED }
   );
+  if (correctedDays) {
+    ctx.page.drawText(
+      `* ${correctedDays} ${correctedDays === 1 ? 'day was' : 'days were'} corrected after submission. The figures above are the corrected ones.`,
+      { x: MARGIN, y: y - 30, size: 8.5, font: ctx.font, color: MUTED }
+    );
+  }
 
   return ctx.doc.save();
 }

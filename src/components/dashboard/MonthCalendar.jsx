@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { BadgeCheck } from 'lucide-react';
+import { BadgeCheck, PencilLine } from 'lucide-react';
 import { mealsFor } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
@@ -142,6 +142,20 @@ export default function MonthCalendar({ month, site, filter = 'all' }) {
                 />
               )}
 
+              {/* A corrected day is still a submitted day, so it keeps the
+                  colour and gains a mark. STOIC-2201 asks for it to be visible
+                  here and not only inside the count: from the month view is
+                  where someone notices that a day was touched after the fact. */}
+              {cell.corrected && (
+                <span
+                  className="absolute left-1.5 top-1.5 hidden items-center gap-0.5 rounded-xs bg-warning-soft px-1 py-px text-[9.5px] font-bold uppercase tracking-wide text-warning-text md:inline-flex"
+                  title="This count was corrected after it was submitted"
+                >
+                  <PencilLine className="h-2.5 w-2.5" strokeWidth={2.6} />
+                  Corr
+                </span>
+              )}
+
               <span className="mt-auto hidden w-full flex-col gap-1 md:flex">
                 {cell.holiday ? (
                   <span className="truncate text-[11px] font-semibold">{cell.holiday}</span>
@@ -186,6 +200,10 @@ export function CalendarLegend({ className }) {
       <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
         <BadgeCheck className="h-3.5 w-3.5 text-success" />
         Approved
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+        <PencilLine className="h-3.5 w-3.5 text-warning-text" />
+        Corrected
       </span>
     </div>
   );

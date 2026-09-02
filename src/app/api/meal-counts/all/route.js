@@ -21,13 +21,17 @@ export const GET = handle(async () => {
     // A voided count leaves its day open again, so it must not show as taken.
     prisma.mealCount.findMany({
       where: { siteId: { in: siteIds }, voidedAt: null },
-      select: { siteId: true, date: true, approvedAt: true },
+      // `_count.corrections` rather than the rows themselves: the dashboard only
+      // needs to know that a day was corrected, and pulling every stored
+      // previous value to answer yes or no would be a lot of JSON for a dot.
+      select: { siteId: true, date: true, approvedAt: true, _count: { select: { corrections: true } } },
     }),
     loadHolidays(),
   ]);
 
   const countedBySite = new Map();
   const approvedBySite = new Map();
+  const correctedBySite = new Map();
   for (const count of counts) {
     const ymd = dateToYmd(count.date);
     if (!countedBySite.has(count.siteId)) countedBySite.set(count.siteId, new Set());
@@ -36,13 +40,23 @@ export const GET = handle(async () => {
       if (!approvedBySite.has(count.siteId)) approvedBySite.set(count.siteId, new Set());
       approvedBySite.get(count.siteId).add(ymd);
     }
+    if (count._count.corrections > 0) {
+      if (!correctedBySite.has(count.siteId)) correctedBySite.set(count.siteId, new Set());
+      correctedBySite.get(count.siteId).add(ymd);
+    }
   }
 
   const result = {};
   for (const site of sites) {
-    // `holidays` is additive to the legacy shape: old callers ignore it.
-    // `holidays` and `approvedDates` are additive: old callers ignore them.
-    result[site.name] = { validDates: {}, excludedDates: [], holidays: {}, approvedDates: [] };
+    // `holidays`, `approvedDates` and `correctedDates` are additive to the
+    // legacy shape: old callers ignore them.
+    result[site.name] = {
+      validDates: {},
+      excludedDates: [],
+      holidays: {},
+      approvedDates: [],
+      correctedDates: [],
+    };
   }
   const byId = new Map(sites.map((s) => [s.id, s]));
 
@@ -92,6 +106,7 @@ export const GET = handle(async () => {
     if (!site) continue;
     result[site.name].excludedDates = [...ymds].sort();
     result[site.name].approvedDates = [...(approvedBySite.get(siteId) ?? [])].sort();
+    result[site.name].correctedDates = [...(correctedBySite.get(siteId) ?? [])].sort();
   }
 
   return legacyJson(result);

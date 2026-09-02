@@ -13,6 +13,7 @@ const INK = rgb(0.06, 0.09, 0.16); // slate-900
 const MUTED = rgb(0.39, 0.45, 0.55); // slate-500
 const LINE = rgb(0.89, 0.91, 0.94); // slate-200
 const HEADER_BG = rgb(0.97, 0.98, 0.99); // slate-50
+const WARN = rgb(0.71, 0.33, 0.05); // amber-700, readable when this prints in grey
 
 const CERTIFICATION_TEXT =
   'I certify that the information on this form is true and correct to the best of my ' +
@@ -117,6 +118,26 @@ export async function buildMealCountPdf(count) {
   text(`Time out: ${timeLabel(count.timeOut)}`, MARGIN + 110, 9, { color: MUTED });
   if (count.submittedBy && count.submittedBy !== 'gas-import') {
     text(`Submitted by: ${count.submittedBy}`, MARGIN + 230, 9, { color: MUTED });
+  }
+
+  // A corrected count prints its current values, so on paper it is
+  // indistinguishable from one that was right the first time. Whoever receives
+  // this has to be able to see that it was touched after it was signed, and
+  // when - that is the whole point of keeping the original values.
+  if (count.corrected) {
+    y -= 15;
+    const last = count.corrections?.[0];
+    const when = last?.at ? new Date(last.at) : null;
+    const stamp = when
+      ? ` on ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : '';
+    const times = count.corrections?.length ?? 1;
+    text(
+      `CORRECTED after submission - ${times} ${times === 1 ? 'correction' : 'corrections'}, last${stamp}${last?.by ? ` by ${last.by}` : ''}`,
+      MARGIN,
+      9,
+      { bold: true, color: WARN }
+    );
   }
   y -= 20;
 

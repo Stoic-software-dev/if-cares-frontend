@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Contentlayer
 .contentlayer
+
+# Crash dumps from the shell, not the app
+*.stackdump

@@ -278,6 +278,11 @@ trabajo con el cliente.
 - [x] Consolidados por mes × estado: los 2 reportes (`claim-part1` por sitio,
       `claim-part2` por día), sin tope de sitios, guardados y recuperables, con el paso
       de firma. Medido: 34 sitios de TX en 3,4 s.
+- [x] **Las correcciones llegan al consolidado**: el reporte lee los counts como están
+      hoy, no la versión original, así que corregir un día mueve el total del claim.
+      Verificado contra producción el 2-sep: sobre los 56 sitios, marcar un almuerzo
+      más llevó el total de `lun` de 9 a 10 sin tocar ninguna otra comida, y deshacer la
+      corrección lo devolvió a 9.
 - [x] **[S] Formulario del consolidado**: estado, mes y año, exclusión de sitios con
       buscador y atajos de incluir o excluir todos, validando que quede al menos uno
       (`/admin/reports/consolidated`).
@@ -302,7 +307,17 @@ trabajo con el cliente.
       lo ve en su pantalla y le llega por mail. Reabrir un request limpia la respuesta,
       para que no quede una resolución vieja sobre algo otra vez abierto.
 - [x] **[S] Inbox usable con volumen**: buscador que cruza todos los campos, contador
-      por pestaña y filtros por sitio además de estado.
+      por pestaña y filtros por estado, por sitio y **por fecha** (desde/hasta, los dos
+      extremos incluidos, resueltos en `PROGRAM_TIMEZONE` para que un request de las
+      11 de la noche no se filtre como del día siguiente).
+- [x] **Aviso de request nuevo** (`src/lib/request-notify.js`): apenas entra un request
+      sale el mismo mail que mandaba el Apps Script, a los mismos destinatarios
+      (`kenya@ifcares.org`, con copia a `marisela@ifcares.org`) y con la misma frase.
+      Son valores por defecto, no constantes: destinatarios y on/off se editan desde
+      `/admin/settings`, así el día que cambie una dirección no hace falta un deploy.
+      El envío no se espera y nunca puede voltear el request: una falla va a
+      `ALERT_EMAILS`, porque un sitio pidiendo servilletas no tiene por qué comerse un
+      error de casilla. Verificado en producción el 2-sep.
 - [x] Reminders diarios de counts atrasados: on/off, horario, cuántos días atrás mirar y
       copias fijas se configuran en `/admin/settings`, **sin deploy**. Cada persona recibe
       solo sus sitios, un feriado nunca cuenta como atrasado, y hay un **preview** que

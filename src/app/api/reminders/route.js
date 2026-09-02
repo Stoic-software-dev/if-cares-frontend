@@ -5,6 +5,7 @@ import { mailConfigured, sendMail, parseRecipients } from '@/lib/gmail';
 import { countOverdue } from '@/lib/mail-templates';
 import { dateToYmd, localHour, todayYmd } from '@/lib/dates';
 import { notifyFailure } from '@/lib/alerts';
+import { readRequestNotifySettings, writeRequestNotifySettings } from '@/lib/request-notify';
 import { applyHolidays, loadHolidays } from '@/lib/holidays';
 import { logAudit } from '@/lib/audit';
 
@@ -61,7 +62,13 @@ export const GET = handle(async () => {
   const settings = await readSettings();
   return legacyJson({
     result: 'success',
-    data: { ...settings, mailReady: mailConfigured(), lastPingAt: await readLastPing() },
+    data: {
+      ...settings,
+      mailReady: mailConfigured(),
+      lastPingAt: await readLastPing(),
+      // The other thing this screen owns: who hears about a new request.
+      requestNotify: await readRequestNotifySettings(),
+    },
   });
 });
 
@@ -95,15 +102,28 @@ export const PATCH = handle(async (req) => {
     update: { value: JSON.stringify(next) },
   });
 
+  // The request notice lives on the same screen, so it is saved by the same
+  // call rather than by a second endpoint that does one field.
+  let requestNotify;
+  if (body.requestNotify !== undefined) {
+    try {
+      requestNotify = await writeRequestNotifySettings(body.requestNotify);
+    } catch (error) {
+      throw new ApiError(422, error.message);
+    }
+  } else {
+    requestNotify = await readRequestNotifySettings();
+  }
+
   await logAudit({
     actor: session.user,
     action: 'reminders.update',
     entity: 'setting',
     entityId: SETTINGS_KEY,
-    payload: next,
+    payload: { ...next, ...(body.requestNotify !== undefined ? { requestNotify } : {}) },
   });
 
-  return legacyJson({ result: 'success', data: next });
+  return legacyJson({ result: 'success', data: { ...next, requestNotify } });
 });
 
 /**

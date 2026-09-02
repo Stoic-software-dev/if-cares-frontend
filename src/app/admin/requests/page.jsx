@@ -9,6 +9,7 @@ import PageHeader from '@/components/shell/PageHeader';
 import RequestForm from '@/components/requests/RequestForm';
 import StatusBadge from '@/components/requests/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch } from '@/lib/api-client';
+import { ymdInProgramTz } from '@/lib/calendar';
 import { SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { requestDate, requestDetail } from '@/lib/requests';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
@@ -39,6 +41,8 @@ function InboxScreen() {
   const [status, setStatus] = useState('NEW');
   const [query, setQuery] = useState('');
   const [siteFilter, setSiteFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [busyId, setBusyId] = useState('');
   const [page, setPage] = useState(1);
   const [resolving, setResolving] = useState(null);
@@ -89,20 +93,25 @@ function InboxScreen() {
     return (inbox ?? []).filter((request) => {
       if (status !== 'ALL' && request.status !== status) return false;
       if (siteFilter !== 'ALL' && request.site !== siteFilter) return false;
+      // The date filter reads the request's own day in the program timezone,
+      // not the browser's: a request filed at 11 PM in Buenos Aires belongs to
+      // the Dallas day the site was working, the same rule the counts follow.
+      if (fromDate && ymdInProgramTz(new Date(request.createdAt)) < fromDate) return false;
+      if (toDate && ymdInProgramTz(new Date(request.createdAt)) > toDate) return false;
       if (!q) return true;
       return [request.type, request.site, request.requestedBy, request.note ?? '', requestDetail(request)]
         .join(' ')
         .toLowerCase()
         .includes(q);
     });
-  }, [inbox, status, siteFilter, query]);
+  }, [inbox, status, siteFilter, query, fromDate, toDate]);
 
   // Ten requests fit on a screen; a school year of them does not. Any change to
   // what is being listed starts the listing over, so page 4 of a filter that now
   // returns two rows is never an empty screen.
   useEffect(() => {
     setPage(1);
-  }, [status, siteFilter, query]);
+  }, [status, siteFilter, query, fromDate, toDate]);
 
   const pageCount = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
@@ -219,6 +228,41 @@ function InboxScreen() {
                 </option>
               ))}
             </NativeSelect>
+          )}
+        </div>
+
+        {/* Dates are their own row: on a phone they would squeeze the site
+            selector into something unusable next to them. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-medium text-muted-foreground">Filed between</span>
+          <Input
+            type="date"
+            aria-label="From date"
+            value={fromDate}
+            max={toDate || undefined}
+            onChange={(event) => setFromDate(event.target.value)}
+            className="w-auto"
+          />
+          <span className="text-[12px] text-muted-foreground">and</span>
+          <Input
+            type="date"
+            aria-label="To date"
+            value={toDate}
+            min={fromDate || undefined}
+            onChange={(event) => setToDate(event.target.value)}
+            className="w-auto"
+          />
+          {(fromDate || toDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFromDate('');
+                setToDate('');
+              }}
+            >
+              Clear dates
+            </Button>
           )}
         </div>
 

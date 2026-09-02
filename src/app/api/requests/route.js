@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/db';
-import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireUser, requireSiteAccess, visibleSites } from '@/lib/auth';
 import { requestSchema } from '@/lib/validation';
 import { toCanonicalTime } from '@/lib/dates';
+import { notifyNewRequest } from '@/lib/request-notify';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,17 @@ export const POST = handle(async (req) => {
       requestedById: session.user.id,
       requestedByEmail: session.user.email,
     },
+  });
+
+  // The old app emailed IF Cares the moment a request came in. Losing that at
+  // cutover would turn a message that reaches somebody into a row in a screen
+  // nobody has open. Not awaited: a site asking for sporks must not get an
+  // error because a mailbox is slow.
+  notifyNewRequest({
+    request,
+    site: site.name,
+    requestedBy: session.user.email,
+    link: `${appBaseUrl(req)}/admin/requests`,
   });
 
   await logAudit({

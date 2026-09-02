@@ -13,7 +13,12 @@ export const MEAL_KEYS = [
 // The program's calendar day, not the device's: a submission at 11 PM in
 // Buenos Aires must still count for the Dallas service day.
 export function todayYmd() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: PROGRAM_TIMEZONE }).format(new Date());
+  return ymdInProgramTz(new Date());
+}
+
+/** Any instant as the program's calendar day, by the same rule as `todayYmd`. */
+export function ymdInProgramTz(date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: PROGRAM_TIMEZONE }).format(date);
 }
 
 function ymdParts(ymd) {

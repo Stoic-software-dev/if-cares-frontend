@@ -75,6 +75,8 @@ function RemindersScreen() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [copyTo, setCopyTo] = useState('');
+  const [requestTo, setRequestTo] = useState('');
+  const [requestCc, setRequestCc] = useState('');
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
 
@@ -84,6 +86,8 @@ function RemindersScreen() {
       .then((res) => {
         setSettings(res.data);
         setCopyTo((res.data.copyTo ?? []).join(', '));
+        setRequestTo((res.data.requestNotify?.to ?? []).join(', '));
+        setRequestCc((res.data.requestNotify?.cc ?? []).join(', '));
       })
       .catch((err) => setError(err.message));
   };
@@ -98,7 +102,9 @@ function RemindersScreen() {
       // screen come from GET and would blank out on every save otherwise.
       setSettings({ ...res.data, mailReady: settings.mailReady, lastPingAt: settings.lastPingAt });
       setCopyTo((res.data.copyTo ?? []).join(', '));
-      toast.success('Reminders saved');
+      setRequestTo((res.data.requestNotify?.to ?? []).join(', '));
+      setRequestCc((res.data.requestNotify?.cc ?? []).join(', '));
+      toast.success('Saved');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -256,6 +262,65 @@ function RemindersScreen() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* 3.9: the notice that goes out when a site asks for something.
+                It belongs next to the reminder because both answer the same
+                question - who hears from this app without opening it. */}
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 md:p-5">
+              <label className="flex items-center justify-between gap-4">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-[14px] font-semibold text-foreground">
+                    Tell someone when a request comes in
+                  </span>
+                  <span className="text-[12.5px] text-muted-foreground">
+                    The same notice the old app sent, the moment a site asks for something.
+                  </span>
+                </span>
+                <Switch
+                  checked={settings.requestNotify?.enabled ?? true}
+                  disabled={saving}
+                  onCheckedChange={(checked) =>
+                    save({ requestNotify: { ...settings.requestNotify, enabled: checked } })
+                  }
+                />
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="To" htmlFor="request-to" hint="Comma separated.">
+                  <div className="flex gap-2">
+                    <Input
+                      id="request-to"
+                      value={requestTo}
+                      onChange={(event) => setRequestTo(event.target.value)}
+                      placeholder="kenya@ifcares.org"
+                    />
+                  </div>
+                </Field>
+                <Field label="Copy to" htmlFor="request-cc" hint="Comma separated.">
+                  <div className="flex gap-2">
+                    <Input
+                      id="request-cc"
+                      value={requestCc}
+                      onChange={(event) => setRequestCc(event.target.value)}
+                      placeholder="marisela@ifcares.org"
+                    />
+                    <Button
+                      variant="outline"
+                      className="shrink-0"
+                      loading={saving}
+                      onClick={() =>
+                        save({
+                          requestNotify: { ...settings.requestNotify, to: requestTo, cc: requestCc },
+                        })
+                      }
+                    >
+                      {!saving && <Save />}
+                      Save
+                    </Button>
+                  </div>
+                </Field>
+              </div>
             </div>
 
             <SchedulerHeartbeat lastPingAt={settings.lastPingAt} />

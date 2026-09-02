@@ -47,6 +47,25 @@ export function welcome({ name, link, sites = [], hours = 24 }) {
   };
 }
 
+// The notice IF Cares gets when a site asks for something. Deliberately the
+// same sentence the Apps Script sent - "The X Site has received a new request
+// on DATE" - because these are skimmed, not read, and the people receiving
+// them have been reading that shape for years.
+export function requestReceived({ site, type, value, note, requestedBy, when, link }) {
+  return {
+    subject: 'New Request Received',
+    html: SHELL(`
+      <p>The <strong>${site} Site</strong> has received a new request on <strong>${when}</strong></p>
+      <p><u>Details of the request:</u><br>
+      <strong>Type:</strong> ${type}<br>
+      <strong>Value:</strong> ${value || '—'}</p>
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${note}</blockquote>` : ''}
+      ${link ? button(link, 'Open the request') : ''}
+      <p style="font-size:13px;color:#475569">Sent by ${requestedBy}.</p>
+    `),
+  };
+}
+
 export function requestAnswered({ name, type, detail, site, comment, resolvedBy }) {
   return {
     subject: `Your request was answered: ${type}`,

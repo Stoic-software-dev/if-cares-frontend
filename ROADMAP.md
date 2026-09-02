@@ -328,6 +328,20 @@ trabajo con el cliente.
       (`reminderStart/End`, 25 de 64 la traen del master); un sitio sin ventana entra
       igual, porque una celda vacía es una forma demasiado silenciosa de apagarle los
       avisos a un sitio. Si algún envío falla, sale una alerta a `ALERT_EMAILS`.
+- [x] **El servidor agenda sus propios recordatorios** (2-sep): el cron aparte de Railway
+      (`curlimages/curl`) ejecutó exactamente dos veces y después quedó horas sin un tick,
+      con el deployment marcado sano — que es justo la falla que esta funcionalidad existe
+      para evitar. La agenda pasó al proceso donde los recordatorios ya corrían
+      (`src/instrumentation.js` → `src/lib/reminder-scheduler.js`), lo que saca de encima
+      un servicio más que mantener vivo, un secreto compartido escrito en texto plano en un
+      start command, y una llamada HTTP que la app se hacía a sí misma. `POST /api/reminders`
+      con el secreto sigue funcionando: un disparador externo sigue siendo válido.
+      Chequea cada 5 minutos y manda **una vez por día, a partir de** la hora configurada,
+      no exactamente a esa hora: Next arma el hook de instrumentación en el primer request,
+      así que un deploy de madrugada lo arma cuando alguien abre la app, y una comparación
+      exacta se saltaría el día entero en silencio. La marca de "ya mandé hoy" vive en la
+      base, no en el proceso: con la anterior, un reinicio a las 9:02 le mandaba a las
+      sesenta personas por segunda vez.
 - [x] **La ventana de recordatorio se edita desde la app** (2-sep): estaba en el
       formulario de ningún lado. La ruta la leía, pero las dos fechas solo entraban por la
       pestaña `Reminders` del master, así que el día del freeze quedaban congeladas para
@@ -360,6 +374,22 @@ trabajo con el cliente.
       qué saber que existe. Un admin mirando stack traces no aprende nada y se preocupa al
       pedo. Las **fallas del servidor** van por mail aparte (`src/lib/alerts.js`), que es lo
       que hacían `sendFailureAlert`/`sendPartialFailureAlert` en el legacy.
+
+      **El log no reporta el control de flujo de Next** (2-sep). Tres de las cuatro
+      primeras entradas reales que juntó eran un solo `redirect()` en la raíz: dos como
+      `NEXT_REDIRECT` literal y siete veces como React #419, que es cómo se ve el mismo
+      throw desde adentro del boundary de Suspense que `loading.jsx` le pone a todas las
+      rutas. El redirect andaba; solo dejaba un parte de accidente cada vez. Se arregló de
+      los dos lados: la raíz pasó a ser un redirect HTTP en `next.config.js` (no renderiza,
+      no hay boundary que abortar) y `reportError` descarta los throws de control de flujo.
+      Un log que grita lobo es cómo se pierde el crash de verdad.
+- [x] **Un sitio sin días de servicio por delante se ve** (2-sep): la pantalla de Sites
+      avisa cuántos hay y marca cada uno, y `npm run db:calendar` lo reporta desde la
+      terminal saliendo con código 1. Medido ese día: **53 de 56 sitios activos** no podían
+      cargar un count al día siguiente, y ninguna pantalla lo decía — porque un sitio con el
+      calendario vacío tampoco muestra counts atrasados, así que leía como sano. Misma
+      forma que el consolidado que se comía 7 sitios: el número se veía bien porque lo que
+      contaba no estaba.
 - [x] **Patrón de listados admin**: usuarios, sitios, requests, feriados y errores del
       cliente comparten `ui/pagination.jsx` y el mismo buscador.
 - [x] **Confirmación explícita en acciones destructivas** (`ui/confirm-dialog.jsx`):

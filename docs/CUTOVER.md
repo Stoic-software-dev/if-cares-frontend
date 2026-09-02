@@ -25,17 +25,58 @@ Nada de esto lo decidimos nosotros. Sin las cuatro respuestas, no se corta.
    Son decisiones sobre datos reales: alumnos duplicados, cuentas repetidas, registros que
    se descartan. Migrar sin esas respuestas es elegir por el cliente.
 
-Además, antes del día:
+### Lo que bloquea el corte y es nuestro
+
+**El calendario de servicio está vacío hacia adelante.** Medido contra producción el
+2-sep: **53 de los 56 sitios activos no tienen un solo día por delante**, 36 días en todo
+el programa, y ningún sitio trae ciclo ni plantilla semanal. Cargar un count exige que el
+día exista (`ServiceDay`); sin él la API contesta "This date is not available for meal
+counts". O sea: **la mañana siguiente al freeze, casi nadie puede trabajar.**
+
+No es un descuido de la migración, es cómo era el sistema viejo: publicaba los días de a
+uno, a las 7:45 de cada mañana, desde la pestaña `All Meals` del master. El import solo
+podía capturar los dos o tres días que esa pestaña tuviera en ese momento, y **la corrida
+final tampoco va a traer más**. El calendario del ciclo hay que construirlo en la app.
+
+```
+npm run db:calendar
+```
+
+Reporta qué sitios están vacíos y **propone la plantilla semanal de cada uno leída de sus
+propios counts** — no de las banderas de `ServiceDay`, que no sirven acá: el 89% de los
+días importados trae las cuatro comidas en `false`, no sobrevivieron al export. Sale
+limpio: BGC Cooke `Mon LS` y de martes a viernes `SP`, Churchill `Mon..Fri S`, y así. Sale
+con código 1 mientras quede un sitio sin días, así que sirve de compuerta.
+
+Cinco sitios no tienen historia reciente de la que deducir nada; esos se preguntan.
+
+En la app se ve sin correr nada: la pantalla **Sites** avisa cuántos sitios no tienen días
+por delante y marca cada uno. Antes no se notaba, porque un sitio con el calendario vacío
+tampoco muestra counts atrasados: leía como sano.
+
+### El resto, antes del día
 
 - [ ] Las pruebas con staff real (STOIC-2206) cerradas, sin hallazgos bloqueantes abiertos.
-- [ ] El scheduler de recordatorios **efectivamente ejecutando**. Hoy el servicio existe
-      pero no dispara ningún tick; la pantalla de recordatorios lo muestra con el latido
-      (`AppSetting reminders.lastPing`). Un recordatorio que no sale se ve igual que un
-      recordatorio sin nada que decir, y tres días sin count pausan la comida de un sitio.
-- [ ] Los feriados del ciclo cargados. Hoy hay cero. Sin ellos, cada feriado se reclama
-      como día atrasado y el staff recibe recordatorios por días que no existieron.
-- [ ] `qa.admin@example.org` y cualquier otra cuenta de prueba, **borradas**. Tienen
-      contraseña conocida y rol de administrador.
+- [x] El scheduler de recordatorios. **Resuelto el 2-sep**: lo agenda el propio servidor
+      (`src/lib/reminder-scheduler.js`), no un servicio aparte corriendo `curl`. El que
+      había ejecutó exactamente dos veces y después quedó horas sin un tick, con el
+      deployment marcado sano. Ahora chequea cada 5 minutos y manda una vez por día, a
+      partir de la hora configurada, contra una fecha guardada en la base para que un
+      reinicio no mande todo dos veces. La pantalla distingue **cuándo chequeó** de
+      **cuándo mandó**. Falta solo **encenderlos**: hoy están en off, que es lo correcto
+      hasta el corte.
+- [ ] Los feriados del ciclo cargados. Hoy hay cero filas. Menos urgente de lo que parecía:
+      hoy solo Labor Day cae en un día de servicio, y en 2 sitios. Pero cuando se construya
+      el calendario del ciclo, los feriados hay que marcarlos junto con él, o cada uno se
+      reclama como día atrasado.
+- [ ] **Borrar las cuentas de prueba**: `qa.admin@example.org` (ADMIN, contraseña conocida),
+      `qa.tester@example.org`, `qa.apitest@example.org`.
+- [ ] **Borrar los 5 sitios de prueba**. Están todos inactivos y sin un solo count vivo,
+      pero ensucian cualquier auditoría con 803 días de servicio fantasma: `ZZ Concurrency
+      Site 1788295032152`, `ZZ Concurrency Site2 1788295058032`, `ZZ Concurrency Site3
+      1788295102065`, `ZZ Deploy Probe No State`, `ZZ QA TEST SITE 20260831 RENAMED`. La app
+      no borra sitios a propósito — desactiva — así que va por el editor SQL de Supabase,
+      borrando primero entries, correcciones, counts, requests, días y alumnos.
 - [ ] Backups automáticos de Supabase verificados **con una restauración de verdad**, no
       con la pantalla que dice que están activos.
 
@@ -60,11 +101,16 @@ Anotar la hora exacta del freeze. Es la línea contra la que se compara todo des
 npm run db:import:master     # sitios, usuarios, calendarios, rosters
 npm run db:import:history    # counts históricos
 npm run db:reconcile         # sitio x mes, Sheets contra base
+npm run db:calendar          # que todo sitio pueda cargar mañana
 ```
 
 `db:reconcile` compara días, filas y totales por comida, sitio por sitio y mes por mes,
 separando lo cargado por la app de lo anulado. **Sale con código 1 si hay una sola
 diferencia.** No se sigue con diferencias sin explicar.
+
+`db:calendar` es la otra compuerta, y la que más fácil se olvida: la reconciliación puede
+dar perfecta con un calendario vacío, porque mide lo que ya pasó. Esta mide si mañana se
+puede trabajar.
 
 ### 3. Validar con IF Cares antes de habilitar a nadie
 
@@ -88,8 +134,10 @@ En producción, con la data final, antes de irse:
 - [ ] Un consolidado por estado, con firma.
 - [ ] Que el aviso de request nuevo llegue a quien tiene que llegar
       (`kenya@ifcares.org`, copia a `marisela@ifcares.org`).
-- [ ] Que el recordatorio diario salga, mirando el latido del scheduler.
-- [ ] `npm run smoke` contra producción.
+- [ ] Encender los recordatorios y confirmar en la pantalla que el scheduler **chequeó**
+      hace minutos y que **mandó** el día que corresponde. Son dos líneas distintas, y solo
+      la segunda dice que alguien recibió algo.
+- [ ] `npm run smoke` y `npm run db:calendar` contra producción.
 
 Y después del día del corte:
 
@@ -125,5 +173,9 @@ consolidados con firma, correcciones que llegan a los totales del claim, import 
 aviso de request nuevo, y la reconciliación completa sin diferencias.
 
 Lo que falta y **no es código**: la fecha con el cliente, las respuestas a la carta de
-anomalías, los feriados cargados, el scheduler ejecutando, las pruebas con staff real y la
-restauración de backup probada.
+anomalías, las pruebas con staff real y la restauración de backup probada.
+
+Lo que falta y **sí es trabajo, aunque no sea código**: construir el calendario del ciclo.
+Es lo único que hoy haría fracasar el corte por sí solo, y es lo que menos parecía un
+problema, porque un sitio sin días no muestra nada raro en ninguna pantalla. Ahora sí las
+muestra.

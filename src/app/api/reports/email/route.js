@@ -1,0 +1,100 @@
+import { z } from 'zod';
+import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
+import { requireUser, requireSiteAccess } from '@/lib/auth';
+import { mailConfigured, sendMail, parseRecipients, MailError } from '@/lib/gmail';
+import { countSent } from '@/lib/mail-templates';
+import { loadMealCountDetail } from '@/lib/meal-count-detail';
+import { buildMealCountPdf } from '@/lib/meal-count-pdf';
+import { siteMonth, monthLabel } from '@/lib/report-data';
+import { buildSiteMonthPdf } from '@/lib/report-pdf';
+import { safeName } from '@/lib/pdf-archive';
+import { dateLabel } from '@/lib/calendar';
+import { logAudit } from '@/lib/audit';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// STOIC-2203: "poder mandar por email cualquier PDF exportado". Consolidated
+// claims already had this; the daily form and the monthly summary - the two a
+// site actually deals with - could only be downloaded and then attached by
+// hand, which is the step where the wrong month gets sent.
+//
+// It builds the same bytes the download endpoints build, from the same
+// functions, so what lands in the inbox is the document that screen shows and
+// not a second rendering that can drift from it.
+
+const schema = z
+  .object({
+    kind: z.enum(['daily', 'monthly']),
+    site: z.string().min(1, 'Site is required.'),
+    to: z.string().min(1, 'Add at least one recipient.'),
+    note: z.string().trim().max(500).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    month: z.coerce.number().int().min(1).max(12).optional(),
+  })
+  .refine((v) => (v.kind === 'daily' ? Boolean(v.date) : Boolean(v.year && v.month)), {
+    message: 'A daily send needs a date; a monthly one needs a year and a month.',
+    path: ['kind'],
+  });
+
+export const POST = handle(async (req) => {
+  const session = await requireUser();
+  const body = schema.parse(await readJsonBody(req));
+
+  // Same gate as downloading it: if you cannot open the document you cannot
+  // mail it to somebody else either.
+  await requireSiteAccess(session, body.site);
+
+  const { valid, invalid } = parseRecipients(body.to);
+  if (invalid.length) throw new ApiError(422, `Not an email address: ${invalid[0]}`);
+  if (!valid.length) throw new ApiError(422, 'Add at least one recipient.');
+  if (!mailConfigured()) throw new ApiError(503, 'Email sending is not configured yet.');
+
+  let bytes;
+  let fileName;
+  let period;
+
+  if (body.kind === 'daily') {
+    const count = await loadMealCountDetail(session, body.site, body.date);
+    bytes = await buildMealCountPdf(count);
+    fileName = `MealCount_${safeName(body.site)}_${body.date}.pdf`;
+    period = dateLabel(body.date);
+  } else {
+    const data = await siteMonth({ site: body.site, year: body.year, month: body.month });
+    if (!data) throw new ApiError(404, 'Site not found.');
+    if (!data.days.length) throw new ApiError(422, 'That month has no counts to send.');
+    bytes = await buildSiteMonthPdf(data);
+    fileName = `${safeName(body.site)} ${body.year}-${String(body.month).padStart(2, '0')} monthly.pdf`;
+    period = monthLabel(body.year, body.month);
+  }
+
+  const message = countSent({
+    site: body.site,
+    period,
+    fileName,
+    note: body.note ?? '',
+    senderName: session.user.email,
+  });
+
+  try {
+    await sendMail({
+      to: valid,
+      ...message,
+      attachments: [{ name: fileName, bytes, mimeType: 'application/pdf' }],
+    });
+  } catch (error) {
+    if (error instanceof MailError) throw new ApiError(502, error.message);
+    throw error;
+  }
+
+  await logAudit({
+    actor: session.user,
+    action: body.kind === 'daily' ? 'report.daily_sent' : 'report.monthly_sent',
+    entity: 'site',
+    entityId: body.site,
+    payload: { site: body.site, period, to: valid.length, fileName },
+  });
+
+  return legacyJson({ result: 'success', data: { sent: valid.length, fileName } });
+});

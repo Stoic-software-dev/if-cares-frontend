@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Ban, BadgeCheck, Check, Download, History, MoreVertical, Pencil, RotateCcw, ShieldAlert } from 'lucide-react';
+import { Ban, BadgeCheck, Check, Download, History, MoreVertical, Pencil, RotateCcw, Send, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, invalidate } from '@/lib/data-cache';
+import EmailPdfDialog from '@/components/reports/EmailPdfDialog';
 import { dateLabel } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
 import { cn } from '@/lib/utils';
@@ -74,6 +75,7 @@ function CountDetailScreen() {
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [emailing, setEmailing] = useState(false);
   const [voided, setVoided] = useState(false);
   const [approving, setApproving] = useState(false);
 
@@ -218,6 +220,10 @@ function CountDetailScreen() {
                 <Button variant="outline" onClick={downloadPdf} loading={downloading}>
                   <Download />
                   {downloading ? 'Preparing' : 'Download PDF'}
+                </Button>
+                <Button variant="outline" onClick={() => setEmailing(true)}>
+                  <Send />
+                  Email PDF
                 </Button>
                 {admin && !count.approved && (
                   <Button
@@ -483,6 +489,15 @@ function CountDetailScreen() {
           </span>
         </div>
       </ConfirmDialog>
+
+      <EmailPdfDialog
+        open={emailing}
+        onClose={() => setEmailing(false)}
+        kind="daily"
+        site={site}
+        date={date}
+        label={`The ${dateLabel(date)} count for ${shortSiteName(site)}`}
+      />
     </AppShell>
   );
 }

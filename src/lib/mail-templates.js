@@ -96,6 +96,20 @@ export function claimSent({ period, state, fileName, note }) {
   };
 }
 
+// A daily form or a whole month of them, sent from the screen that shows it.
+// The subject carries the site and the period because these get forwarded and
+// filed, and "meal count.pdf" in an inbox six months later says nothing.
+export function countSent({ site, period, fileName, note, senderName }) {
+  return {
+    subject: `Meal count: ${site}, ${period}`,
+    html: SHELL(`
+      <p>Attached is the meal count for <strong>${site}</strong>, ${period}.</p>
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${note}</blockquote>` : ''}
+      <p style="font-size:13px;color:#475569">${fileName}${senderName ? ` · sent by ${senderName}` : ''}</p>
+    `),
+  };
+}
+
 export function signatureRequest({ period, state, link }) {
   return {
     subject: `Signature needed: meals claimed, ${state ? `${state} ` : ''}${period}`,

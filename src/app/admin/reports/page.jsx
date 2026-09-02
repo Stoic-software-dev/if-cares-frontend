@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Download, FileText, Layers, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, FileText, Layers, Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
+import EmailPdfDialog from '@/components/reports/EmailPdfDialog';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { dateLabel, monthLabel, todayYmd } from '@/lib/calendar';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
@@ -47,6 +48,7 @@ function ReportsScreen() {
   }));
   const [busyDate, setBusyDate] = useState('');
   const [bulk, setBulk] = useState(null);
+  const [emailing, setEmailing] = useState(false);
 
   const siteList = useCachedGet(SITES_PATH);
   const mealList = useCachedGet(ALL_MEALS_PATH);
@@ -159,6 +161,12 @@ function ReportsScreen() {
                     <FileText />
                     Monthly summary
                   </a>
+                </Button>
+              )}
+              {site && submitted.length > 0 && (
+                <Button variant="outline" onClick={() => setEmailing(true)}>
+                  <Send />
+                  Email the summary
                 </Button>
               )}
               {submitted.length > 0 && (
@@ -281,6 +289,16 @@ function ReportsScreen() {
           </>
         )}
       </div>
+
+      <EmailPdfDialog
+        open={emailing}
+        onClose={() => setEmailing(false)}
+        kind="monthly"
+        site={site}
+        year={cursor.year}
+        month={cursor.month}
+        label={`The ${monthLabel(cursor.year, cursor.month)} summary for ${shortSiteName(site ?? '')}`}
+      />
     </AppShell>
   );
 }

@@ -7,6 +7,7 @@ import {
   CalendarRange,
   ExternalLink,
   FileText,
+  FileUp,
   MoreVertical,
   Pencil,
   Plus,
@@ -36,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import SiteForm, { emptySite } from '@/components/sites/SiteForm';
+import RosterImportDialog from '@/components/sites/RosterImportDialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
@@ -180,6 +182,7 @@ function SiteDetailScreen() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [dialog, setDialog] = useState(null);
+  const [importing, setImporting] = useState(false);
   const [removing, setRemoving] = useState(null);
 
   const loadRoster = () =>
@@ -459,7 +462,11 @@ function SiteDetailScreen() {
             <TabsContent value="roster" className="flex flex-col gap-3">
               <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
                 <SearchInput value={query} onChange={setQuery} placeholder="Find a student" className="sm:w-80" />
-                <Button className="sm:ml-auto" onClick={() => setDialog({ mode: 'create' })}>
+                <Button variant="outline" className="sm:ml-auto" onClick={() => setImporting(true)}>
+                  <FileUp strokeWidth={2.2} />
+                  Import roster
+                </Button>
+                <Button onClick={() => setDialog({ mode: 'create' })}>
                   <Plus strokeWidth={2.4} />
                   Add student
                 </Button>
@@ -550,6 +557,13 @@ function SiteDetailScreen() {
         site={site}
         onClose={() => setDialog(null)}
         onSaved={loadRoster}
+      />
+
+      <RosterImportDialog
+        open={importing}
+        site={site}
+        onClose={() => setImporting(false)}
+        onImported={loadRoster}
       />
 
       <Dialog open={editing} onOpenChange={setEditing}>

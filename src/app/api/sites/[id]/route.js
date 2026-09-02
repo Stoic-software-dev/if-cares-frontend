@@ -48,6 +48,12 @@ export const PATCH = handle(async (req, { params }) => {
       ...(body.programEnd !== undefined
         ? { programEnd: body.programEnd ? ymdToUtcDate(body.programEnd) : null }
         : {}),
+      ...(body.reminderStart !== undefined
+        ? { reminderStart: body.reminderStart ? ymdToUtcDate(body.reminderStart) : null }
+        : {}),
+      ...(body.reminderEnd !== undefined
+        ? { reminderEnd: body.reminderEnd ? ymdToUtcDate(body.reminderEnd) : null }
+        : {}),
       ...(weeklyTemplate !== undefined ? { weeklyTemplate } : {}),
     },
   });

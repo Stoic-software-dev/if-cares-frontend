@@ -57,6 +57,8 @@ export const POST = handle(async (req) => {
         active: true,
         programStart: body.programStart ? ymdToUtcDate(body.programStart) : null,
         programEnd: body.programEnd ? ymdToUtcDate(body.programEnd) : null,
+        reminderStart: body.reminderStart ? ymdToUtcDate(body.reminderStart) : null,
+        reminderEnd: body.reminderEnd ? ymdToUtcDate(body.reminderEnd) : null,
         weeklyTemplate,
       },
     });

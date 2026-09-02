@@ -235,6 +235,8 @@ function SiteDetailScreen() {
       siteNumber: record.siteNumber ?? '',
       programStart: record.programStart ?? '',
       programEnd: record.programEnd ?? '',
+      reminderStart: record.reminderStart ?? '',
+      reminderEnd: record.reminderEnd ?? '',
       weeklyTemplate: record.weeklyTemplate ?? {},
     });
     setAttempted(false);

@@ -28,6 +28,8 @@ export const emptySite = {
   siteNumber: '',
   programStart: '',
   programEnd: '',
+  reminderStart: '',
+  reminderEnd: '',
   weeklyTemplate: {},
 };
 
@@ -85,6 +87,10 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
   const rangeError =
     attempted && value.programStart && value.programEnd && value.programStart > value.programEnd
       ? 'The program ends before it starts.'
+      : undefined;
+  const reminderRangeError =
+    attempted && value.reminderStart && value.reminderEnd && value.reminderStart > value.reminderEnd
+      ? 'The reminder window ends before it starts.'
       : undefined;
 
   return (
@@ -246,6 +252,40 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
                   what the cycle implies; days that already have a count are never touched.
                 </p>
               )}
+            </div>
+
+            {/* Separate from the program cycle on purpose: a site can serve all
+                year and only be chased for part of it. Both empty is the common
+                case and means always. */}
+            <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Reminder window
+              </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Chase from" htmlFor="site-reminder-start">
+                  <Input
+                    id="site-reminder-start"
+                    type="date"
+                    value={value.reminderStart ?? ''}
+                    onChange={(event) => set({ reminderStart: event.target.value })}
+                  />
+                </Field>
+                <Field label="Chase until" htmlFor="site-reminder-end" error={reminderRangeError}>
+                  <Input
+                    id="site-reminder-end"
+                    type="date"
+                    value={value.reminderEnd ?? ''}
+                    onChange={(event) => set({ reminderEnd: event.target.value })}
+                    aria-invalid={Boolean(reminderRangeError)}
+                  />
+                </Field>
+              </div>
+              <p className="text-[12px] leading-relaxed text-muted-foreground">
+                Outside these dates nobody at this site is emailed about a missing count. Leave both
+                empty and the site is always chased, which is the safe default: an empty date is too
+                quiet a way to switch off the reminders for a site whose meals stop after three
+                missed days.
+              </p>
             </div>
           </div>
         )}

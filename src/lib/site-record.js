@@ -14,6 +14,8 @@ export function toSiteRecord(site) {
     siteNumber: site.siteNumber,
     programStart: site.programStart ? dateToYmd(site.programStart) : '',
     programEnd: site.programEnd ? dateToYmd(site.programEnd) : '',
+    reminderStart: site.reminderStart ? dateToYmd(site.reminderStart) : '',
+    reminderEnd: site.reminderEnd ? dateToYmd(site.reminderEnd) : '',
     weeklyTemplate: site.weeklyTemplate ?? {},
     students: site._count?.students ?? 0,
     serviceDays: site._count?.serviceDays ?? 0,

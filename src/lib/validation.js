@@ -173,6 +173,12 @@ const siteFields = {
   siteNumber: z.string().trim().max(50).optional(),
   programStart: z.union([ymd, z.literal('')]).optional(),
   programEnd: z.union([ymd, z.literal('')]).optional(),
+  // The window inside which this site is chased about missing counts. It came
+  // from the master spreadsheet's `Reminders` tab and, until now, from nowhere
+  // else: the reminder route read it and no screen could write it. That is fine
+  // while the Sheets are alive and a one way door the moment they are frozen.
+  reminderStart: z.union([ymd, z.literal('')]).optional(),
+  reminderEnd: z.union([ymd, z.literal('')]).optional(),
   weeklyTemplate: weeklyTemplateSchema.optional(),
 };
 
@@ -190,6 +196,10 @@ export const siteCreateSchema = z
   .refine(
     (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,
     { message: 'The program ends before it starts.', path: ['programEnd'] }
+  )
+  .refine(
+    (value) => !value.reminderStart || !value.reminderEnd || value.reminderStart <= value.reminderEnd,
+    { message: 'The reminder window ends before it starts.', path: ['reminderEnd'] }
   );
 
 export const siteUpdateSchema = z
@@ -197,6 +207,10 @@ export const siteUpdateSchema = z
   .refine(
     (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,
     { message: 'The program ends before it starts.', path: ['programEnd'] }
+  )
+  .refine(
+    (value) => !value.reminderStart || !value.reminderEnd || value.reminderStart <= value.reminderEnd,
+    { message: 'The reminder window ends before it starts.', path: ['reminderEnd'] }
   );
 
 const holidayFields = {

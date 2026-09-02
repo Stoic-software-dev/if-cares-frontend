@@ -6,6 +6,7 @@ import {
   SETTINGS_KEY,
   overdueRecipients,
   readLastPing,
+  readLastRunDay,
   readSettings,
   runReminders,
   touchLastPing,
@@ -35,6 +36,9 @@ export const GET = handle(async () => {
       ...settings,
       mailReady: mailConfigured(),
       lastPingAt: await readLastPing(),
+      // Checking and sending are different facts, and only one of them is what
+      // an administrator actually wants to know.
+      lastRunDay: await readLastRunDay(),
       // The other thing this screen owns: who hears about a new request.
       requestNotify: await readRequestNotifySettings(),
     },

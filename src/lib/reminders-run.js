@@ -15,6 +15,12 @@ import { logAudit } from '@/lib/audit';
 
 export const SETTINGS_KEY = 'reminders';
 const LAST_PING_KEY = 'reminders.lastPing';
+// The program day a run last completed on. In the database rather than in the
+// process because the guard has to survive a restart: two things depend on it,
+// and both are the difference between a reminder and a mistake. It stops a
+// second tick inside the sending hour from mailing sixty people twice, and it
+// stops a redeploy at 9:02 from doing the same.
+const LAST_RUN_KEY = 'reminders.lastRunDay';
 
 export const DEFAULTS = {
   enabled: false,
@@ -56,6 +62,19 @@ export async function touchLastPing() {
 export async function readLastPing() {
   const row = await prisma.appSetting.findUnique({ where: { key: LAST_PING_KEY } });
   return row?.value ?? null;
+}
+
+export async function readLastRunDay() {
+  const row = await prisma.appSetting.findUnique({ where: { key: LAST_RUN_KEY } });
+  return row?.value ?? '';
+}
+
+async function markRanToday(ymd) {
+  await prisma.appSetting.upsert({
+    where: { key: LAST_RUN_KEY },
+    create: { key: LAST_RUN_KEY, value: ymd },
+    update: { value: ymd },
+  });
 }
 
 // The reminder window a site carries: outside it, nobody there is nagged. A site
@@ -141,15 +160,29 @@ export async function runReminders({ force = false, baseUrl } = {}) {
   const settings = await readSettings();
   if (!settings.enabled) return { skipped: 'disabled' };
 
-  // The scheduler calls often; which of those calls actually sends is the
-  // administrator's setting, enforced here. That keeps the choice in the screen
-  // instead of in a cron expression, and resolving the hour in APP_TIMEZONE
-  // means daylight saving never moves the reminder.
-  if (!force && localHour() !== settings.hour) {
-    return { skipped: 'not the hour', hour: settings.hour };
+  const day = todayYmd();
+  if (!force) {
+    // Once a day, whatever the tick count and whatever restarted in between.
+    if ((await readLastRunDay()) === day) return { skipped: 'already ran today' };
+    // The scheduler ticks often; which of those ticks sends is the
+    // administrator's setting, enforced here. That keeps the choice in the
+    // screen instead of in a cron expression, and resolving the hour in
+    // APP_TIMEZONE means daylight saving never moves the reminder.
+    //
+    // On or after the hour rather than exactly at it, because the alternative
+    // fails silently in the way that matters: Next starts the scheduler on the
+    // first request after a boot, so a deploy at 3am on a quiet night would
+    // arm it at whatever time somebody first opened the app, and an exact match
+    // would then skip that day entirely. Late is a reminder. Never is three
+    // missed days and a site whose meals stop.
+    if (localHour() < settings.hour) return { skipped: 'not the hour', hour: settings.hour };
   }
 
   if (!mailConfigured()) return { skipped: 'mail not configured' };
+
+  // Claimed before the first send, not after the last: a crash halfway through
+  // sixty messages must not let the next tick start again from the top.
+  if (!force) await markRanToday(day);
 
   const { since, overdue, messages } = await overdueRecipients(settings);
 

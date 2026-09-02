@@ -28,20 +28,16 @@ const TICK_MS = 5 * 60 * 1000;
 // the flag off globalThis is what survives that.
 const FLAG = Symbol.for('ifcares.reminderScheduler');
 
-// At most one send per local hour, whatever the tick count. Two ticks inside the
-// sending hour would otherwise mail everyone twice.
-let lastRunHourKey = '';
-
 async function tick() {
   try {
     await touchLastPing();
+    // Once a day is enforced inside runReminders, against a date stored in the
+    // database. In the process it would not survive the restart that is exactly
+    // when double sending happens.
     const result = await runReminders({ baseUrl: process.env.APP_URL?.replace(/\/$/, '') || '' });
 
     if (result.skipped) return;
 
-    const key = new Date().toISOString().slice(0, 13);
-    if (key === lastRunHourKey) return;
-    lastRunHourKey = key;
     console.log(
       `[reminders] ${result.sent} sent, ${result.failed} failed, ${result.overdue} overdue days`
     );

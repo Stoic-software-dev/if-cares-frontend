@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
+import { dateLabel } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
 function hourLabel(hour) {
@@ -23,7 +24,7 @@ function hourLabel(hour) {
 // A reminder that stops arriving reads exactly like a reminder with nothing to
 // say. This is the difference, on the screen where someone would look: the
 // scheduler either called recently or it did not.
-function SchedulerHeartbeat({ lastPingAt }) {
+function SchedulerHeartbeat({ lastPingAt, lastRunDay }) {
   const at = lastPingAt ? new Date(lastPingAt) : null;
   const minutesAgo = at ? Math.floor((Date.now() - at.getTime()) / 60000) : null;
   // It checks every five minutes; three missed checks and something is wrong.
@@ -63,7 +64,14 @@ function SchedulerHeartbeat({ lastPingAt }) {
         >
           {stale
             ? 'It is meant to check every five minutes. If this stays stale, the reminders are not going out at all, whatever the settings above say.'
-            : 'It checks every five minutes and sends only at the hour above. This line records each check, so a scheduler that dies stops being invisible.'}
+            : 'It checks every five minutes and sends once a day, at or after the hour above. This line records each check, so a scheduler that dies stops being invisible.'}
+        </span>
+        {/* Checking is not sending, and the second is what somebody is actually
+            asking about when they open this screen. */}
+        <span className="mt-0.5 text-[12.5px] text-muted-foreground">
+          {lastRunDay
+            ? `Reminders last went out on ${dateLabel(lastRunDay, { month: 'long', day: 'numeric', year: 'numeric' })}.`
+            : 'No reminder has gone out yet.'}
         </span>
       </div>
     </div>
@@ -100,7 +108,12 @@ function RemindersScreen() {
       const res = await apiPatch('/api/reminders', patch);
       // PATCH answers with the settings only; the two read-only facts on this
       // screen come from GET and would blank out on every save otherwise.
-      setSettings({ ...res.data, mailReady: settings.mailReady, lastPingAt: settings.lastPingAt });
+      setSettings({
+        ...res.data,
+        mailReady: settings.mailReady,
+        lastPingAt: settings.lastPingAt,
+        lastRunDay: settings.lastRunDay,
+      });
       setCopyTo((res.data.copyTo ?? []).join(', '));
       setRequestTo((res.data.requestNotify?.to ?? []).join(', '));
       setRequestCc((res.data.requestNotify?.cc ?? []).join(', '));
@@ -323,7 +336,7 @@ function RemindersScreen() {
               </div>
             </div>
 
-            <SchedulerHeartbeat lastPingAt={settings.lastPingAt} />
+            <SchedulerHeartbeat lastPingAt={settings.lastPingAt} lastRunDay={settings.lastRunDay} />
 
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               The hour above is the one that sends, in the program&apos;s own timezone, and daylight saving

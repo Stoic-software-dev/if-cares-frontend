@@ -26,8 +26,8 @@ function hourLabel(hour) {
 function SchedulerHeartbeat({ lastPingAt }) {
   const at = lastPingAt ? new Date(lastPingAt) : null;
   const minutesAgo = at ? Math.floor((Date.now() - at.getTime()) / 60000) : null;
-  // It is asked to call every hour; twice that and something is wrong.
-  const stale = minutesAgo === null || minutesAgo > 130;
+  // It checks every five minutes; three missed checks and something is wrong.
+  const stale = minutesAgo === null || minutesAgo > 16;
 
   const when = () => {
     if (minutesAgo === null) return 'never';
@@ -53,7 +53,7 @@ function SchedulerHeartbeat({ lastPingAt }) {
       )}
       <div className="flex flex-col gap-0.5">
         <span className={cn('text-[13px] font-semibold', stale ? 'text-warning-text' : 'text-foreground')}>
-          {lastPingAt ? `The scheduler last called ${when()}` : 'The scheduler has never called'}
+          {lastPingAt ? `The scheduler last checked ${when()}` : 'The scheduler has never checked'}
         </span>
         <span
           className={cn(
@@ -62,8 +62,8 @@ function SchedulerHeartbeat({ lastPingAt }) {
           )}
         >
           {stale
-            ? 'It is meant to call every hour. If this stays stale, the reminders are not running at all, whatever the settings above say.'
-            : 'It calls every hour and this page records each call, so a scheduler that dies stops being invisible.'}
+            ? 'It is meant to check every five minutes. If this stays stale, the reminders are not going out at all, whatever the settings above say.'
+            : 'It checks every five minutes and sends only at the hour above. This line records each check, so a scheduler that dies stops being invisible.'}
         </span>
       </div>
     </div>
@@ -328,6 +328,11 @@ function RemindersScreen() {
             <p className="text-[12px] leading-relaxed text-muted-foreground">
               The hour above is the one that sends, in the program&apos;s own timezone, and daylight saving
               never moves it. Changing it here is enough: nothing has to be redeployed.
+            </p>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              A reminder goes only to people assigned to the site that is missing a count, and a holiday is
+              never overdue. Each site can also carry a window of dates outside which nobody there is
+              chased, set on the site itself.
             </p>
           </>
         )}

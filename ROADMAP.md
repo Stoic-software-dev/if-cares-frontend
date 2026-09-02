@@ -24,9 +24,9 @@ código, no contra este archivo. Salieron **5 huecos reales** que ningún doc re
 |---|---|---|
 | 2201 / 2203 | El count corregido solo se distinguía en el detalle. La card pide "a simple vista **en el dashboard**", y el PDF pide "la marca de corregido" | **Arreglado** (`9256f86`). El mensual además tenía `corrected` hardcodeado en `false` |
 | 2200 | "Importar o cargar el roster" no existía: solo se podía agregar de a un alumno | **Arreglado** (`d41fdaa`), verificado 9/9 en producción |
-| 2199 | "Se capturan los horarios de servicio **por meal type**" — hoy hay un solo `timeIn`/`timeOut` | **Abierto**, ver abajo |
-| 2203 | "Poder mandar por email **cualquier PDF** exportado" — hoy solo el consolidado se puede mandar | **Abierto** |
-| 2198 | "El log de registros rechazados revisado y cada caso con decisión de IF Cares" | **Abierto**, es conversación con el cliente |
+| 2199 | "Se capturan los horarios de servicio **por meal type**" — hoy hay un solo `timeIn`/`timeOut` | **Cerrado como está, por decisión del 2-sep**: se mantiene un único submit con un `timeIn`/`timeOut`, y el alumno marca a qué comida asistió. Es como funciona la web original. Si más adelante hace falta separarlos, se revisa |
+| 2203 | "Poder mandar por email **cualquier PDF** exportado" — solo el consolidado se podía mandar | **Arreglado** (`d305d34`), 6/6 verificado en producción con envíos reales |
+| 2198 | "El log de registros rechazados revisado y cada caso con decisión de IF Cares" | **Log construido** (`57fd660`, `npm run db:anomalies`) y la carta actualizada contra la data viva. Falta solo la respuesta de IF Cares |
 
 Lección para la próxima: este archivo describía un estado mucho más avanzado que el real en
 unas cosas y mucho más atrasado en otras. **Las cards son la fuente de verdad**, no el
@@ -143,9 +143,9 @@ trabajo con el cliente.
       quién corrigió; `GeneratedReport` guarda los consolidados con su firma;
       `AppSetting` lleva la config de notificaciones; la firma se guarda como imagen en la
       base, que es lo que hace que un claim firmado se reproduzca aunque falte el archivo
-      en Drive. **Falta**: horarios de servicio por tipo de comida — hoy el count guarda un
-      solo `timeIn`/`timeOut` para todo el día. Es una pregunta al cliente antes que
-      trabajo de código: depende de si el formulario en papel los separa.
+      en Drive. Los **horarios por tipo de comida** quedaron **cerrados como están** por
+      decisión del 2-sep: un `timeIn`/`timeOut` por count, con el alumno marcando a qué
+      comida asistió, igual que la web original.
 - [~] **[S] Deltas de schema de paridad Summer** (detalle en SPECS.md §4 y §11):
       **todos construidos salvo los datos de contacto del sitio**, que siguen esperando la
       confirmación de la Etapa 1.

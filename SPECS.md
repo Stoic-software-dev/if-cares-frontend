@@ -112,9 +112,11 @@ completa en `prisma/full-schema-reference.sql`.
   los counts si Drive no lo tiene.
 - ✅ **Config de notificaciones** (STOIC-2205): en `AppSetting` (`reminders`), editable
   desde la pantalla sin deploy. Se sumó `reminders.lastPing`, el latido del scheduler.
-- ⬜ **Horarios de servicio por meal type**: lo único que falta de este bloque. Hoy hay un
-  `timeIn/timeOut` global por count. **Es una pregunta al cliente antes que trabajo de
-  código**: depende de si el formulario en papel los separa por comida.
+- ✅ **Horarios de servicio por meal type**: **cerrado como está** (decisión del 2-sep).
+  Aunque STOIC-2199 los pide por tipo de comida, la app mantiene un `timeIn`/`timeOut` por
+  count y el alumno marca a qué comida asistió — que es exactamente como opera la web
+  original que se está reemplazando. Separarlos se revisará si el formulario en papel
+  llega a exigirlo.
 
 **Deltas de schema de paridad Summer** (relevamiento 28-ago, detalle funcional en §11).
 **Estado al 2-sep: construidos todos menos los datos de contacto del sitio**, que siguen

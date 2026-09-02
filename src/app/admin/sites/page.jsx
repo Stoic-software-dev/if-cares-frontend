@@ -35,12 +35,18 @@ function monthStats(siteData, monthPrefix, today) {
   const submitted = (siteData?.excludedDates ?? []).filter((ymd) => ymd.startsWith(monthPrefix)).length;
   let missing = 0;
   let upcoming = 0;
+  // Days ahead is counted over the whole calendar, not this month: a site whose
+  // next service day is in October is fine, and one with nothing at all is not.
+  // Filing a count needs the day to exist, so a site with an empty calendar
+  // cannot be used - and nothing on any screen said so until this line.
+  let ahead = 0;
   for (const ymd of Object.keys(siteData?.validDates ?? {})) {
+    if (ymd >= today) ahead += 1;
     if (!ymd.startsWith(monthPrefix)) continue;
     if (ymd < today) missing += 1;
     else upcoming += 1;
   }
-  return { submitted, missing, upcoming, service: submitted + missing + upcoming };
+  return { submitted, missing, upcoming, ahead, service: submitted + missing + upcoming };
 }
 
 // Ten per column in the two column grid, which is as much as fits on a laptop
@@ -112,6 +118,16 @@ function AdminSitesScreen() {
       ),
     [rows]
   );
+
+  // Sites that cannot be used tomorrow. Counted over every active site rather
+  // than the filtered page, because the number is only useful if it is the whole
+  // program: a filter that hides them is exactly how this went unnoticed.
+  const emptyCalendars = useMemo(() => {
+    if (!sites || !allMeals) return [];
+    return sites.filter(
+      (name) => !inactiveNames.has(name) && monthStats(allMeals[name], monthPrefix, today).ahead === 0
+    );
+  }, [sites, allMeals, inactiveNames, monthPrefix, today]);
 
   // Any change to what is being listed starts the listing over: page 7 of a
   // filter that now returns four sites is an empty screen.
@@ -214,6 +230,28 @@ function AdminSitesScreen() {
           </NativeSelect>
         </div>
 
+        {emptyCalendars.length > 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-soft p-4">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] font-semibold text-warning-text">
+                {emptyCalendars.length === 1
+                  ? '1 site has no service days ahead'
+                  : `${emptyCalendars.length} sites have no service days ahead`}
+              </span>
+              <span className="text-[12.5px] leading-relaxed text-warning-text/90">
+                A count can only be filed on a day the calendar has. Until these sites have days,
+                nobody there can file anything, and the day never shows as missing either. Open a
+                site to set its cycle and weekly meals, then generate the days.
+              </span>
+              <span className="text-[12px] leading-relaxed text-warning-text/80">
+                {emptyCalendars.slice(0, 4).map((name) => shortSiteName(name)).join(', ')}
+                {emptyCalendars.length > 4 && `, and ${emptyCalendars.length - 4} more`}
+              </span>
+            </div>
+          </div>
+        )}
+
         {error && <ErrorState title="Couldn't load the sites" message={error} onRetry={load} />}
 
         {!sites && !error && (
@@ -270,6 +308,11 @@ function AdminSitesScreen() {
                     {stateByName.get(row.name) && (
                       <Badge size="sm" variant="neutral">
                         {stateByName.get(row.name)}
+                      </Badge>
+                    )}
+                    {row.stats.ahead === 0 && !inactiveNames.has(row.name) && (
+                      <Badge size="sm" variant="warning">
+                        No days ahead
                       </Badge>
                     )}
                   </span>

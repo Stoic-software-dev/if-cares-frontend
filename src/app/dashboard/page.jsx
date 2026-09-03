@@ -2,15 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  ArrowRight,
-  Building2,
-  CalendarCheck,
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  CircleAlert,
-} from 'lucide-react';
+import { ArrowRight, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -18,15 +10,13 @@ import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
 import MonthCalendar, { CalendarLegend } from '@/components/dashboard/MonthCalendar';
 import { MonthPicker } from '@/components/dashboard/MonthPicker';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { availableMonths, buildMonth, dateLabel, todayYmd } from '@/lib/calendar';
+import { availableMonths, buildMonth, dateLabel, monthMealPattern, todayYmd } from '@/lib/calendar';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { useStoredState } from '@/lib/hooks';
 import { sortSiteNames } from '@/lib/sites';
-import { cn } from '@/lib/utils';
 
 const SITE_STORAGE_KEY = 'ifc.selectedSite';
 
@@ -139,11 +129,7 @@ function DashboardScreen() {
       <AppShell width="wide">
         <div className="flex flex-col gap-4">
           <Skeleton className="h-[68px] w-full rounded-lg" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {Array.from({ length: 3 }, (_, i) => (
-              <Skeleton key={i} className="h-[104px] rounded-lg" />
-            ))}
-          </div>
+          <Skeleton className="h-4 w-96 max-w-full rounded-sm" />
           <Skeleton className="h-[420px] w-full rounded-lg" />
         </div>
       </AppShell>
@@ -151,7 +137,33 @@ function DashboardScreen() {
   }
 
   const { stats } = month;
-  const pct = stats.service > 0 ? (stats.submitted / stats.service) * 100 : 0;
+
+  // One sentence, in the order somebody actually reads it: what is wrong, what
+  // the month is, what it serves. Every clause is dropped when it has nothing
+  // to say, so a clean month is a short line rather than three zeroes.
+  const mealPattern = monthMealPattern(month);
+  const parts = [];
+  if (stats.service === 0) {
+    parts.push('No service days this month.');
+  } else {
+    parts.push(
+      stats.missing > 0
+        ? `${stats.missing} of ${stats.service} service days still need a count.`
+        : `All ${stats.service} service days are accounted for.`
+    );
+  }
+  if (mealPattern) {
+    parts.push(
+      `Most days serve ${mealPattern.text}` +
+        (mealPattern.exceptions > 0
+          ? `; ${mealPattern.exceptions} ${mealPattern.exceptions === 1 ? 'day differs' : 'days differ'} and say so.`
+          : '.')
+    );
+  }
+  if (todayIsOpen) {
+    parts.push(`Today, ${dateLabel(today, { month: 'long', day: 'numeric' })}, is a service day.`);
+  }
+  const summary = parts.join(' ');
 
   return (
     <AppShell width="wide">
@@ -216,38 +228,12 @@ function DashboardScreen() {
           </div>
         </div>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatCard
-            icon={CalendarCheck}
-            tone="success"
-            value={stats.submitted}
-            label="Submitted"
-            detail={
-              stats.service > 0
-                ? `${Math.round(pct)}% of ${stats.service} service days`
-                : 'No service days this month'
-            }
-            progress={pct}
-          />
-          <StatCard
-            icon={CircleAlert}
-            tone={stats.missing > 0 ? 'danger' : 'neutral'}
-            value={stats.missing}
-            label="Missing"
-            detail={stats.missing > 0 ? 'Past service days without a count' : 'Nothing overdue'}
-          />
-          <StatCard
-            icon={CalendarClock}
-            tone="neutral"
-            value={stats.upcoming}
-            label="Remaining"
-            detail={
-              todayIsOpen
-                ? `Today, ${dateLabel(today, { month: 'short', day: 'numeric' })}, is a service day`
-                : 'Today is not a service day'
-            }
-          />
-        </section>
+        {/* What three cards and twenty-two repeated pairs of chips were saying,
+            in one line. The counts were already in the tabs above, and the third
+            card was the other two subtracted from the total. */}
+        <p className="px-0.5 text-[13px] leading-relaxed text-muted-foreground">
+          {summary}
+        </p>
 
         {todayIsOpen && (
           <Button onClick={submitToday} size="touch" className="xl:hidden">
@@ -256,35 +242,11 @@ function DashboardScreen() {
           </Button>
         )}
 
-        <CalendarLegend className="px-0.5" />
+        <CalendarLegend month={month} className="px-0.5" />
 
-        <MonthCalendar month={month} site={selectedSite} filter={filter} />
+        <MonthCalendar month={month} site={selectedSite} filter={filter} mealPattern={mealPattern} />
       </div>
     </AppShell>
-  );
-}
-
-function StatCard({ icon: Icon, tone, value, label, detail, progress }) {
-  const tones = {
-    success: 'bg-success-soft text-success-text',
-    danger: 'bg-destructive-soft text-destructive-text',
-    neutral: 'bg-muted text-muted-foreground',
-  };
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-      <div className="flex items-center gap-2.5">
-        <span className={cn('flex h-8 w-8 items-center justify-center rounded-sm', tones[tone])}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-          {label}
-        </span>
-        <span className="ml-auto text-[26px] font-bold leading-none tabular-nums text-foreground">{value}</span>
-      </div>
-      {progress !== undefined && <Progress value={progress} label={`${label} progress`} />}
-      <p className="text-[12.5px] leading-relaxed text-muted-foreground">{detail}</p>
-    </div>
   );
 }
 

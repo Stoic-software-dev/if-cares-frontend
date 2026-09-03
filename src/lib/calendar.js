@@ -161,3 +161,54 @@ export function mealsFor(dayMeals) {
   if (!dayMeals) return [];
   return MEAL_KEYS.filter((meal) => dayMeals[meal.key]).map((meal) => meal.short);
 }
+
+const mealSignature = (dayMeals) =>
+  MEAL_KEYS.filter((meal) => dayMeals?.[meal.key])
+    .map((meal) => meal.key)
+    .join('+');
+
+/**
+ * What this month serves, said once.
+ *
+ * Almost every site serves the same meals every service day, so printing the
+ * same two chips into twenty-two cells spends the whole calendar saying one
+ * thing. This finds the shape the month usually has, so the sentence can carry
+ * it and the cells can be left to show the day that is different - which is the
+ * only day the chips were ever informative about.
+ *
+ * Returns `null` when there is no usual shape, and then the cells keep their
+ * chips: a month where every day differs has nothing to factor out.
+ */
+export function monthMealPattern(month) {
+  const counts = new Map();
+  let days = 0;
+  for (const day of Object.values(month?.days ?? {})) {
+    if (!day.meals) continue;
+    const signature = mealSignature(day.meals);
+    if (!signature) continue;
+    counts.set(signature, (counts.get(signature) ?? 0) + 1);
+    days += 1;
+  }
+  if (days === 0) return null;
+
+  const [signature, hits] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  // Worth factoring out only when it really is what the month does. Below that,
+  // a "usually" would be a lie and the chips carry their own weight.
+  if (hits / days < 0.7) return null;
+
+  const keys = signature.split('+');
+  const labels = MEAL_KEYS.filter((meal) => keys.includes(meal.key)).map((meal) => meal.label);
+  return {
+    signature,
+    labels,
+    // "Snack and Supper", "Breakfast, Lunch and Snack".
+    text: labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}` : labels[0],
+    exceptions: days - hits,
+  };
+}
+
+/** Does this day serve something other than what the month usually serves? */
+export function differsFromPattern(dayMeals, pattern) {
+  if (!pattern || !dayMeals) return true;
+  return mealSignature(dayMeals) !== pattern.signature;
+}

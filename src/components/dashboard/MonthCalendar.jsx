@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { BadgeCheck, PencilLine } from 'lucide-react';
-import { mealsFor } from '@/lib/calendar';
+import { differsFromPattern, mealsFor } from '@/lib/calendar';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -43,7 +43,7 @@ const STATUS = {
   },
 };
 
-export default function MonthCalendar({ month, site, filter = 'all' }) {
+export default function MonthCalendar({ month, site, filter = 'all', mealPattern = null }) {
   const router = useRouter();
 
   const open = (cell) => {
@@ -87,7 +87,9 @@ export default function MonthCalendar({ month, site, filter = 'all' }) {
           const style = STATUS[cell.status] ?? STATUS.none;
           const clickable = ['submitted', 'missing', 'today'].includes(cell.status);
           const dimmed = filter !== 'all' && cell.status !== filter;
-          const meals = mealsFor(cell.meals);
+          // Only the day that breaks the month's pattern names its meals. When
+          // every cell says the same two words, the words stop being read.
+          const meals = differsFromPattern(cell.meals, mealPattern) ? mealsFor(cell.meals) : [];
           const Tag = clickable ? 'button' : 'div';
 
           return (
@@ -181,30 +183,55 @@ export default function MonthCalendar({ month, site, filter = 'all' }) {
   );
 }
 
-export function CalendarLegend({ className }) {
-  const items = [
-    { label: 'Submitted', className: 'border-success-border bg-success-soft' },
-    { label: 'Missing', className: 'border-destructive-border bg-destructive-soft' },
-    { label: 'Today', className: 'border-primary bg-primary-soft' },
-    { label: 'Holiday', className: 'border-info-border bg-info-soft' },
-    { label: 'No service', className: 'border-border bg-surface-sunken' },
-  ];
+const SWATCHES = {
+  submitted: { label: 'Submitted', className: 'border-success-border bg-success-soft' },
+  missing: { label: 'Missing', className: 'border-destructive-border bg-destructive-soft' },
+  today: { label: 'Today', className: 'border-primary bg-primary-soft' },
+  holiday: { label: 'Holiday', className: 'border-info-border bg-info-soft' },
+};
+
+/**
+ * The key, for the month on screen only.
+ *
+ * It used to list all seven things a day can be, every month, whether or not
+ * any day was one of them. A key to colours that are not there is vocabulary,
+ * not help, and it was the widest row on the page.
+ */
+export function CalendarLegend({ month, className }) {
+  const present = new Set();
+  let approved = false;
+  let corrected = false;
+  for (const day of Object.values(month?.days ?? {})) {
+    if (SWATCHES[day.status]) present.add(day.status);
+    if (day.approved) approved = true;
+    if (day.corrected) corrected = true;
+  }
+
+  // One colour on screen explains itself.
+  if (present.size < 2 && !approved && !corrected) return null;
+
   return (
     <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-2', className)}>
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          <span className={cn('h-3 w-3 rounded-xs border', item.className)} />
-          {item.label}
+      {Object.entries(SWATCHES)
+        .filter(([status]) => present.has(status))
+        .map(([status, item]) => (
+          <span key={status} className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <span className={cn('h-3 w-3 rounded-xs border', item.className)} />
+            {item.label}
+          </span>
+        ))}
+      {approved && (
+        <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <BadgeCheck className="h-3.5 w-3.5 text-success" />
+          Approved
         </span>
-      ))}
-      <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-        <BadgeCheck className="h-3.5 w-3.5 text-success" />
-        Approved
-      </span>
-      <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-        <PencilLine className="h-3.5 w-3.5 text-warning-text" />
-        Corrected
-      </span>
+      )}
+      {corrected && (
+        <span className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+          <PencilLine className="h-3.5 w-3.5 text-warning-text" />
+          Corrected
+        </span>
+      )}
     </div>
   );
 }

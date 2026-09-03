@@ -339,6 +339,15 @@ trabajo con el cliente.
       (`reminderStart/End`, 25 de 64 la traen del master); un sitio sin ventana entra
       igual, porque una celda vacía es una forma demasiado silenciosa de apagarle los
       avisos a un sitio. Si algún envío falla, sale una alerta a `ALERT_EMAILS`.
+- [x] **Hasta el corte, ningún mail llega a alguien real** (3-sep): `MAIL_REDIRECT_TO`
+      atrapado en `sendMail()`, el único lugar por el que pasan todos. Con la variable
+      cargada, todo va ahí en vez de a quien nombra, con el asunto prefijado `[redirected]`
+      y un cartel arriba diciendo a quién le tocaba — así una prueba desviada **sigue
+      probando** a quién se le hubiera escrito. Existe porque la base ya tiene gente real y
+      los destinatarios de una aprobación, de la respuesta a un request o de un
+      recordatorio **no salen de un setting**: salen de las filas de usuarios, así que
+      desviar feature por feature cubre solo la que uno se acordó. La pantalla de Reminder
+      emails lo avisa mientras esté activo, y borrarlo es un paso del runbook del corte.
 - [x] **El servidor agenda sus propios recordatorios** (2-sep): el cron aparte de Railway
       (`curlimages/curl`) ejecutó exactamente dos veces y después quedó horas sin un tick,
       con el deployment marcado sano — que es justo la falla que esta funcionalidad existe

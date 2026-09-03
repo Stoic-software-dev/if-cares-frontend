@@ -88,9 +88,17 @@ export const GET = handle(async () => {
   // had a service day there. Reading only the ServiceDay rows meant a holiday
   // over a weekend, or over a month whose calendar has not been generated yet,
   // simply never appeared - while the holiday's own screen said it did.
+  // Expanded ONCE, not once per site. This ran inside the site loop, so a single
+  // holiday cost fifty-six full walks of its range and fifty-six copies of the
+  // resulting array.
+  const holidayDays = holidays.map((holiday) => ({
+    holiday,
+    ymds: datesBetween(holiday.startDate, holiday.endDate),
+  }));
+
   for (const site of sites) {
-    for (const holiday of holidays) {
-      for (const ymd of datesBetween(holiday.startDate, holiday.endDate)) {
+    for (const { holiday, ymds } of holidayDays) {
+      for (const ymd of ymds) {
         if (!holidayNameFor([holiday], site.id, ymd)) continue;
         // A day that still serves something, or that already carries a count, is
         // not the holiday's to label.

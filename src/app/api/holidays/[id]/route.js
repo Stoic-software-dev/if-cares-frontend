@@ -15,8 +15,13 @@ export const PATCH = handle(async (req, { params }) => {
   const holiday = await prisma.holiday.findUnique({ where: { id: params.id } });
   if (!holiday) throw new ApiError(404, 'Holiday not found.');
 
+  // `ymdToUtcDate` answers null for a date that matches the shape but is not a
+  // real day - "2026-02-31", "2026-13-01". POST checks for that; this did not,
+  // so null sailed past the comparison below (null > a Date is false) and hit a
+  // NOT NULL column as a 500.
   const start = body.startDate ? ymdToUtcDate(body.startDate) : holiday.startDate;
   const end = body.endDate ? ymdToUtcDate(body.endDate) : holiday.endDate;
+  if (!start || !end) throw new ApiError(422, 'Invalid dates.');
   if (start > end) throw new ApiError(422, 'The holiday ends before it starts.');
 
   // The scope is replaced wholesale when it is sent: editing "these four sites"

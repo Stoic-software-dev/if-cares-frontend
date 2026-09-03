@@ -5,7 +5,13 @@
 
 const APP_TZ = () => process.env.APP_TIMEZONE || 'America/Chicago';
 
-const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+// The year is bounded, not just four digits. "0000-01-01" matches a bare \d{4}
+// and was accepted as a holiday start date; every reader that walks a date range
+// day by day then walked two thousand years of them, and one such holiday turned
+// the dashboard's own endpoint into 21 MB and forty seconds for every
+// administrator. A program that started in 2024 has no legitimate date outside
+// this range.
+const YMD_RE = /^(19|20)\d{2}-\d{2}-\d{2}$/;
 
 export function isYmd(value) {
   return typeof value === 'string' && YMD_RE.test(value);

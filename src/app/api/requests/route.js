@@ -54,9 +54,17 @@ export const POST = handle(async (req) => {
 
 // Admins read everything; site staff read the requests of their own sites —
 // in 2.0 a request has a visible status instead of vanishing into an email.
+const STATUSES = ['NEW', 'IN_PROGRESS', 'RESOLVED'];
+
 export const GET = handle(async (req) => {
   const session = await requireUser();
   const status = new URL(req.url).searchParams.get('status');
+  // The value went straight into a filter on an enum column, so any other word
+  // in the query string reached Prisma as an invalid enum member and came back
+  // as a 500. A filter nobody offers is a bad request, not a broken server.
+  if (status && !STATUSES.includes(status)) {
+    throw new ApiError(400, 'Unknown status filter.');
+  }
 
   const where = status ? { status } : {};
   if (session.user.role !== 'ADMIN') {

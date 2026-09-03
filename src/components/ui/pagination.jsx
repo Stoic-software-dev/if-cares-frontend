@@ -46,7 +46,10 @@ export function Pagination({ page, pageCount, onPageChange, total, pageSize, cla
         <span />
       )}
 
-      <div className="flex items-center gap-1">
+      {/* Wraps like the row around it. Seven page buttons plus previous and
+          next come to a little over 300px, which is wider than a 320px phone
+          has to give and put the whole users screen into a sideways scroll. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
         <Button variant="ghost" size="icon" aria-label="Previous page" disabled={page === 1} onClick={() => go(page - 1)}>
           <ChevronLeft />
         </Button>

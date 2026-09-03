@@ -223,7 +223,11 @@ function ConsolidatedScreen() {
           backLabel="Back to reports"
         />
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
+        {/* `grid-cols-1` is the base every breakpoint-only grid needs. Without
+            it the implicit column is `auto`, which stretches to the widest thing
+            inside it: on a 320px phone this screen laid out at 514px and scrolled
+            sideways, with the month and state selects off the edge. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
           <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 md:p-5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Build a claim

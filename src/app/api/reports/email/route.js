@@ -10,9 +10,15 @@ import { buildSiteMonthPdf } from '@/lib/report-pdf';
 import { safeName } from '@/lib/pdf-archive';
 import { dateLabel } from '@/lib/calendar';
 import { logAudit } from '@/lib/audit';
+import { hit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// A daily form goes to a site's own people and a monthly one to a handful more.
+// Anything past this is a mailing list, and this is not the tool for one.
+const MAX_RECIPIENTS = 10;
+const MAX_SENDS_PER_HOUR = 30;
 
 // STOIC-2203: "poder mandar por email cualquier PDF exportado". Consolidated
 // claims already had this; the daily form and the monthly summary - the two a
@@ -49,7 +55,22 @@ export const POST = handle(async (req) => {
   const { valid, invalid } = parseRecipients(body.to);
   if (invalid.length) throw new ApiError(422, `Not an email address: ${invalid[0]}`);
   if (!valid.length) throw new ApiError(422, 'Add at least one recipient.');
+  if (valid.length > MAX_RECIPIENTS) {
+    throw new ApiError(422, `Send to at most ${MAX_RECIPIENTS} addresses at a time.`);
+  }
   if (!mailConfigured()) throw new ApiError(503, 'Email sending is not configured yet.');
+
+  // This is the one place a signed in user can put a note and an attachment into
+  // a message that leaves as ifcares.org, to any address they type. That is the
+  // feature, so it stays - but unmetered it is also a way to send mail as the
+  // foundation all day, and the reputation lost belongs to IF Cares.
+  const { limited } = hit({
+    bucket: 'report.email',
+    key: session.user.id,
+    limit: MAX_SENDS_PER_HOUR,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (limited) throw new ApiError(429, 'That is a lot of sending. Try again in a little while.');
 
   let bytes;
   let fileName;

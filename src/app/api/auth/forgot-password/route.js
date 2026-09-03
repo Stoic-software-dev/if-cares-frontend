@@ -6,6 +6,7 @@ import { mailConfigured, sendMail } from '@/lib/gmail';
 import { passwordReset } from '@/lib/mail-templates';
 import { notifyFailure } from '@/lib/alerts';
 import { logAudit } from '@/lib/audit';
+import { hit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,19 +21,36 @@ const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 // floor costs a fixed wait on a screen nobody is watching the clock on.
 const ANSWER_FLOOR_MS = 400;
 
+// Asking for a link is cheap and sends mail to somebody else's inbox, so it is
+// worth a ceiling. Being over it still answers success after the same floor as
+// everything else here: a 429 on a real address and a 200 on an invented one
+// would say which is which.
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_PER_EMAIL = 5;
+
 export const POST = handle(async (req) => {
   const startedAt = Date.now();
   const { email } = forgotPasswordSchema.parse(await readJsonBody(req));
-  const user = await prisma.user.findUnique({ where: { email } });
+  const { limited } = hit({ bucket: 'forgot', key: email, limit: MAX_PER_EMAIL, windowMs: WINDOW_MS });
+  const user = limited ? null : await prisma.user.findUnique({ where: { email } });
   if (user && user.active) {
     const token = crypto.randomBytes(32).toString('hex');
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
-        expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-      },
-    });
+    await prisma.$transaction([
+      // One live link at a time. Every request used to add another usable token
+      // and only using one retired the rest, so an address that was asked for a
+      // link five times had five keys to it for the hour.
+      prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+          expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+        },
+      }),
+    ]);
     // The mail is sent alongside the answer, never in front of it: a slow or
     // broken mail provider must not turn into a slow login screen, and must not
     // become a way to find out whether an address exists.

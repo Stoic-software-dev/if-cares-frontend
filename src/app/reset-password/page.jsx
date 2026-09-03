@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import BrandMark from '@/components/shell/BrandMark';
@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { apiPost } from '@/lib/api-client';
+import { apiGet, apiPost } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 function ResetPasswordScreen() {
@@ -19,6 +19,21 @@ function ResetPasswordScreen() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // null while asking. A dead link used to render the whole form and only admit
+  // it after somebody had chosen a password and typed it twice.
+  const [usable, setUsable] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiGet(`/api/auth/reset-password?token=${encodeURIComponent(token)}`)
+      .then((res) => alive && setUsable(res.data.usable))
+      // If the check itself cannot run, show the form rather than a dead end:
+      // saving still answers truthfully.
+      .catch(() => alive && setUsable(true));
+    return () => {
+      alive = false;
+    };
+  }, [token]);
 
   const longEnough = password.length >= 8;
   const matches = confirm.length > 0 && password === confirm;
@@ -53,7 +68,20 @@ function ResetPasswordScreen() {
       <div className="flex w-full max-w-[22rem] flex-col gap-6">
         <BrandMark size="lg" className="self-center" />
 
-        {done ? (
+        {usable === null ? (
+          <p className="text-center text-[13px] text-muted-foreground">Checking this link…</p>
+        ) : usable === false ? (
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-card p-5">
+            <AlertCircle className="h-7 w-7 text-destructive" />
+            <h1 className="text-[22px] font-bold tracking-tight text-foreground">This link cannot be used</h1>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">
+              It has already been used, or it has expired. Ask for a new one from the sign in screen.
+            </p>
+            <Button onClick={() => router.push('/login')} size="touch" className="mt-2">
+              Go to sign in
+            </Button>
+          </div>
+        ) : done ? (
           <div className="flex flex-col items-start gap-3 rounded-lg border border-success-border bg-success-soft p-5">
             <CircleCheck className="h-7 w-7 text-success" />
             <h1 className="text-[22px] font-bold tracking-tight text-success-text">Password updated</h1>

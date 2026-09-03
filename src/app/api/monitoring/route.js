@@ -4,6 +4,7 @@ import { handle, readJsonBody, requireObjectBody, legacyJson, legacySuccess, Api
 import { requireAdmin, getSession } from '@/lib/auth';
 import { canSeeMonitoring } from '@/lib/monitoring-access';
 import { clientErrorSchema } from '@/lib/validation';
+import { clientIp, hit } from '@/lib/rate-limit';
 
 // Reading the errors is narrower than being an admin: it is a developer view.
 // It answers 404 rather than 403 so the screen is not advertised to the admins
@@ -27,23 +28,13 @@ export const dynamic = 'force-dynamic';
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
-const hits = new Map(); // ip -> { count, resetAt }
-
-function rateLimited(ip) {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    hits.set(ip, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  entry.count += 1;
-  if (entry.count > MAX_PER_WINDOW) return true;
-  // The map would grow forever on a busy server otherwise.
-  if (hits.size > 5000) {
-    for (const [key, value] of hits) if (now > value.resetAt) hits.delete(key);
-  }
-  return false;
-}
+// The per address limit is keyed on a header the caller writes, so it slows an
+// honest flood and not a deliberate one: vary the header and the counter resets.
+// What actually has to be bounded is the number of DISTINCT problems the table
+// can learn about in a minute, because a new fingerprint is a new row and the
+// message is free text. Real crashes arrive as a handful of repeated
+// fingerprints; hundreds of new ones a minute is somebody writing rows.
+const MAX_NEW_FINGERPRINTS_PER_WINDOW = 60;
 
 // The same broken line reported from forty sites is one problem. Grouping on the
 // message plus the first frame plus the screen keeps the list readable.
@@ -56,9 +47,8 @@ function fingerprintOf({ message, stack, pathname }) {
 }
 
 export const POST = handle(async (req) => {
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'local';
-  if (rateLimited(ip)) throw new ApiError(429, 'Too many reports.');
+  const perIp = hit({ bucket: 'monitoring.ip', key: clientIp(req), limit: MAX_PER_WINDOW, windowMs: WINDOW_MS });
+  if (perIp.limited) throw new ApiError(429, 'Too many reports.');
 
   const report = clientErrorSchema.parse(await readJsonBody(req));
 
@@ -72,6 +62,22 @@ export const POST = handle(async (req) => {
   }
 
   const fingerprint = fingerprintOf(report);
+
+  // Seeing a problem again is always recorded, however often it happens: that
+  // counter is the point of the screen. Learning a NEW one is what is capped,
+  // and the cap is global rather than per caller so it cannot be sidestepped by
+  // changing an address.
+  const known = await prisma.clientError.findUnique({ where: { fingerprint }, select: { id: true } });
+  if (!known) {
+    const fresh = hit({
+      bucket: 'monitoring.new',
+      key: 'global',
+      limit: MAX_NEW_FINGERPRINTS_PER_WINDOW,
+      windowMs: WINDOW_MS,
+    });
+    if (fresh.limited) throw new ApiError(429, 'Too many reports.');
+  }
+
   await prisma.clientError.upsert({
     where: { fingerprint },
     create: {
@@ -131,9 +137,12 @@ export const PATCH = handle(async (req) => {
   const { id, resolved } = requireObjectBody(await readJsonBody(req));
   if (!id) throw new ApiError(400, 'Missing id.');
 
-  await prisma.clientError.update({
-    where: { id },
+  // An id that is not there is a 404, not a crash: Prisma raises P2025 for it
+  // and nothing was catching that.
+  const { count } = await prisma.clientError.updateMany({
+    where: { id: String(id) },
     data: { resolvedAt: resolved ? new Date() : null },
   });
+  if (!count) throw new ApiError(404, 'That report is no longer there.');
   return legacySuccess();
 });

@@ -29,6 +29,27 @@ export const PATCH = handle(async (req, { params }) => {
   if (body.active === false && existing.id === session.user.id) {
     throw new ApiError(422, 'You cannot deactivate your own account.');
   }
+  // Locking yourself out by changing your role was still open. The guard above
+  // covered one of the two ways to do it, and an administrator who saved their
+  // own row as a regular user lost administration on the very next request.
+  if (body.role && body.role !== 'ADMIN' && existing.id === session.user.id) {
+    throw new ApiError(422, 'You cannot remove your own administrator access.');
+  }
+  // And somebody has to be left holding it. Nothing prevented the last
+  // administrator from being demoted or switched off, which leaves the app with
+  // no way back in short of the database.
+  const losesAdmin =
+    existing.role === 'ADMIN' &&
+    existing.active &&
+    ((body.role && body.role !== 'ADMIN') || body.active === false);
+  if (losesAdmin) {
+    const others = await prisma.user.count({
+      where: { role: 'ADMIN', active: true, id: { not: existing.id } },
+    });
+    if (others === 0) {
+      throw new ApiError(422, 'This is the only administrator left. Promote somebody else first.');
+    }
+  }
 
   const data = {};
   for (const key of ['name', 'lastname', 'email', 'role', 'allSites', 'active']) {

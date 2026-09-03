@@ -183,6 +183,17 @@ trabajo con el cliente.
 - [x] Dashboard mensual: mes × sitio en una pantalla, estado por color de cada día,
       click → count o formulario. Con caché stale-while-revalidate compartido entre
       pantallas (`lib/data-cache.js`), que es lo que bajó la navegación a ~1 s.
+- [x] **Simplificado** (3-sep, comentario del cliente: "tiene mucha info"). Tres cosas
+      decían lo que otra cosa ya decía. Las **tarjetas de stats**: Submitted y Missing eran
+      los mismos dos números de las pestañas justo arriba, y Remaining era esos dos
+      restados del total — 300px de alto para un dato que nadie tenía. Se fueron; queda una
+      frase. La **leyenda**: listaba los 7 estados posibles todos los meses, hubiera o no
+      un día así; ahora muestra solo los que el mes en pantalla tiene, y desaparece cuando
+      hay un solo color. Los **chips de comida**: las 22 celdas decían "Snk Sup" porque eso
+      es propiedad del sitio, no del día; ahora el patrón se dice una vez en la frase y una
+      celda nombra sus comidas **solo si se sale del patrón** (`monthMealPattern()` en
+      `lib/calendar.js`, con umbral de 70% — abajo de eso no hay patrón que valga y cada
+      celda se explica sola).
 - [x] Mantener descargas de menú (ahora por Drive REST API con service account; el GAS solo
       actúa como fallback mientras falten las credenciales).
 - [~] Verificar ≤ 1 s en carga y submit. Medido en desarrollo: navegación entre

@@ -121,20 +121,26 @@ trabajo con el cliente.
       hojas "Copy of…") para que decidan caso por caso (cierre de STOIC-2196).
 - [ ] Actualizar el timeline con el cliente: el artifact aún dice cutover en agosto;
       las cards lo ponen al final. Acordar fecha tentativa de corte.
-- [~] **Servicio de cron** en Railway (`curlimages/curl`, `0 * * * *`) que postea a
-      `/api/reminders`. **Creado el 2-sep** (`if-cares-reminders-cron`) con la imagen, el
-      horario, el comando y las variables cargadas y verificadas por API. **No está
-      ejecutando**: el contenedor no corre en ningún tick. La única vez que corrió fue con
-      un comando mal armado (la imagen trae `ENTRYPOINT ["curl"]` y Railway agrega el start
-      command como argumentos, así que quedaba `curl curl …`); eso ya está corregido, pero
-      desde entonces no se ejecutó más. Falta mirar el dashboard, que muestra estado que la
-      API no expone.
-      Mientras tanto la app ya delata el problema sola: ver el latido del scheduler abajo.
+- [x] **El scheduler de recordatorios** — resuelto el 3-sep, y **sin servicio de cron**.
+      El servicio aparte (`if-cares-reminders-cron`, imagen `curlimages/curl`) se creó,
+      ejecutó exactamente dos ticks y después quedó horas mudo con el deployment marcado
+      sano. Quedó descartado: la agenda vive en el propio servidor.
+      Dos vueltas hicieron falta. La primera puso el timer en `instrumentation.js`, y ahí
+      apareció que **Next no llama a `register()` al bootear sino en el primer request**:
+      medido, el server estuvo listo 15:35:42 y el scheduler arrancó 16:47:49, cuando
+      alguien entró. Para un recordatorio que persigue sitios que **no** usaron la app, eso
+      es circular. Lo cierra el **healthcheck de Railway contra `/api/health`**, que genera
+      ese primer request solo: verificado redesplegando sin tocar nada, el scheduler
+      arranca en el mismo segundo en que el server dice estar listo, y el primer tick cae
+      5 minutos después.
 - [x] **[S] Aprobación de counts: DECIDIDA el 31-ago — va.** Construida el mismo día;
       el detalle de qué bloquea y qué no está en la Etapa 4.
 - [ ] **[S] Confirmar si el formulario en papel del Regular Year lleva datos del sitio**
       (dirección / teléfono / supervisor). Summer los guarda por sitio y los imprime en
-      el PDF; hoy el modelo `Site` no tiene esos campos. Bloquea 2200 y 2203.
+      el PDF; hoy el modelo `Site` no tiene esos campos.
+      **Es el único pendiente que todavía puede volverse código**: si la respuesta es que
+      sí, son tres campos en `Site`, el formulario del sitio y el PDF. Si es que no, se
+      cierra y no queda nada. Todo lo demás de las etapas 1 a 6 está construido.
 
 ## Etapa 2 — Cerrar la base (STOIC-2196 / 2197 / 2198)
 
@@ -196,9 +202,12 @@ trabajo con el cliente.
       celda se explica sola).
 - [x] Mantener descargas de menú (ahora por Drive REST API con service account; el GAS solo
       actúa como fallback mientras falten las credenciales).
-- [~] Verificar ≤ 1 s en carga y submit. Medido en desarrollo: navegación entre
-      secciones ~1 s con caché tibio, toggle de un roster de 250 alumnos 3 a 7 ms. Falta
-      medirlo en el hosting real y con conexiones lentas (va con la Etapa 7).
+- [x] Verificar ≤ 1 s en carga y submit. **Medido contra producción el 2-sep**, mediana
+      de 5 corridas: HTML de cualquier pantalla 185 ms, roster 270 ms, leer un count
+      319 ms, dashboard de los 56 sitios 562 ms, login 628 ms, **submit de un count
+      completo 627 ms**, PDF diario 477 ms, mensual 384 ms. Ninguna de las 14 llamadas pasa
+      el segundo. Eso cierra la mitad del servidor; la mitad del dispositivo, con las
+      tablets reales y conexiones lentas, es de la Etapa 7.
 - [x] **[S] Guardia de cambios sin guardar** (`components/common/UnsavedGuard.jsx`):
       `beforeunload` para cerrar la pestaña y captura de los links de la app, con el
       diálogo del producto en vez del `confirm` nativo.

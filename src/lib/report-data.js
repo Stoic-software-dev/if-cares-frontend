@@ -40,6 +40,30 @@ function addEntries(totals, entries) {
   return totals;
 }
 
+/**
+ * The sites a claim covers: every active one in the state, plus any that is no
+ * longer active but filed a count in the month.
+ *
+ * Filtering on `active` alone rewrote history. A site that closes in March
+ * disappeared from January's and February's claims too, and because a stored
+ * claim is rebuilt from the counts, the document came back with fewer sites and
+ * smaller totals than the one that was filed and signed.
+ */
+async function claimSites({ year, month, state, select }) {
+  const { from, to } = monthBounds(year, month);
+  return prisma.site.findMany({
+    where: {
+      ...(state ? { state } : {}),
+      OR: [
+        { active: true },
+        { mealCounts: { some: { date: { gte: from, lte: to }, voidedAt: null } } },
+      ],
+    },
+    select,
+    orderBy: { name: 'asc' },
+  });
+}
+
 async function loadCounts({ year, month, siteIds }) {
   const { from, to } = monthBounds(year, month);
   return prisma.mealCount.findMany({
@@ -78,10 +102,11 @@ async function foundationIdFor(state) {
  * Mirrors what the legacy generator wrote into the template, column for column.
  */
 export async function consolidatedBySite({ year, month, state, excludeSites = [] }) {
-  const sites = await prisma.site.findMany({
-    where: { active: true, ...(state ? { state } : {}) },
+  const sites = await claimSites({
+    year,
+    month,
+    state,
     select: { id: true, name: true, siteNumber: true, state: true },
-    orderBy: { name: 'asc' },
   });
 
   const excluded = new Set(excludeSites);
@@ -123,10 +148,7 @@ export async function consolidatedBySite({ year, month, state, excludeSites = []
  * meals served across every included site.
  */
 export async function consolidatedByDay({ year, month, state, excludeSites = [] }) {
-  const sites = await prisma.site.findMany({
-    where: { active: true, ...(state ? { state } : {}) },
-    select: { id: true, name: true },
-  });
+  const sites = await claimSites({ year, month, state, select: { id: true, name: true } });
   const excluded = new Set(excludeSites);
   const included = sites.filter((site) => !excluded.has(site.name));
   const counts = await loadCounts({ year, month, siteIds: included.map((site) => site.id) });

@@ -61,6 +61,11 @@ export const POST = handle(async (req) => {
           state: body.state || '',
           kind: body.kind,
           fileName,
+          // Everything the build depended on, so the claim can be produced again
+          // exactly as it was filed. Without these two the rebuild - which is
+          // what the signing page serves - was a different document.
+          excludeSites: body.excludeSites ?? [],
+          title: body.title ?? '',
           storageKey: file?.id ?? '',
           createdById: session.user.id,
           createdByEmail: session.user.email ?? '',

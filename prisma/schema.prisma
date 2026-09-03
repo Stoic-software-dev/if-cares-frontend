@@ -349,6 +349,14 @@ model GeneratedReport {
   state          String // "TX" | "OK"
   kind           String // e.g. "claim-part1" | "claim-part2"
   fileName       String
+  // What the claim was BUILT from. A claim is rebuilt from the counts whenever
+  // the stored file is not reachable - and the signing page rebuilds it every
+  // time - so anything the build depended on has to survive here or the rebuilt
+  // document is a different document. These two did not, which meant a claim
+  // filed for four sites came back carrying all forty one, and whoever signed it
+  // signed that instead.
+  excludeSites   String[] @default([])
+  title          String   @default("")
   storageKey     String   @default("")
   signedBy       String   @default("")
   signedTitle    String   @default("")

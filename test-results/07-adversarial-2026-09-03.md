@@ -1,9 +1,12 @@
 # Pasada adversarial — 3-sep-2026
 
-> Contra el código de `v2-mock` (`bcd7f7d`), corriendo local contra la **misma base de
-> Supabase que producción**. Mail apagado en local (`MAIL_FROM` vacío), así que ningún
-> mensaje salió a nadie. ~120 requests de API, barridos responsive de 320 a 1440 px sobre
-> 15 pantallas, y lectura de las 42 rutas de API y de los 39 módulos de `src/lib`.
+> Contra el código de `v2-mock` (`bcd7f7d`), corriendo local contra la base de Supabase de
+> esa misma rama. **Esa base no es producción**: al 3-sep-2026 el cutover no ocurrió, `main`
+> sigue corriendo sobre Google Sheets y los 56 sitios cargan por ahí. El README dice lo
+> contrario (líneas 8-9 y 101) y `TEST.md` §1.1 también; conviene no creerles hasta que se
+> corrijan. Mail apagado en local (`MAIL_FROM` vacío), así que ningún mensaje salió a nadie.
+> ~120 requests de API, barridos responsive de 320 a 1440 px sobre 15 pantallas, y lectura
+> de las 42 rutas de API y de los 39 módulos de `src/lib`.
 
 ## Estado de los arreglos (3-sep-2026)
 

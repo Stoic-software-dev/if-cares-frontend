@@ -79,6 +79,11 @@ tampoco muestra counts atrasados: leía como sano.
       borrando primero entries, correcciones, counts, requests, días y alumnos.
 - [ ] Backups automáticos de Supabase verificados **con una restauración de verdad**, no
       con la pantalla que dice que están activos.
+- [ ] **Borrar `MAIL_REDIRECT_TO` de Railway.** Mientras esté cargada, *todo* mail va a
+      esa casilla en vez de a quien nombra: es lo que hace que probar en producción no le
+      escriba a Kenya, a Marisela ni al staff. Es el último paso, no el primero — y sin
+      hacerlo, encender los recordatorios no le llega a nadie. La pantalla de Reminder
+      emails lo avisa con un cartel mientras siga activa.
 
 ---
 

@@ -1,6 +1,6 @@
 import { handle, legacyJson } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { mailConfigured, mailFrom, mailActsAs, sendMail } from '@/lib/gmail';
+import { mailConfigured, mailFrom, mailActsAs, mailRedirect, sendMail } from '@/lib/gmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +33,10 @@ export const POST = handle(async () => {
       subject: 'IF Cares: mail is working',
       html: '<p>If you are reading this, the app can send email as IF Cares.</p>',
     });
-    return legacyJson({ result: 'success', data: { ok: true, to, from: mailFrom(), as: mailActsAs() } });
+    return legacyJson({
+      result: 'success',
+      data: { ok: true, to, from: mailFrom(), as: mailActsAs(), redirectedTo: mailRedirect() },
+    });
   } catch (error) {
     return legacyJson({
       result: 'success',

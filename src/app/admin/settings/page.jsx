@@ -111,6 +111,7 @@ function RemindersScreen() {
       setSettings({
         ...res.data,
         mailReady: settings.mailReady,
+        mailRedirectedTo: settings.mailRedirectedTo,
         lastPingAt: settings.lastPingAt,
         lastRunDay: settings.lastRunDay,
       });
@@ -151,6 +152,24 @@ function RemindersScreen() {
 
         {settings && (
           <>
+            {settings.mailRedirectedTo?.length > 0 && (
+              <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-soft p-4">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[13px] font-semibold text-warning-text">
+                    Every email is being redirected
+                  </span>
+                  <span className="text-[12.5px] leading-relaxed text-warning-text/90">
+                    Nothing reaches the person it names. All of it goes to{' '}
+                    {settings.mailRedirectedTo.join(', ')} instead, carrying a note saying who it was
+                    for. That is deliberate until the app goes live: the database already holds real
+                    people, so a test would otherwise write to them. Clearing MAIL_REDIRECT_TO turns
+                    it off.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {!settings.mailReady && (
               <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-soft p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />

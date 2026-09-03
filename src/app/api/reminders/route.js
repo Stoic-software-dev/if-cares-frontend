@@ -1,6 +1,6 @@
 import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { mailConfigured, parseRecipients } from '@/lib/gmail';
+import { mailConfigured, mailRedirect, parseRecipients } from '@/lib/gmail';
 import { readRequestNotifySettings, writeRequestNotifySettings } from '@/lib/request-notify';
 import {
   SETTINGS_KEY,
@@ -35,6 +35,10 @@ export const GET = handle(async () => {
     data: {
       ...settings,
       mailReady: mailConfigured(),
+      // While this is set nothing reaches a real recipient. It has to be visible
+      // on the screen that owns sending, or somebody turns the reminders on at
+      // cutover and wonders why nobody got one.
+      mailRedirectedTo: mailRedirect(),
       lastPingAt: await readLastPing(),
       // Checking and sending are different facts, and only one of them is what
       // an administrator actually wants to know.

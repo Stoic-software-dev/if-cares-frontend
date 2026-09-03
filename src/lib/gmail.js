@@ -59,6 +59,37 @@ export function mailActsAs() {
   return credentials()?.sender ?? '';
 }
 
+// Everything goes here instead, while the app is not live yet.
+//
+// Before the cutover the database holds real people: Kenya, Marisela, the site
+// staff. Any test that approves a count, answers a request or files one reaches
+// them, because those recipients come from user rows rather than from a setting
+// anybody can point somewhere safe. Redirecting per feature only covers the one
+// feature you remembered - which is how a fake request notice reached IF Cares
+// on 3 September.
+//
+// So the catch is here, in the one function every message goes through, and it
+// is switched off by clearing one variable on the day the app goes live.
+export function mailRedirect() {
+  return parseRecipients(process.env.MAIL_REDIRECT_TO ?? '').valid;
+}
+
+// The message still has to say who it was really for, or a redirected test
+// stops proving anything about who would have been written to.
+function redirectNotice(to, cc) {
+  const line = (label, list) => (list?.length ? `<div><b>${label}:</b> ${list.join(', ')}</div>` : '');
+  return (
+    '<div style="margin:0 0 16px;padding:12px 14px;border:1px solid #f0c36d;background:#fdf6e3;' +
+    'border-radius:6px;font:13px/1.5 system-ui,sans-serif;color:#7a5c00">' +
+    '<div style="font-weight:700;margin-bottom:4px">Redirected: the app is not live yet</div>' +
+    '<div>This message was not delivered to the people below. It came here because ' +
+    'MAIL_REDIRECT_TO is set.</div>' +
+    line('To', to) +
+    line('Cc', cc) +
+    '</div>'
+  );
+}
+
 // Keyed by the mailbox it impersonates. Changing MAIL_FROM without that key
 // would keep sending as the old address for up to an hour, which reads as "the
 // setting did not take" and is the worst moment for it: right after someone
@@ -195,7 +226,24 @@ export async function sendMail({ to, cc = [], subject, html, text, attachments =
   const recipients = (Array.isArray(to) ? to : [to]).map((value) => String(value).trim()).filter(Boolean);
   if (!recipients.length) throw new MailError('No recipient.');
 
-  const raw = buildMime({ to: recipients, cc, subject, html, text, attachments })
+  // The one place a pre-launch redirect can be enforced: every feature that
+  // sends anything comes through here.
+  const redirect = mailRedirect();
+  const finalTo = redirect.length ? redirect : recipients;
+  const finalCc = redirect.length ? [] : cc;
+  const finalSubject = redirect.length ? `[redirected] ${subject}` : subject;
+  const finalHtml = redirect.length
+    ? redirectNotice(recipients, cc) + (html ?? (text ? `<pre>${text}</pre>` : ''))
+    : html;
+
+  const raw = buildMime({
+    to: finalTo,
+    cc: finalCc,
+    subject: finalSubject,
+    html: finalHtml,
+    text: redirect.length ? undefined : text,
+    attachments,
+  })
     .toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

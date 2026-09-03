@@ -20,9 +20,29 @@ el dominio**.
 ```
 MAIL_FROM="IF Cares <noreply@stoicsoftware.io>"   # lo que ve quien recibe
 MAIL_AS="<casilla real que se suplanta>"          # a quién suplanta el service account
+MAIL_REDIRECT_TO="..."                            # desvío pre-lanzamiento, ver abajo
 REMINDERS_SECRET="<cadena larga y aleatoria>"
 APP_URL="https://<la app en Railway>"
 ```
+
+## `MAIL_REDIRECT_TO`: nada llega a nadie real hasta el corte
+
+Con esa variable cargada, **todo** mail que la app manda va a esas direcciones en
+vez de a quien nombra, con el asunto prefijado `[redirected]` y un cartel arriba
+que dice a quién le hubiera llegado. Se apaga borrando la variable, y ese es un
+paso del runbook del corte.
+
+Existe porque la base **ya tiene gente real**: Kenya, Marisela, el staff de los
+sitios. Los destinatarios de una aprobación, de la respuesta a un request o de un
+recordatorio **no salen de un setting** que uno pueda apuntar a un lugar seguro:
+salen de las filas de usuarios. Desviar feature por feature cubre solo la que uno
+se acordó — que es exactamente como el 3-sep les llegó a Kenya y a Marisela el
+aviso de un request de prueba.
+
+Por eso el desvío vive en `sendMail()`, que es el único lugar por donde pasan
+todos, y no se puede saltear desde ninguna ruta. La pantalla de **Reminder
+emails** lo muestra en un cartel mientras esté activo, para que nadie encienda
+los recordatorios el día del corte y se pregunte por qué no llegó ninguno.
 
 Reutiliza `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`,
 los mismos de Drive.

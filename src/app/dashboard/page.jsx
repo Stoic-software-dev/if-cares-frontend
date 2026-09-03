@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { availableMonths, buildMonth, dateLabel, monthMealPattern, todayYmd } from '@/lib/calendar';
+import { availableMonths, buildMonth, monthMealPattern, todayYmd } from '@/lib/calendar';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { useStoredState } from '@/lib/hooks';
 import { sortSiteNames } from '@/lib/sites';
@@ -129,7 +129,6 @@ function DashboardScreen() {
       <AppShell width="wide">
         <div className="flex flex-col gap-4">
           <Skeleton className="h-[68px] w-full rounded-lg" />
-          <Skeleton className="h-4 w-96 max-w-full rounded-sm" />
           <Skeleton className="h-[420px] w-full rounded-lg" />
         </div>
       </AppShell>
@@ -138,32 +137,9 @@ function DashboardScreen() {
 
   const { stats } = month;
 
-  // One sentence, in the order somebody actually reads it: what is wrong, what
-  // the month is, what it serves. Every clause is dropped when it has nothing
-  // to say, so a clean month is a short line rather than three zeroes.
+  // The month's usual meal shape. Nothing on the page says it out loud any more;
+  // it is here so a day that breaks it can be the only one that names its meals.
   const mealPattern = monthMealPattern(month);
-  const parts = [];
-  if (stats.service === 0) {
-    parts.push('No service days this month.');
-  } else {
-    parts.push(
-      stats.missing > 0
-        ? `${stats.missing} of ${stats.service} service days still need a count.`
-        : `All ${stats.service} service days are accounted for.`
-    );
-  }
-  if (mealPattern) {
-    parts.push(
-      `Most days serve ${mealPattern.text}` +
-        (mealPattern.exceptions > 0
-          ? `; ${mealPattern.exceptions} ${mealPattern.exceptions === 1 ? 'day differs' : 'days differ'} and say so.`
-          : '.')
-    );
-  }
-  if (todayIsOpen) {
-    parts.push(`Today, ${dateLabel(today, { month: 'long', day: 'numeric' })}, is a service day.`);
-  }
-  const summary = parts.join(' ');
 
   return (
     <AppShell width="wide">
@@ -227,13 +203,6 @@ function DashboardScreen() {
             )}
           </div>
         </div>
-
-        {/* What three cards and twenty-two repeated pairs of chips were saying,
-            in one line. The counts were already in the tabs above, and the third
-            card was the other two subtracted from the total. */}
-        <p className="px-0.5 text-[13px] leading-relaxed text-muted-foreground">
-          {summary}
-        </p>
 
         {todayIsOpen && (
           <Button onClick={submitToday} size="touch" className="xl:hidden">

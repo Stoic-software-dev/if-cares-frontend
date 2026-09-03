@@ -33,6 +33,8 @@ yarn-error.log*
 /import-snapshots/
 # local data snapshots for the Sheets migration (PII + credentials — never commit)
 /migration-data/
+# snapshots taken to rebuild the database on 3-sep-2026: full rosters, so PII
+/recovery-2026-09-03/
 
 # vercel
 .vercel

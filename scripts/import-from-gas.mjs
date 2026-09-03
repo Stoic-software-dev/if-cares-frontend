@@ -39,22 +39,37 @@ const warn = (msg) => {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function gasGet(type, params = {}) {
+// The Apps Script answers with a Google error page - HTML, not JSON - roughly
+// one call in three, which is why every reader of it in this repo retries. Three
+// attempts is not enough here: this script makes one call per active site, so
+// over fifty-odd calls a run that gives up on the third failure is a run that
+// never finishes. Six attempts with a widening wait is what actually gets
+// through, and `soft` lets one stubborn site be reported and skipped instead of
+// aborting an import that had already written everything before it.
+const ATTEMPTS = 6;
+
+async function gasGet(type, params = {}, { soft = false } = {}) {
   const qs = new URLSearchParams({ type, ...params }).toString();
   const url = `${GAS}?${qs}`;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  let last;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(url, { redirect: 'follow' });
+      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30_000) });
       const text = await res.text();
       const data = JSON.parse(text); // GAS returns HTML error pages on failure
       await sleep(400); // throttle
       return data;
     } catch (error) {
-      if (attempt === 3) throw new Error(`GAS ${type} failed after 3 attempts: ${error.message}`);
-      await sleep(1500 * attempt);
+      last = error;
+      if (attempt < ATTEMPTS) await sleep(1500 * attempt);
     }
   }
-  return null;
+  const message = `GAS ${type} failed after ${ATTEMPTS} attempts: ${last?.message}`;
+  if (soft) {
+    warn(message);
+    return null;
+  }
+  throw new Error(message);
 }
 
 async function snapshot(name, data) {
@@ -127,7 +142,7 @@ async function importSites() {
   if (only !== 'sites') {
     const activeSites = DRY ? [] : await prisma.site.findMany({ where: { active: true } });
     for (const site of activeSites) {
-      const data = await gasGet('siteData', { site: site.name });
+      const data = await gasGet('siteData', { site: site.name }, { soft: true });
       if (!data || typeof data !== 'object') {
         warn(`siteData missing for ${site.name}`);
         continue;
@@ -208,7 +223,7 @@ async function importStudents() {
   const claimedBy = new Map(); // student id -> site name
 
   for (const site of activeSites) {
-    const roster = await gasGet('studentData', { site: site.name });
+    const roster = await gasGet('studentData', { site: site.name }, { soft: true });
     if (!Array.isArray(roster)) {
       warn(`studentData missing for ${site.name}`);
       continue;

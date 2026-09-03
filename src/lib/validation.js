@@ -55,10 +55,16 @@ export const editStudentSchema = z.object({
   site: z.string().min(1, 'Please select a Site.'),
 });
 
+// A roster row is a child at a site, so its numbers have the range a child has.
+// Unbounded, this accepted a position of -5 and an age of -3 and printed them on
+// a claim.
 const mealRowSchema = z.tuple([
-  z.coerce.number().int(), // number
-  z.string(), // name
-  z.union([z.coerce.number(), z.literal('')]), // age (may arrive '')
+  z.coerce.number().int().min(0, 'A roster position cannot be negative.'), // number
+  z.string().trim().min(1, 'A roster row needs a name.').max(120, 'That name is too long.'), // name
+  z.union([
+    z.coerce.number().int().min(0, 'An age cannot be negative.').max(120, 'That age is not plausible.'),
+    z.literal(''),
+  ]), // age (may arrive '')
   z.boolean(), // attendance
   z.boolean(), // breakfast
   z.boolean(), // lunch
@@ -66,14 +72,25 @@ const mealRowSchema = z.tuple([
   z.boolean(), // supper
 ]);
 
+// The biggest real roster is about 250 names and the roster importer already
+// refuses more than a thousand. Without a ceiling here a single submission wrote
+// three thousand rows to a site that has thirteen.
+const MAX_ROSTER_ROWS = 1000;
+// The same ceiling the public claim signature carries. A drawn signature is tens
+// of kilobytes; without a limit a 3 MB blob went straight into the row.
+const MAX_SIGNATURE_CHARS = 400_000;
+
 export const mealCountSchema = z.object({
   actionType: z.literal('mealCount').optional(),
   values: z.object({
-    data: z.array(mealRowSchema).min(1, 'No students in the submission.'),
+    data: z
+      .array(mealRowSchema)
+      .min(1, 'No students in the submission.')
+      .max(MAX_ROSTER_ROWS, 'That is more students than any roster has.'),
     date: z.string().min(1, 'Date is required.'),
     timeIn: z.string().min(1, 'Time In is required.'),
     timeOut: z.string().min(1, 'Time Out is required.'),
-    signature: z.string().min(1, 'Signature is required.'),
+    signature: z.string().min(1, 'Signature is required.').max(MAX_SIGNATURE_CHARS, 'That signature is too large.'),
     site: z.string().min(1, 'Site is required.'),
   }),
 });
@@ -162,11 +179,32 @@ const weeklyTemplateSchema = z.object({
   sun: dayMealsSchema.optional(),
 });
 
+// The two states the program files claims under.
+//
+// This was free text, and that is enough on its own to lose a site from a claim.
+// The backend selects a claim's sites with an EXACT match on this column while
+// every screen normalizes it for display, so a site saved as "tx" appeared as TX
+// in the checklist and was silently absent from the PDF - 42 promised, 41
+// printed. It is the same divergence the name-parsing fix was meant to close,
+// arriving through the column instead of the name. One canonical value on the
+// way in is what keeps the two sides from drifting again.
+//
+// The empty string stays legal on update because a site can genuinely belong to
+// no claim - the training site does - and the claim screen already says so.
+// Creating one that way is not allowed: that is how a real site goes missing.
+export const SITES_STATES = ['TX', 'OK'];
+const stateRequired = z.string().trim().toUpperCase().pipe(z.enum(SITES_STATES, { error: 'Pick TX or OK.' }));
+const stateOptional = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(z.enum([...SITES_STATES, ''], { error: 'A site is in TX, in OK, or in no claim at all.' }));
+
 const siteFields = {
   // The full legacy name with its school-year prefix: it is the identity every
   // screen shows and every URL carries.
   name: z.string().trim().min(3, 'The full site name is required.').max(200),
-  state: z.string().trim().max(10).optional(),
+  state: stateOptional.optional(),
   ceName: z.string().trim().max(200).optional(),
   ceId: z.string().trim().max(50).optional(),
   siteName: z.string().trim().max(200).optional(),
@@ -191,7 +229,7 @@ export const siteCreateSchema = z
     // the only thing standing between a typo and the same failure recurring -
     // an empty state is invisible in the UI (the badge falls back to parsing
     // the name) right up until a claim quietly excludes the site.
-    state: z.string().trim().min(1, 'Pick TX or OK.').max(10),
+    state: stateRequired,
   })
   .refine(
     (value) => !value.programStart || !value.programEnd || value.programStart <= value.programEnd,

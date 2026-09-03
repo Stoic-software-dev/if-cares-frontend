@@ -10,6 +10,35 @@ export const MEAL_KEYS = [
   { key: 'sup', label: 'Supper', short: 'Sup' },
 ];
 
+const EVERY_MEAL = { brk: true, lunch: true, snk: true, sup: true };
+
+/**
+ * Which meals a day may carry, given the meals its calendar names.
+ *
+ * A day that names no meal at all gets all four rather than none. That is not a
+ * nicety: 89% of the service days that came over from the spreadsheets carry all
+ * four flags as false, because the flags did not survive the export, and with
+ * "none" the count form renders the attendance column alone. Somebody could
+ * record who was there and not one meal they ate, and the count would submit
+ * looking complete.
+ *
+ * This lives here, next to nothing that touches a database, because BOTH sides
+ * have to agree on it. It began as a rule in the count form, which meant the
+ * screen offered lunch alone on a lunch-only day while the API happily accepted
+ * a submission claiming breakfast, snack and supper as well - and those three
+ * went into the month's totals and into the claim.
+ */
+export function mealsOrAll(meals) {
+  if (!meals) return EVERY_MEAL;
+  return Object.values(meals).some(Boolean) ? meals : EVERY_MEAL;
+}
+
+/** The meal keys a submission for this day is NOT allowed to claim. */
+export function mealsNotServed(meals) {
+  const allowed = mealsOrAll(meals);
+  return MEAL_KEYS.filter((meal) => !allowed[meal.key]);
+}
+
 // The program's calendar day, not the device's: a submission at 11 PM in
 // Buenos Aires must still count for the Dallas service day.
 export function todayYmd() {
@@ -45,7 +74,10 @@ export function monthShortLabel(month) {
 }
 
 export function dateLabel(ymd, options = { weekday: 'long', month: 'long', day: 'numeric' }) {
-  if (!ymd) return '';
+  // A date that is not one produces NaN parts, and `toLocaleDateString` renders
+  // those as the literal string "Invalid Date" - which is what /counts/whatever
+  // printed as its page heading. Nothing is a better heading than that.
+  if (!ymd || !/^(19|20)\d{2}-\d{2}-\d{2}$/.test(ymd)) return '';
   const { year, month, day } = ymdParts(ymd);
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
     ...options,

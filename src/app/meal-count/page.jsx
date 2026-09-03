@@ -22,38 +22,12 @@ import { EmptyState, ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, cachedGet, invalidate } from '@/lib/data-cache';
-import { MEAL_KEYS, dateLabel, todayYmd } from '@/lib/calendar';
+import { MEAL_KEYS, dateLabel, mealsOrAll, todayYmd } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const ATTENDANCE = { key: 'att', label: 'Attendance', short: 'Att' };
 const EMPTY_MARKS = { att: false, brk: false, lunch: false, snk: false, sup: false };
-const EVERY_MEAL = { brk: true, lunch: true, snk: true, sup: true };
-
-/**
- * Which meal columns to show for a day.
- *
- * A day that names no meal at all gets all four rather than none. That is not a
- * nicety: 89% of the service days that came over from the spreadsheets carry all
- * four flags as false, because the flags did not survive the export, and with
- * "none" this form renders the attendance column alone. Somebody could record
- * who was there and not one meal they ate, and the count would submit looking
- * complete.
- *
- * Most of those days are already filed, so they never reach this form. The one
- * that does is a day whose count was voided: voiding hands the day back as open,
- * with the service day's own flags, which is exactly where the empty ones live.
- * Voiding is the documented way out of a count filed on the wrong day, so the
- * path is a normal one, not a corner.
- *
- * Showing everything is the safe direction: the person filling it in is at the
- * point of service and ticks what actually happened. Showing nothing quietly
- * makes the truth unrecordable.
- */
-function mealsOrAll(meals) {
-  if (!meals) return EVERY_MEAL;
-  return Object.values(meals).some(Boolean) ? meals : EVERY_MEAL;
-}
 
 // Drafts live only in this browser and only until the count is submitted. They
 // exist because a phone can die, lose signal or be backgrounded halfway through
@@ -138,6 +112,8 @@ function MealCountScreen() {
   const [voided, setVoided] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [restored, setRestored] = useState(false);
+  // How far the roster moved under a restored draft, when it did.
+  const [draftDrift, setDraftDrift] = useState(null);
 
   // One draft per site and day, on this device only.
   const draftKey = `ifc.draft.${site}|${iso}`;
@@ -172,15 +148,25 @@ function MealCountScreen() {
               ])
             )
           );
-          // A submitted count carries no service-day flags any more, so the
-          // columns are the meals that were actually served that day.
+          // The columns a correction can touch: what the day already carries,
+          // plus what its calendar says it serves. Deriving them from the
+          // entries alone made the commonest correction impossible - a meal
+          // nobody was ticked for had no column to tick it in.
           const served = {
             brk: data.entries.some((e) => e.breakfast),
             lunch: data.entries.some((e) => e.lunch),
             snk: data.entries.some((e) => e.snack),
             sup: data.entries.some((e) => e.supper),
           };
-          setDayMeals(mealsOrAll(served));
+          const day = data.dayMeals ?? {};
+          setDayMeals(
+            mealsOrAll({
+              brk: served.brk || Boolean(day.brk),
+              lunch: served.lunch || Boolean(day.lunch),
+              snk: served.snk || Boolean(day.snk),
+              sup: served.sup || Boolean(day.sup),
+            })
+          );
           setTimeIn(data.timeIn ? data.timeIn.slice(0, 5) : '');
           setTimeOut(data.timeOut ? data.timeOut.slice(0, 5) : '');
         })
@@ -233,17 +219,30 @@ function MealCountScreen() {
         // A draft from this device wins over an empty roster: a reload, a
         // crash or a browser killed in the background must not cost the marks
         // already taken at the point of service.
+        //
+        // It used to be all or nothing, and matched on the roster being
+        // IDENTICAL - so one student added or removed while the phone was in a
+        // pocket threw away every mark already taken, silently. Now the marks
+        // that still have a student are kept and the difference is said out
+        // loud, because the alternative is somebody re-ticking two hundred
+        // names without ever learning why.
         const draft = readDraft(draftKey);
-        const usable =
-          draft && draft.marks.length === rows.length && draft.marks.every(([id]) => rows.some((r) => r.id === id));
-        if (usable) {
-          setMarks(new Map(draft.marks));
+        const saved = new Map(draft?.marks ?? []);
+        const kept = rows.filter((student) => saved.has(student.id));
+        if (draft && kept.length) {
+          setMarks(new Map(rows.map((student) => [student.id, saved.get(student.id) ?? { ...EMPTY_MARKS }])));
           setTimeIn(draft.timeIn ?? '15:30');
           setTimeOut(draft.timeOut ?? '');
           setRestored(true);
           setDirty(true);
+          setDraftDrift(
+            kept.length === saved.size && kept.length === rows.length
+              ? null
+              : { added: rows.length - kept.length, gone: saved.size - kept.length }
+          );
         } else {
           if (draft) clearDraft(draftKey);
+          setDraftDrift(null);
           setMarks(new Map(rows.map((student) => [student.id, { ...EMPTY_MARKS }])));
         }
       })
@@ -314,6 +313,7 @@ function MealCountScreen() {
     setTimeIn('15:30');
     setTimeOut('');
     setRestored(false);
+    setDraftDrift(null);
     setDirty(false);
   };
 
@@ -498,6 +498,15 @@ function MealCountScreen() {
             <RotateCcw className="h-4 w-4 shrink-0" />
             <span className="flex-1">
               Marks from this device were restored. Nothing was submitted yet.
+              {draftDrift && (
+                <>
+                  {' '}
+                  The roster changed since then
+                  {draftDrift.added > 0 && `, ${draftDrift.added} name${draftDrift.added > 1 ? 's' : ''} added`}
+                  {draftDrift.gone > 0 && `, ${draftDrift.gone} removed`}
+                  {' '}— check the new rows before submitting.
+                </>
+              )}
             </span>
             <Button variant="outline" size="sm" onClick={discardDraft} className="shrink-0">
               Start over

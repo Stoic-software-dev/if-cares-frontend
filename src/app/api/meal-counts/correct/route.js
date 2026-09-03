@@ -8,10 +8,16 @@ import { logAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Bounded for the same reason the submit path is: a roster is a few hundred
+// names, and a position or an age below zero is not one.
 const rowSchema = z.tuple([
-  z.number(), // number
-  z.string(), // name
-  z.union([z.number(), z.string(), z.null()]), // age
+  z.number().int().min(0, 'A roster position cannot be negative.'), // number
+  z.string().trim().min(1, 'A roster row needs a name.').max(120, 'That name is too long.'), // name
+  z.union([
+    z.number().int().min(0, 'An age cannot be negative.').max(120, 'That age is not plausible.'),
+    z.literal(''),
+    z.null(),
+  ]), // age
   z.boolean(), // attendance
   z.boolean(), // breakfast
   z.boolean(), // lunch
@@ -25,7 +31,7 @@ const correctionSchema = z.object({
   timeIn: z.string().min(1),
   timeOut: z.string().min(1),
   note: z.string().trim().max(500).default(''),
-  data: z.array(rowSchema).min(1),
+  data: z.array(rowSchema).min(1).max(1000, 'That is more students than any roster has.'),
 });
 
 // STOIC-2201: an Administrator edits a submitted count. The full prior state is
@@ -60,6 +66,7 @@ export const POST = handle(async (req) => {
   const timeIn = toCanonicalTime(body.timeIn);
   const timeOut = toCanonicalTime(body.timeOut);
   if (!timeIn || !timeOut) throw new ApiError(422, 'Time in and time out are required.');
+  if (timeOut <= timeIn) throw new ApiError(422, 'Time out has to be after time in.');
 
   const roster = await prisma.student.findMany({
     where: { siteId: site.id },

@@ -87,6 +87,15 @@ export async function loadMealCountDetail(session, siteName, ymd) {
   });
   if (!count) throw new ApiError(404, 'No meal count was submitted for this date.');
 
+  // What the calendar says this day serves. A correction used to derive its
+  // columns purely from what the count already had, which meant the one thing a
+  // correction most needs to fix - a meal nobody was ticked for - was the one
+  // thing it could not add.
+  const serviceDay = await prisma.serviceDay.findUnique({
+    where: { siteId_date: { siteId: site.id, date } },
+    select: { brk: true, lunch: true, snk: true, sup: true },
+  });
+
   const totals = { att: 0, brk: 0, lun: 0, snk: 0, sup: 0 };
   for (const entry of count.entries) {
     if (entry.attendance) totals.att += 1;
@@ -99,6 +108,9 @@ export async function loadMealCountDetail(session, siteName, ymd) {
   return {
     date: ymd,
     site: site.name,
+    dayMeals: serviceDay
+      ? { brk: serviceDay.brk, lunch: serviceDay.lunch, snk: serviceDay.snk, sup: serviceDay.sup }
+      : null,
     timeIn: count.timeIn,
     timeOut: count.timeOut,
     signature: count.signature,

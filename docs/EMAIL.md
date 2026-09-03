@@ -144,11 +144,28 @@ Dos trampas de esa imagen: tiene `ENTRYPOINT ["curl"]`, así que el start comman
 se agrega como argumentos y termina siendo `curl curl ...`; y no hay shell, así
 que `$APP_URL` no se expande. Van los valores literales.
 
-**El servicio está creado pero todavía no ejecuta ningún tick.** Cómo se sabe sin
-leer logs: cada llamada con el secreto correcto sella `AppSetting
-reminders.lastPing`, **antes** de cualquier motivo por el que esa corrida no
-mande nada, y la pantalla de recordatorios lo muestra. Un recordatorio que dejó de
-salir se ve igual que uno sin nada que decir; el latido es la diferencia.
+**Ese servicio quedó descartado (3-sep).** Ejecutó exactamente dos ticks y después
+seis horas sin uno solo, con el deployment marcado sano. La agenda pasó al propio
+servidor: `src/instrumentation.js` → `src/lib/reminder-scheduler.js`, que chequea
+cada 5 minutos y manda **una vez por día, a partir de** la hora configurada. La
+ruta con el secreto sigue existiendo: un disparador externo sigue siendo válido.
+
+### El healthcheck no es decoración
+
+Next 14 **no** llama a `register()` al bootear: lo llama en el primer request.
+Medido el 3-sep, el server quedó listo 15:35:42 y el scheduler arrancó 16:47:49,
+cuando alguien entró. Para un recordatorio que existe para perseguir sitios que
+**no** usaron la app, esperar a que alguien use la app es circular.
+
+Lo que lo cierra es el **healthcheck de Railway apuntado a `/api/health`**: ese
+primer request lo arma. Verificado redesplegando sin tocar nada — el scheduler
+arranca en el mismo segundo en que el server dice estar listo. Si alguien saca esa
+ruta del servicio, los recordatorios vuelven a depender de que pase gente.
+
+Cómo se detecta sin leer logs: cada chequeo sella `AppSetting reminders.lastPing`
+**antes** de cualquier motivo por el que esa corrida no mande nada, y la pantalla
+lo muestra, separado de `lastRunDay` (cuándo mandó de verdad). Un recordatorio que
+dejó de salir se ve igual que uno sin nada que decir; el latido es la diferencia.
 
 Para probar fuera de hora, `?force=1` saltea la comparación.
 

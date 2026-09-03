@@ -65,6 +65,10 @@ tampoco muestra counts atrasados: leía como sano.
       reinicio no mande todo dos veces. La pantalla distingue **cuándo chequeó** de
       **cuándo mandó**. Falta solo **encenderlos**: hoy están en off, que es lo correcto
       hasta el corte.
+      **No sacar el healthcheck `/api/health` del servicio en Railway**: Next arma el
+      scheduler en el primer request, no al bootear, así que ese ping es lo único que lo
+      enciende sin esperar a que entre alguien. Sin él, el recordatorio que persigue a los
+      sitios que no usaron la app depende de que alguien use la app.
 - [ ] Los feriados del ciclo cargados. Hoy hay cero filas. Menos urgente de lo que parecía:
       hoy solo Labor Day cae en un día de servicio, y en 2 sitios. Pero cuando se construya
       el calendario del ciclo, los feriados hay que marcarlos junto con él, o cada uno se

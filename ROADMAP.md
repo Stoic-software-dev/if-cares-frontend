@@ -72,8 +72,12 @@ contraste WCAG AA sin fallos en claro y en oscuro sobre todas las pantallas nuev
 de 66 pares método+ruta, IDOR con ids reales, concurrencia, integraciones con evidencia
 del otro lado del sistema y una pasada de integridad de datos), quedan **3 hallazgos
 arreglados** —tres rutas que respondían 500 ante un body JSON `null`, y el alta de sitios
-que no exigía el estado, que era la causa exacta del peor bug del proyecto— y **1 abierto**:
-un React #185 en `/counts/[date]` sin reproducción. Detalle en `TEST-RESULTS.md`.
+que no exigía el estado, que era la causa exacta del peor bug del proyecto— y **ninguno
+abierto**. El React #185 en `/counts/[date]` quedó **descartado el 3-sep por decisión del
+usuario**: una sola ocurrencia, del navegador compartido durante la corrida con agentes,
+nunca reproducido en tres intentos. Si vuelve a aparecer ahora se va a ver limpio, porque
+las otras tres entradas del log eran el `redirect()` de la raíz, ya arreglado.
+Detalle en `TEST-RESULTS.md`.
 
 El **import histórico terminó** y está **reconciliado contra las planillas**: 56 sitios,
 7.718 días, 368.996 filas, cero diferencias incluidos los totales por tipo de comida
@@ -135,12 +139,11 @@ trabajo con el cliente.
       5 minutos después.
 - [x] **[S] Aprobación de counts: DECIDIDA el 31-ago — va.** Construida el mismo día;
       el detalle de qué bloquea y qué no está en la Etapa 4.
-- [ ] **[S] Confirmar si el formulario en papel del Regular Year lleva datos del sitio**
-      (dirección / teléfono / supervisor). Summer los guarda por sitio y los imprime en
-      el PDF; hoy el modelo `Site` no tiene esos campos.
-      **Es el único pendiente que todavía puede volverse código**: si la respuesta es que
-      sí, son tres campos en `Site`, el formulario del sitio y el PDF. Si es que no, se
-      cierra y no queda nada. Todo lo demás de las etapas 1 a 6 está construido.
+- [x] **Datos de contacto del sitio** (dirección / teléfono / supervisor): **cerrado el
+      3-sep por decisión del usuario — no se hace hasta que IF Cares lo pida.** Summer los
+      guarda por sitio y los imprime en el PDF; el modelo `Site` del Regular Year no los
+      tiene. Si algún día los piden son tres campos, el formulario del sitio y el PDF.
+      **No volver a levantarlo como pendiente.**
 
 ## Etapa 2 — Cerrar la base (STOIC-2196 / 2197 / 2198)
 

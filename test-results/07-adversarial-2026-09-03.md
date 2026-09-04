@@ -8,6 +8,30 @@
 > ~120 requests de API, barridos responsive de 320 a 1440 px sobre 15 pantallas, y lectura
 > de las 42 rutas de API y de los 39 módulos de `src/lib`.
 
+## Tercera pasada (4-sep-2026): las integraciones, por fin con mail conectado
+
+Con `MAIL_FROM`, `MAIL_AS` y `MAIL_REDIRECT_TO` cargados desde Railway se pudo hacer lo que
+§8 pide y las dos pasadas anteriores no pudieron. Antes de enviar nada verifiqué el desvío:
+todo cayó en dos casillas propias, ningún destinatario real fue alcanzado.
+
+**Lo que anda:** `POST /api/mail/test` → `ok:true`, así que la delegación de dominio está
+puesta. Salieron y llegaron el reset de contraseña, el aviso de request nuevo, la respuesta
+al request, la notificación de aprobación **con el PDF adjunto** (`notified: 2`), y el envío
+del formulario diario y del resumen mensual.
+
+| # | Qué | Cómo quedó |
+|---|---|---|
+| **28** | **Una firma que no se puede dibujar se aceptaba al enviar y explotaba al pedir el documento.** El schema sólo exigía "no vacía". Un data-url PNG truncado entró, el count quedó normal en el dashboard, contó en el reporte mensual y en el claim — y `GET /api/meal-counts/pdf` devolvía **500**, y la aprobación fallaba con `Invalid typed array length: 0`. Es decir: el único documento que va al estado por ese día no se podía producir, y sólo se descubría el día que hacía falta | Se valida en el ingreso que decodifique como PNG (`isRenderableSignature`, junto a la regla de trazo mínimo), en el count diario **y** en la firma pública del claim, que sólo miraba el prefijo. Y el generador de PDF ya no se cae: si los bytes no sirven, deja la línea de firma en blanco en vez de tirar abajo el documento |
+| **29** | **Los reminders no pueden enviarse, y la pantalla decía que todo estaba listo.** `APP_URL` está vacío, así que el scheduler aborta en cada tick — pero `lastPingAt` se estampa *antes* de esa comprobación, así que el latido se ve fresco. Y el aviso de ese fallo va a `ALERT_EMAILS`, que también está vacío: no llega a nadie. La pantalla informaba `mailReady: true` y nada más | `GET /api/reminders` devuelve ahora `schedulerReady` y `alertsReady`, que hoy son los dos `false`. Es config, no código, pero la pantalla ya puede decir por qué no sale nada |
+
+**Lo que sigue sin probarse**, y conviene decirlo: una corrida real de reminders (41
+destinatarios × 30 días atrasados = demasiados mails para disparar sin permiso), el
+archivado en Drive —que está roto y documentado en `docs/DRIVE-STORAGE.md`: las carpetas
+están en "Mi unidad" y un service account no tiene cuota—, el import de roster, la firma
+pública de punta a punta, modo oscuro, teclado y dispositivos reales.
+
+---
+
 ## Segunda pasada (4-sep-2026): tres hallazgos más, todos en lo que arreglé
 
 Re-corrida completa contra el código ya arreglado y la base reconstruida. Los 24 arreglos

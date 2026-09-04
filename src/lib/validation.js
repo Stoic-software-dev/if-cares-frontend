@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isRenderableSignature } from './signature';
 
 export const REQUEST_TYPES = [
   'Sporks',
@@ -90,7 +91,11 @@ export const mealCountSchema = z.object({
     date: z.string().min(1, 'Date is required.'),
     timeIn: z.string().min(1, 'Time In is required.'),
     timeOut: z.string().min(1, 'Time Out is required.'),
-    signature: z.string().min(1, 'Signature is required.').max(MAX_SIGNATURE_CHARS, 'That signature is too large.'),
+    signature: z
+      .string()
+      .min(1, 'Signature is required.')
+      .max(MAX_SIGNATURE_CHARS, 'That signature is too large.')
+      .refine(isRenderableSignature, 'That signature did not come through. Draw it again.'),
     site: z.string().min(1, 'Site is required.'),
   }),
 });
@@ -294,7 +299,15 @@ export const consolidatedSchema = z.object({
 });
 
 export const signReportSchema = z.object({
-  signature: z.string().startsWith('data:image/png;base64,', 'A signature is required.').max(400_000),
+  // The same check the daily count uses. The prefix alone said nothing about
+  // whether the bytes decode, and this is the signature on the document with the
+  // most legal weight in the app - the one place where an unrenderable image
+  // would be discovered by the claim failing to build.
+  signature: z
+    .string()
+    .startsWith('data:image/png;base64,', 'A signature is required.')
+    .max(400_000)
+    .refine(isRenderableSignature, 'That signature did not come through. Sign again.'),
   signedBy: z.string().trim().min(2, 'Type the name of whoever is signing.').max(120),
   title: z.string().trim().max(120).optional(),
 });

@@ -187,8 +187,22 @@ export async function buildMealCountPdf(count) {
   text(CERTIFICATION_TEXT.slice(midpoint + 1), MARGIN, 8, { color: MUTED });
   y -= 24;
 
+  // A signature that will not decode must not take the document down with it.
+  // pdf-lib throws on a truncated PNG ("Invalid typed array length: 0"), and
+  // this is the only place the bytes are ever read - so a count accepted months
+  // ago became a count whose daily form answered 500, at the moment somebody
+  // needed the form. The row is still on the dashboard, still in the monthly
+  // report and still in the claim; only its own document was unbuildable.
+  let png = null;
   if (count.signature?.startsWith('data:image/png;base64,')) {
-    const png = await doc.embedPng(count.signature.slice('data:image/png;base64,'.length));
+    try {
+      png = await doc.embedPng(count.signature.slice('data:image/png;base64,'.length));
+    } catch {
+      png = null; // falls through to the blank signature line below
+    }
+  }
+
+  if (png) {
     const scale = Math.min(180 / png.width, 55 / png.height, 1);
     page.drawImage(png, {
       x: MARGIN,

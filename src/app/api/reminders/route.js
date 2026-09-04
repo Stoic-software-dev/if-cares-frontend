@@ -1,6 +1,7 @@
 import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, mailRedirect, parseRecipients } from '@/lib/gmail';
+import { alertsConfigured } from '@/lib/alerts';
 import { readRequestNotifySettings, writeRequestNotifySettings } from '@/lib/request-notify';
 import {
   SETTINGS_KEY,
@@ -35,6 +36,21 @@ export const GET = handle(async () => {
     data: {
       ...settings,
       mailReady: mailConfigured(),
+      // Two more things that decide whether a reminder can ever arrive, and
+      // which nothing on this screen used to say.
+      //
+      // The scheduler refuses to run without APP_URL, because every reminder is
+      // a link to the day that needs filing and sixty messages whose only button
+      // is broken are worse than none. It refuses QUIETLY: `lastPingAt` is
+      // stamped before that check, so the screen shows a fresh heartbeat while
+      // nothing has been sent. And the failure it reports goes to ALERT_EMAILS,
+      // which when empty means it goes nowhere at all.
+      //
+      // Turning reminders on and watching nothing happen is precisely the
+      // failure this feature exists to prevent, so the screen has to be able to
+      // say why.
+      schedulerReady: Boolean(process.env.APP_URL),
+      alertsReady: alertsConfigured(),
       // While this is set nothing reaches a real recipient. It has to be visible
       // on the screen that owns sending, or somebody turns the reminders on at
       // cutover and wonders why nobody got one.

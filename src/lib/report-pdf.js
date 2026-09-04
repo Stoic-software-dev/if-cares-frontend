@@ -153,8 +153,8 @@ function drawHeading(ctx, { title, subtitle }) {
  * hand, so an unsigned copy is still a usable document.
  */
 async function drawSignature(ctx, y, { signature, signedBy, title }) {
-  const { doc, page, font, bold, size } = ctx;
-  let cursor = y - 10;
+  const { doc, font, bold, size } = ctx;
+  const boxWidth = 220;
 
   const lines = [];
   let line = '';
@@ -169,27 +169,46 @@ async function drawSignature(ctx, y, { signature, signedBy, title }) {
   }
   if (line) lines.push(line);
 
+  // The signature is measured before anything is drawn, because its height
+  // decides two things: how far down the ruled line goes, and whether the whole
+  // block still fits on this page.
+  let png = null;
+  let sigWidth = 0;
+  let sigHeight = 0;
+  if (signature?.startsWith('data:image/png;base64,')) {
+    try {
+      png = await doc.embedPng(Buffer.from(signature.split(',')[1], 'base64'));
+      const scale = Math.min(boxWidth / png.width, 44 / png.height);
+      sigWidth = png.width * scale;
+      sigHeight = png.height * scale;
+    } catch {
+      // An unreadable signature must not cost the whole report.
+      png = null;
+    }
+  }
+
+  // Room for the signature to stand on the line rather than hang through it.
+  const gap = Math.max(18, sigHeight + 10);
+  const needed = 10 + lines.length * 11 + gap + 32;
+  if (y - needed < MARGIN) {
+    ctx.page = doc.addPage([size.width, size.height]);
+    y = size.height - MARGIN;
+  }
+  const page = ctx.page;
+  let cursor = y - 10;
+
   for (const text of lines) {
     page.drawText(text, { x: MARGIN, y: cursor, size: 8, font, color: MUTED });
     cursor -= 11;
   }
 
-  cursor -= 18;
-  const boxWidth = 220;
+  cursor -= gap;
 
-  if (signature?.startsWith('data:image/png;base64,')) {
-    try {
-      const png = await doc.embedPng(Buffer.from(signature.split(',')[1], 'base64'));
-      const scale = Math.min(boxWidth / png.width, 44 / png.height);
-      page.drawImage(png, {
-        x: MARGIN,
-        y: cursor - png.height * scale + 6,
-        width: png.width * scale,
-        height: png.height * scale,
-      });
-    } catch {
-      // An unreadable signature must not cost the whole report.
-    }
+  // Sitting on the line, not across it. Anchoring the image by its top put the
+  // strokes through "Authorized representative" and through the signer's own
+  // name, on the one page of the claim that has to look like a signed document.
+  if (png) {
+    page.drawImage(png, { x: MARGIN, y: cursor + 1, width: sigWidth, height: sigHeight });
   }
 
   page.drawLine({
@@ -216,8 +235,18 @@ async function drawSignature(ctx, y, { signature, signedBy, title }) {
     page.drawText(today, { x: dateX, y: cursor - 25, size: 9, font: bold, color: INK });
   }
 
+  // The signer's title used to float beside the date with no line and no label,
+  // which read as a stray word rather than a field of the form.
   if (title) {
-    page.drawText(title, { x: dateX + 160, y: cursor - 25, size: 9, font, color: INK });
+    const titleX = dateX + 160;
+    page.drawLine({
+      start: { x: titleX, y: cursor - 2 },
+      end: { x: size.width - MARGIN, y: cursor - 2 },
+      thickness: 0.75,
+      color: INK,
+    });
+    page.drawText('Title', { x: titleX, y: cursor - 14, size: 7.5, font, color: MUTED });
+    page.drawText(title, { x: titleX, y: cursor - 25, size: 9, font: bold, color: INK });
   }
 }
 

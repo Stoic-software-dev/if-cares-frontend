@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field, NativeSelect } from '@/components/ui/field';
+import { ChipRow, Fab, FilterSheet } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
 import { Pagination } from '@/components/ui/pagination';
 import { Segmented } from '@/components/ui/segmented';
@@ -188,14 +189,84 @@ function InboxScreen() {
               : 'Loading the inbox'
           }
           actions={
-            <Button variant="outline" onClick={() => setComposing(true)}>
+            <Button variant="outline" onClick={() => setComposing(true)} className="hidden md:inline-flex">
               <Plus />
               New request
             </Button>
           }
         />
 
-        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
+        {/* Phone: the status is the inbox's own navigation, so it stays on the
+            screen as chips that scroll - four segments sharing 358px turned
+            "In progress" into "In progr..." and "All" into "A.". The site and
+            the date range go behind the filter button. */}
+        <div className="flex flex-col gap-2.5 md:hidden">
+          <div className="flex items-center gap-2">
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Search type, site or requester"
+              className="min-w-0 flex-1"
+            />
+            <FilterSheet
+              count={(siteFilter !== 'ALL' ? 1 : 0) + (fromDate || toDate ? 1 : 0)}
+              onClear={() => {
+                setSiteFilter('ALL');
+                setFromDate('');
+                setToDate('');
+              }}
+            >
+              {siteOptions.length > 1 && (
+                <Field label="Site" htmlFor="inbox-site">
+                  <NativeSelect
+                    id="inbox-site"
+                    value={siteFilter}
+                    onChange={(event) => setSiteFilter(event.target.value)}
+                  >
+                    <option value="ALL">All sites</option>
+                    {siteOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {shortSiteName(name)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              )}
+              <Field label="Filed from" htmlFor="inbox-from">
+                <Input
+                  id="inbox-from"
+                  type="date"
+                  value={fromDate}
+                  max={toDate || undefined}
+                  onChange={(event) => setFromDate(event.target.value)}
+                />
+              </Field>
+              <Field label="Filed to" htmlFor="inbox-to">
+                <Input
+                  id="inbox-to"
+                  type="date"
+                  value={toDate}
+                  min={fromDate || undefined}
+                  onChange={(event) => setToDate(event.target.value)}
+                />
+              </Field>
+            </FilterSheet>
+          </div>
+
+          <ChipRow
+            ariaLabel="Filter by status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'NEW', label: 'New', count: counts.NEW },
+              { value: 'IN_PROGRESS', label: 'In progress', count: counts.IN_PROGRESS },
+              { value: 'RESOLVED', label: 'Resolved', count: counts.RESOLVED },
+              { value: 'ALL', label: 'All', count: counts.ALL },
+            ]}
+          />
+        </div>
+
+        <div className="hidden flex-col gap-2.5 md:flex md:flex-row md:flex-wrap md:items-center">
           <Segmented
             ariaLabel="Filter by status"
             value={status}
@@ -232,8 +303,9 @@ function InboxScreen() {
         </div>
 
         {/* Dates are their own row: on a phone they would squeeze the site
-            selector into something unusable next to them. */}
-        <div className="flex flex-wrap items-center gap-2">
+            selector into something unusable next to them, so there they live in
+            the filter sheet instead. */}
+        <div className="hidden flex-wrap items-center gap-2 md:flex">
           <span className="text-[12px] font-medium text-muted-foreground">Filed between</span>
           <Input
             type="date"
@@ -411,6 +483,10 @@ function InboxScreen() {
           </div>
         )}
       </div>
+
+      <Fab icon={Plus} onClick={() => setComposing(true)}>
+        New request
+      </Fab>
 
       <Dialog open={composing} onOpenChange={setComposing}>
         <DialogContent className="sm:max-w-md">

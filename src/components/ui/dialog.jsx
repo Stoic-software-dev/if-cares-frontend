@@ -69,7 +69,9 @@ const DialogFooter = ({ className, ...props }) => (
   <div
     className={cn(
       'flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end sm:gap-2.5',
-      '[&>button]:w-full sm:[&>button]:w-auto',
+      // A dialog is a bottom sheet on a phone, and the button that confirms it
+      // is the last thing a thumb reaches: 40px is a desk's target, not one.
+      '[&>button]:h-12 [&>button]:w-full sm:[&>button]:h-10 sm:[&>button]:w-auto',
       className
     )}
     {...props}

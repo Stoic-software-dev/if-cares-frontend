@@ -271,14 +271,28 @@ function CalendarScreen() {
               className="md:w-auto md:max-w-[26rem]"
             />
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon-sm" aria-label="Previous month" onClick={() => step(-1)}>
+            {/* Full width on a phone, so stepping a month is a thumb tap and
+                not a 32px target floating at the left edge. */}
+            <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1 md:border-0 md:bg-transparent md:p-0">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Previous month"
+                onClick={() => step(-1)}
+                className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+              >
                 <ChevronLeft />
               </Button>
-              <span className="min-w-[9rem] text-center text-[15px] font-bold tabular-nums text-foreground">
+              <span className="flex-1 text-center text-[15px] font-bold tabular-nums text-foreground md:min-w-[9rem] md:flex-none">
                 {monthLabel(cursor.year, cursor.month)} {cursor.year}
               </span>
-              <Button variant="outline" size="icon-sm" aria-label="Next month" onClick={() => step(1)}>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Next month"
+                onClick={() => step(1)}
+                className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+              >
                 <ChevronRight />
               </Button>
             </div>

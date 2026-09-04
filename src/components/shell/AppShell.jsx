@@ -35,7 +35,13 @@ const WIDTHS = {
 
 // The frame every signed-in screen renders inside: one desktop bar, one phone
 // bar, and a bottom tab strip within thumb reach on phones.
-export default function AppShell({ children, width = 'default', className }) {
+//
+// `focus` is for a screen that is a task rather than a place - taking a meal
+// count is the one. On a phone it drops the tab strip, because the screen
+// already carries its own bar at the bottom and two stacked bars took a fifth
+// of the display to say nothing. The way out is the back link at the top, the
+// same as any other form you are in the middle of.
+export default function AppShell({ children, width = 'default', className, focus = false }) {
   const pathname = usePathname();
   const { user, logOut } = useAuth();
   const admin = isAdmin(user);
@@ -157,14 +163,27 @@ export default function AppShell({ children, width = 'default', className }) {
         </button>
       </header>
 
-      <main className={cn('mx-auto w-full flex-1 px-4 pb-28 pt-4 md:px-6 md:pb-12 md:pt-7 lg:px-8', WIDTHS[width], className)}>
+      {/* `pb-32` on a phone is the tab bar plus the floating action that sits
+          above it: without the second allowance the last row of every list is
+          under a button. A focus screen has neither, and supplies its own. */}
+      <main
+        className={cn(
+          'mx-auto w-full flex-1 px-4 pt-4 md:px-6 md:pb-12 md:pt-7 lg:px-8',
+          focus ? 'pb-6' : 'pb-32',
+          WIDTHS[width],
+          className
+        )}
+      >
         {children}
       </main>
 
       {/* Phone tab bar */}
       <nav
         aria-label="Sections"
-        className="fixed inset-x-0 bottom-0 z-40 border-t px-1 pb-safe glass-bar md:hidden"
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-40 border-t px-1 pb-safe glass-bar md:hidden',
+          focus && 'hidden'
+        )}
       >
         <div className="flex items-stretch">
           {bottomItems.map((item) => {

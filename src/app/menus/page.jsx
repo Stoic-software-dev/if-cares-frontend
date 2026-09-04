@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
+import { ActionSheet, Fab, SheetAction } from '@/components/ui/mobile';
 import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -254,16 +255,44 @@ function MenusScreen() {
               )}
             </div>
           }
+          // Publishing is the floating action below; re-reading Drive is a
+          // once-in-a-while repair and belongs behind the one control the title
+          // row has room for.
+          mobileActions={
+            admin && (
+              <ActionSheet title="Menus">
+                <SheetAction
+                  icon={RefreshCw}
+                  onSelect={hardRefresh}
+                  hint="Read the Drive folder again"
+                  disabled={refreshing}
+                >
+                  {refreshing ? 'Refreshing' : 'Refresh'}
+                </SheetAction>
+              </ActionSheet>
+            )
+          }
         />
+
+        {files && files.length > 3 && (
+          <SearchInput value={query} onChange={setQuery} placeholder="Find a menu" className="md:hidden" />
+        )}
 
         {error && <ErrorState title="Couldn't load the menus" message={error} onRetry={load} />}
 
         {!files && !error && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-            {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="h-[232px] rounded-lg" />
-            ))}
-          </div>
+          <>
+            <div className="flex flex-col gap-1.5 md:hidden">
+              {Array.from({ length: 5 }, (_, i) => (
+                <Skeleton key={i} className="h-[68px] rounded-lg" />
+              ))}
+            </div>
+            <div className="hidden grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4 md:grid">
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className="h-[232px] rounded-lg" />
+              ))}
+            </div>
+          </>
         )}
 
         {files && visible.length === 0 && (
@@ -294,9 +323,70 @@ function MenusScreen() {
           </div>
         )}
 
+        {/* Phone: a menu is a file you open. The standing-document card is a
+            lovely thing on a wall of them and a third of a phone screen each,
+            so here the same list is rows: what it is, when it is for, and the
+            one tap that opens it. */}
+        {visible.length > 0 && (
+          <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card md:hidden">
+            {visible.map((file) => {
+              const period = periodOf(file);
+              return (
+                <div key={fileId(file) || fileName(file)} className="flex items-center gap-3 px-3 py-2.5">
+                  <a
+                    href={urlFor(file)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-h-[52px] min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary-strong dark:text-primary">
+                      <FileText className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-[14px] font-semibold text-foreground">
+                        {titleOf(file)}
+                      </span>
+                      <span className="truncate text-[12px] text-muted-foreground">
+                        {period ?? 'Program menu'} &middot; {extensionOf(file)}
+                      </span>
+                    </span>
+                  </a>
+
+                  {admin ? (
+                    <ActionSheet title={titleOf(file)} ariaLabel={`Actions for ${titleOf(file)}`}>
+                      <SheetAction icon={Eye} href={urlFor(file)} target="_blank">
+                        View
+                      </SheetAction>
+                      <SheetAction
+                        icon={Download}
+                        href={urlFor(file, { attachment: true })}
+                        download={fileName(file)}
+                      >
+                        Download
+                      </SheetAction>
+                      <SheetAction icon={Trash2} destructive onSelect={() => setRemoving(file)}>
+                        Remove
+                      </SheetAction>
+                    </ActionSheet>
+                  ) : (
+                    <a
+                      href={urlFor(file, { attachment: true })}
+                      download={fileName(file)}
+                      aria-label={`Download ${titleOf(file)}`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground outline-none transition-colors active:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Download className="h-[18px] w-[18px]" />
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {visible.length > 0 && (
           <div
-            className="stagger grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4"
+            className="stagger hidden grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4 md:grid"
             style={{ '--stagger-step': '35ms' }}
           >
             {visible.map((file, index) => {
@@ -367,6 +457,12 @@ function MenusScreen() {
           </div>
         )}
       </div>
+
+      {admin && (
+        <Fab icon={Upload} onClick={() => setPublishing(true)}>
+          Publish
+        </Fab>
+      )}
 
       <PublishDialog open={publishing} onClose={() => setPublishing(false)} onPublished={load} />
 

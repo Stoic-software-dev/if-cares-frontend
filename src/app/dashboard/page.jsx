@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, Building2, ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -10,10 +10,11 @@ import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
 import MonthCalendar, { CalendarLegend } from '@/components/dashboard/MonthCalendar';
 import { MonthPicker } from '@/components/dashboard/MonthPicker';
 import { Button } from '@/components/ui/button';
+import { ChipRow } from '@/components/ui/mobile';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { availableMonths, buildMonth, monthMealPattern, todayYmd } from '@/lib/calendar';
+import { availableMonths, buildMonth, dateLabel, mealsFor, monthMealPattern, todayYmd } from '@/lib/calendar';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { useStoredState } from '@/lib/hooks';
 import { sortSiteNames } from '@/lib/sites';
@@ -141,11 +142,85 @@ function DashboardScreen() {
   // it is here so a day that breaks it can be the only one that names its meals.
   const mealPattern = monthMealPattern(month);
 
+  const todayCell = month.days?.[Number(today.slice(8, 10))];
+  const todayMeals = todayCell ? mealsFor(todayCell.meals).join(', ') : '';
+
   return (
     <AppShell width="wide">
       <div className="flex flex-col gap-4">
-        {/* One control bar: which site, which month, what to show. */}
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-2 md:flex-row md:flex-wrap md:items-center md:gap-3">
+        {/* Phone: the three controls are three controls, not one crowded card.
+            A site to file for, a month to look at, and what to show - each with
+            a target a thumb can hit, in the order they are asked. */}
+        <div className="flex flex-col gap-2.5 md:hidden">
+          <SiteSwitcher sites={sites} value={selectedSite} onChange={pickSite} />
+
+          <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+            <button
+              type="button"
+              aria-label="Previous month"
+              disabled={!hasPrev}
+              onClick={() => setCursor(months[index - 1])}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none transition-colors active:bg-accent disabled:opacity-25"
+            >
+              <ChevronLeft className="h-[18px] w-[18px]" />
+            </button>
+            <MonthPicker
+              months={months}
+              value={current}
+              label={month.label}
+              onChange={(next) => setCursor(next)}
+              className="h-11 flex-1 justify-center"
+            />
+            <button
+              type="button"
+              aria-label="Next month"
+              disabled={!hasNext}
+              onClick={() => setCursor(months[index + 1])}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none transition-colors active:bg-accent disabled:opacity-25"
+            >
+              <ChevronRight className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+
+          <ChipRow
+            ariaLabel="Filter days"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'all', label: 'All days' },
+              { value: 'missing', label: 'Missing', count: stats.missing },
+              { value: 'submitted', label: 'Submitted', count: stats.submitted },
+            ]}
+          />
+        </div>
+
+        {/* The reason a phone opens this app at all. It leads with the day
+            rather than waiting at the bottom of a scroll, and it names the
+            meals, so nobody files a supper count on a snack-only day. */}
+        {todayIsOpen && (
+          <button
+            type="button"
+            onClick={submitToday}
+            className="flex items-center gap-3 rounded-lg border border-primary-border bg-primary-soft p-3.5 text-left outline-none transition-transform duration-fast active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <ClipboardCheck className="h-5 w-5" />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[14.5px] font-bold text-primary-strong dark:text-primary">
+                Submit today&apos;s count
+              </span>
+              <span className="truncate text-[12.5px] text-primary-strong/75 dark:text-primary/75">
+                {dateLabel(today, { weekday: 'long', month: 'long', day: 'numeric' })}
+                {todayMeals && ` · ${todayMeals}`}
+              </span>
+            </span>
+            <ArrowRight className="h-[18px] w-[18px] shrink-0 text-primary-strong dark:text-primary" />
+          </button>
+        )}
+
+        {/* Desktop keeps its one control bar. */}
+        <div className="hidden rounded-lg border border-border bg-card p-2 md:flex md:flex-row md:flex-wrap md:items-center md:gap-3">
           <SiteSwitcher
             sites={sites}
             value={selectedSite}
@@ -208,13 +283,16 @@ function DashboardScreen() {
         </div>
 
         {todayIsOpen && (
-          <Button onClick={submitToday} size="touch" className="xl:hidden">
+          <Button onClick={submitToday} size="touch" className="hidden md:inline-flex xl:hidden">
             Submit today&apos;s count
             <ArrowRight />
           </Button>
         )}
 
-        <CalendarLegend month={month} className="px-0.5" />
+        {/* A key is read after the colours, not before them: on a phone it goes
+            under the month it explains, which also puts the calendar itself
+            within the first screen. */}
+        <CalendarLegend month={month} className="order-last px-0.5 md:order-none" />
 
         <MonthCalendar month={month} site={selectedSite} filter={filter} mealPattern={mealPattern} />
       </div>

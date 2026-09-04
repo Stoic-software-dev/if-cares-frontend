@@ -8,6 +8,7 @@ import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvi
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -24,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { ActionSheet, Fab, SheetAction } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
@@ -183,8 +185,16 @@ function CountDetailScreen() {
             // Everything the old status card held, as one quiet line: a count on
             // this screen is submitted by definition, so a badge saying so was
             // only taking the place of the numbers.
+            //
+            // That line runs to four wrapped rows of mixed colour on a phone,
+            // so there it stops after the two facts you came for and the rest
+            // becomes the badges underneath.
             count ? (
               <>
+                <span className="md:hidden">
+                  {shortSiteName(site)}, {timeLabel(count.timeIn)} to {timeLabel(count.timeOut)}
+                </span>
+                <span className="hidden md:inline">
                 {shortSiteName(site)}, {timeLabel(count.timeIn)} to {timeLabel(count.timeOut)}
                 {count.submittedBy && count.submittedBy !== 'gas-import' && (
                   <>, submitted by {count.submittedBy}</>
@@ -211,9 +221,54 @@ function CountDetailScreen() {
                     </button>
                   </>
                 )}
+                </span>
               </>
             ) : (
               shortSiteName(site)
+            )
+          }
+          mobileActions={
+            count && (
+              <ActionSheet title={title} description={shortSiteName(site)}>
+                <SheetAction icon={Download} onSelect={downloadPdf} hint="Save the signed form to this device">
+                  Download PDF
+                </SheetAction>
+                <SheetAction icon={Send} onSelect={() => setEmailing(true)} hint="Send it to somebody">
+                  Email PDF
+                </SheetAction>
+                {admin && !count.approved && (
+                  <SheetAction
+                    icon={Pencil}
+                    href={`/meal-count?date=${date}&site=${encodeURIComponent(site)}&correct=1`}
+                    hint="The original values stay on record"
+                  >
+                    Correct count
+                  </SheetAction>
+                )}
+                {count.corrected && (
+                  <SheetAction icon={History} onSelect={() => setHistoryOpen(true)}>
+                    Correction history
+                  </SheetAction>
+                )}
+                {admin && count.approved && (
+                  <SheetAction icon={RotateCcw} onSelect={undoApproval}>
+                    Undo approval
+                  </SheetAction>
+                )}
+                {admin && (
+                  <SheetAction
+                    icon={Ban}
+                    destructive
+                    onSelect={() => {
+                      setVoidReason('');
+                      setVoidOpen(true);
+                    }}
+                    hint="For a count filed on the wrong day or site"
+                  >
+                    Void count
+                  </SheetAction>
+                )}
+              </ActionSheet>
             )
           }
           backHref={`/dashboard?site=${encodeURIComponent(site)}`}
@@ -286,6 +341,34 @@ function CountDetailScreen() {
           }
         />
 
+        {/* Phone: what the sentence above says on a wide screen, as marks that
+            wrap instead of a paragraph in four colours. */}
+        {count && (
+          <div className="flex flex-wrap items-center gap-1.5 md:hidden">
+            {count.approved && (
+              <Badge variant="success">
+                <BadgeCheck />
+                Approved by {count.approved.by}
+              </Badge>
+            )}
+            {count.corrected && (
+              <button type="button" onClick={() => setHistoryOpen(true)} className="outline-none">
+                <Badge variant="warning">
+                  <Pencil />
+                  Corrected {count.corrections.length}{' '}
+                  {count.corrections.length === 1 ? 'time' : 'times'}
+                </Badge>
+              </button>
+            )}
+            {count.source === 'GAS_IMPORT' && <Badge variant="neutral">Imported</Badge>}
+            {count.submittedBy && count.submittedBy !== 'gas-import' && (
+              <Badge variant="neutral" className="max-w-full">
+                <span className="truncate">By {count.submittedBy}</span>
+              </Badge>
+            )}
+          </div>
+        )}
+
         {error && <ErrorState title="Couldn't load this count" message={error} onRetry={load} />}
 
         {!count && !error && (
@@ -304,10 +387,10 @@ function CountDetailScreen() {
                 {COLUMNS.map((column) => {
                   const value = count.totals[column.key];
                   return (
-                    <div key={column.key} className="flex flex-col items-center gap-0.5 px-2 py-4">
+                    <div key={column.key} className="flex flex-col items-center gap-1 px-1 py-3.5 md:gap-0.5 md:px-2 md:py-4">
                       <span
                         className={cn(
-                          'text-[26px] font-bold leading-none tabular-nums tracking-tight',
+                          'text-[22px] font-bold leading-none tabular-nums tracking-tight md:text-[26px]',
                           value === 0 ? 'text-muted-foreground/40' : 'text-foreground'
                         )}
                       >
@@ -334,7 +417,7 @@ function CountDetailScreen() {
               </div>
 
               <div className="overflow-hidden rounded-lg border border-border bg-card">
-                <div className="grid grid-cols-[minmax(0,1fr)_repeat(5,40px)] border-b border-border bg-surface-sunken px-3.5 py-2 md:grid-cols-[minmax(0,1fr)_repeat(5,64px)]">
+                <div className="hidden grid-cols-[minmax(0,1fr)_repeat(5,64px)] border-b border-border bg-surface-sunken px-3.5 py-2 md:grid">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                     Name
                   </span>
@@ -350,19 +433,34 @@ function CountDetailScreen() {
 
                 <div className="divide-y divide-border">
                   {entries.map((entry) => (
-                    <div
-                      key={`${entry.number}-${entry.name}`}
-                      className="grid grid-cols-[minmax(0,1fr)_repeat(5,40px)] items-center px-3.5 py-2.5 transition-colors hover:bg-accent/40 md:grid-cols-[minmax(0,1fr)_repeat(5,64px)]"
-                    >
-                      <span className="flex min-w-0 items-baseline gap-2 pr-2">
-                        <span className="w-6 shrink-0 text-[11.5px] font-semibold tabular-nums text-muted-foreground">
+                    <div key={`${entry.number}-${entry.name}`}>
+                      {/* A phone has 330px for a name and five columns. Five
+                          columns won, and every second name was "Jonathan ...".
+                          Here the name gets the width and the marks say only
+                          what was ticked, which is what anyone reads them for. */}
+                      <div className="flex items-start gap-3 px-4 py-2.5 md:hidden">
+                        <span className="w-6 shrink-0 pt-0.5 text-[11.5px] font-semibold tabular-nums text-muted-foreground">
                           {entry.number}
                         </span>
-                        <span className="truncate text-[13px] font-medium text-foreground">{entry.name}</span>
-                      </span>
-                      {COLUMNS.map((column) => (
-                        <Mark key={column.key} value={entry[column.entry]} />
-                      ))}
+                        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                          <span className="truncate text-[13.5px] font-semibold text-foreground">
+                            {entry.name}
+                          </span>
+                          <MarkPills entry={entry} />
+                        </span>
+                      </div>
+
+                      <div className="hidden grid-cols-[minmax(0,1fr)_repeat(5,64px)] items-center px-3.5 py-2.5 transition-colors hover:bg-accent/40 md:grid">
+                        <span className="flex min-w-0 items-baseline gap-2 pr-2">
+                          <span className="w-6 shrink-0 text-[11.5px] font-semibold tabular-nums text-muted-foreground">
+                            {entry.number}
+                          </span>
+                          <span className="truncate text-[13px] font-medium text-foreground">{entry.name}</span>
+                        </span>
+                        {COLUMNS.map((column) => (
+                          <Mark key={column.key} value={entry[column.entry]} />
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -409,6 +507,14 @@ function CountDetailScreen() {
           </>
         )}
       </div>
+
+      {/* Signing the day off is what an administrator opens this screen to do,
+          so on a phone it is the one control that does not hide in a sheet. */}
+      {count && admin && !count.approved && (
+        <Fab icon={BadgeCheck} onClick={approve}>
+          {approving ? 'Approving' : 'Approve'}
+        </Fab>
+      )}
 
       {/* The history matters when someone goes looking for it, which is rarely.
           On the page it pushed the numbers below the fold on every visit. */}
@@ -555,6 +661,27 @@ function SectionLabel({ children }) {
   return (
     <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       {children}
+    </span>
+  );
+}
+
+// What this student was ticked for, on a screen with no column headings to
+// read a tick against.
+function MarkPills({ entry }) {
+  const marked = COLUMNS.filter((column) => entry[column.entry]);
+  if (marked.length === 0) {
+    return <span className="text-[11.5px] text-muted-foreground">Nothing marked</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {marked.map((column) => (
+        <span
+          key={column.key}
+          className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary-strong dark:text-primary"
+        >
+          {column.label}
+        </span>
+      ))}
     </span>
   );
 }

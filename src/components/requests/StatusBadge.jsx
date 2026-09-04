@@ -7,11 +7,11 @@ const STATUS = {
   RESOLVED: { label: 'Resolved', variant: 'success', icon: CircleCheck },
 };
 
-export default function StatusBadge({ status, size = 'default' }) {
+export default function StatusBadge({ status, size = 'default', className }) {
   const config = STATUS[status] ?? STATUS.NEW;
   const Icon = config.icon;
   return (
-    <Badge variant={config.variant} size={size}>
+    <Badge variant={config.variant} size={size} className={className}>
       <Icon />
       {config.label}
     </Badge>

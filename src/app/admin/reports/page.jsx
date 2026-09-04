@@ -11,6 +11,7 @@ import PageHeader from '@/components/shell/PageHeader';
 import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ActionSheet, Fab, SheetAction } from '@/components/ui/mobile';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
@@ -145,6 +146,28 @@ function ReportsScreen() {
         <PageHeader
           title="Reports"
           subtitle="Daily meal count forms, the month summary for a site, and the consolidated claims."
+          mobileActions={
+            <ActionSheet title="Reports" description={site ? shortSiteName(site) : undefined}>
+              <SheetAction icon={Layers} href="/admin/reports/consolidated" hint="Every site in one claim">
+                Consolidated claims
+              </SheetAction>
+              {site && (
+                <SheetAction
+                  icon={FileText}
+                  plain
+                  href={`/api/reports/monthly?site=${encodeURIComponent(site)}&year=${cursor.year}&month=${cursor.month}`}
+                  hint={`${monthLabel(cursor.year, cursor.month)} ${cursor.year}`}
+                >
+                  Monthly summary
+                </SheetAction>
+              )}
+              {site && submitted.length > 0 && (
+                <SheetAction icon={Send} onSelect={() => setEmailing(true)}>
+                  Email the summary
+                </SheetAction>
+              )}
+            </ActionSheet>
+          }
           actions={
             <>
               <Button variant="outline" asChild>
@@ -182,14 +205,29 @@ function ReportsScreen() {
         {sites && (
           <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between">
             <SiteSwitcher sites={sites} value={site} onChange={setSite} className="md:w-auto md:max-w-[26rem]" />
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon-sm" aria-label="Previous month" onClick={() => step(-1)}>
+            {/* On a phone the month is a strip the width of the screen, so
+                stepping through it is a thumb tap and not a 32px target
+                floating at the left edge. */}
+            <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1 md:border-0 md:bg-transparent md:p-0">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Previous month"
+                onClick={() => step(-1)}
+                className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+              >
                 <ChevronLeft />
               </Button>
-              <span className="min-w-[9rem] text-center text-[15px] font-bold tabular-nums text-foreground">
+              <span className="flex-1 text-center text-[15px] font-bold tabular-nums text-foreground md:min-w-[9rem] md:flex-none">
                 {monthLabel(cursor.year, cursor.month)} {cursor.year}
               </span>
-              <Button variant="outline" size="icon-sm" aria-label="Next month" onClick={() => step(1)}>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Next month"
+                onClick={() => step(1)}
+                className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+              >
                 <ChevronRight />
               </Button>
             </div>
@@ -234,11 +272,16 @@ function ReportsScreen() {
                 {submitted.map((date) => (
                   <div
                     key={date}
-                    className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-accent/30 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
                   >
-                    <span className="text-[13.5px] font-semibold text-foreground">{dateLabel(date)}</span>
-                    <Badge variant="success">Submitted</Badge>
-                    <div className="flex gap-2 sm:justify-end">
+                    {/* `sm:contents` dissolves this wrapper back into the grid:
+                        a phone reads the day and its state as one block with the
+                        actions beside it, a desk reads them as columns. */}
+                    <span className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
+                      <span className="text-[13.5px] font-semibold text-foreground">{dateLabel(date)}</span>
+                      <Badge variant="success">Submitted</Badge>
+                    </span>
+                    <div className="flex shrink-0 gap-2 sm:justify-end">
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`/counts/${date}?site=${encodeURIComponent(site)}`}>View</Link>
                       </Button>
@@ -258,11 +301,13 @@ function ReportsScreen() {
                 {missing.map((date) => (
                   <div
                     key={date}
-                    className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
+                    className="flex items-center gap-3 px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
                   >
-                    <span className="text-[13.5px] font-medium text-muted-foreground">{dateLabel(date)}</span>
-                    <Badge variant="danger">Missing</Badge>
-                    <div className="flex sm:justify-end">
+                    <span className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
+                      <span className="text-[13.5px] font-medium text-muted-foreground">{dateLabel(date)}</span>
+                      <Badge variant="danger">Missing</Badge>
+                    </span>
+                    <div className="flex shrink-0 sm:justify-end">
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`/meal-count?date=${date}&site=${encodeURIComponent(site)}`}>
                           Submit the count
@@ -286,6 +331,12 @@ function ReportsScreen() {
         )}
       </div>
 
+      {submitted.length > 0 && (
+        <Fab icon={Download} onClick={downloadMonth}>
+          {bulk ? `${bulk.done} of ${bulk.total}` : `Download ${submitted.length}`}
+        </Fab>
+      )}
+
       <EmailPdfDialog
         open={emailing}
         onClose={() => setEmailing(false)}
@@ -301,10 +352,14 @@ function ReportsScreen() {
 
 function Summary({ label, value, tone = 'neutral' }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+    <div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 sm:p-4">
+      {/* A third of a phone is 79px of usable width: at the desk's tracking
+          "Service days" wrapped and left one card taller than its neighbours. */}
+      <span className="text-[10.5px] font-semibold uppercase tracking-normal text-muted-foreground sm:text-[11px] sm:tracking-[0.06em]">
+        {label}
+      </span>
       <span
-        className={`text-[24px] font-bold leading-none tabular-nums ${
+        className={`text-[22px] font-bold leading-none tabular-nums sm:text-[24px] ${
           tone === 'danger' ? 'text-destructive-text' : 'text-foreground'
         }`}
       >

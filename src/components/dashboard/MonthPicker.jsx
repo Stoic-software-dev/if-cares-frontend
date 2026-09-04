@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 // Jumping to "March last year" takes one tap instead of twelve presses on the
 // arrow. Months the site has no data for are visible but disabled, so the
 // range of the program is legible at a glance.
-export function MonthPicker({ months, value, onChange, label, compact = false }) {
+export function MonthPicker({ months, value, onChange, label, compact = false, className }) {
   const [open, setOpen] = useState(false);
   const [year, setYear] = useState(value.year);
 
@@ -34,7 +34,8 @@ export function MonthPicker({ months, value, onChange, label, compact = false })
           type="button"
           className={cn(
             'flex items-center gap-1.5 rounded-md outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-            compact ? 'h-9 px-2.5' : 'px-2 py-1'
+            compact ? 'h-9 px-2.5' : 'px-2 py-1',
+            className
           )}
         >
           <span

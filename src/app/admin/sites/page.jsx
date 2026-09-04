@@ -20,7 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { NativeSelect } from '@/components/ui/field';
+import { Field, NativeSelect } from '@/components/ui/field';
+import { ActionSheet, Fab, FilterSheet, SheetAction } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -208,11 +209,65 @@ function AdminSitesScreen() {
               </Button>
             </div>
           }
+          // Adding a site is the floating action; the list of states is set
+          // once a year and does not need a button of its own on a phone.
+          mobileActions={
+            <ActionSheet title="Sites">
+              <SheetAction
+                icon={MapPin}
+                onSelect={() => setEditingStates(true)}
+                hint="Which states sites can file under"
+              >
+                States
+              </SheetAction>
+            </ActionSheet>
+          }
         />
 
         <SectionTabs options={SITES_TABS} ariaLabel="Sites section" />
 
-        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
+        {/* Phone: one row. What is set shows as a number on the button, and the
+            two selects get a sheet with room to be read. */}
+        <div className="flex items-center gap-2 md:hidden">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search sites"
+            className="min-w-0 flex-1"
+          />
+          <FilterSheet
+            count={(stateFilter !== 'ALL' ? 1 : 0) + (sort !== 'name' ? 1 : 0)}
+            onClear={() => {
+              setStateFilter('ALL');
+              setSort('name');
+            }}
+          >
+            {states.length > 1 && (
+              <Field label="State" htmlFor="filter-state">
+                <NativeSelect
+                  id="filter-state"
+                  value={stateFilter}
+                  onChange={(event) => setStateFilter(event.target.value)}
+                >
+                  <option value="ALL">Every state</option>
+                  {states.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            )}
+            <Field label="Order" htmlFor="filter-sort">
+              <NativeSelect id="filter-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="name">Sort by name</option>
+                <option value="missing">Sort by missing counts</option>
+              </NativeSelect>
+            </Field>
+          </FilterSheet>
+        </div>
+
+        <div className="hidden flex-col gap-2.5 md:flex md:flex-row md:flex-wrap md:items-center">
           <SearchInput value={query} onChange={setQuery} placeholder="Search sites" className="md:min-w-[14rem] md:max-w-md md:flex-1" />
           {states.length > 1 && (
             <NativeSelect
@@ -293,18 +348,32 @@ function AdminSitesScreen() {
                     <span className="truncate text-[14px] font-semibold text-foreground">
                       {shortSiteName(row.name)}
                     </span>
+                    {/* On a phone these two badges took half the row and left
+                        "Casa del L..." where the site's name should be. The name
+                        gets the width; the marks move down a line, where there
+                        is room for both of them. */}
                     {stateByName.get(row.name) && (
-                      <Badge size="sm" variant="neutral">
+                      <Badge size="sm" variant="neutral" className="hidden md:inline-flex">
                         {stateByName.get(row.name)}
                       </Badge>
                     )}
                     {row.stats.ahead === 0 && !inactiveNames.has(row.name) && (
-                      <Badge size="sm" variant="warning">
+                      <Badge size="sm" variant="warning" className="hidden md:inline-flex">
                         No days ahead
                       </Badge>
                     )}
                   </span>
-                  <span className="flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground">
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
+                    {stateByName.get(row.name) && (
+                      <Badge size="sm" variant="neutral" className="md:hidden">
+                        {stateByName.get(row.name)}
+                      </Badge>
+                    )}
+                    {row.stats.ahead === 0 && !inactiveNames.has(row.name) && (
+                      <Badge size="sm" variant="warning" className="md:hidden">
+                        No days ahead
+                      </Badge>
+                    )}
                     <span className="inline-flex items-center gap-1">
                       <CircleCheck className="h-3.5 w-3.5 text-success" />
                       {row.stats.submitted} submitted
@@ -342,6 +411,17 @@ function AdminSitesScreen() {
           label="sites"
         />
       </div>
+
+      <Fab
+        icon={Plus}
+        onClick={() => {
+          setDraft(emptySite);
+          setAttempted(false);
+          setCreating(true);
+        }}
+      >
+        Add site
+      </Fab>
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-2xl">

@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { ChipRow, Fab, FilterSheet } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
 import { Segmented } from '@/components/ui/segmented';
@@ -392,6 +393,10 @@ function AdminUsersScreen() {
     };
   }, [users]);
 
+  // What the phone's filter button carries as a number. Status is not in it:
+  // that one is on the screen as chips, and always set to something.
+  const extraFilters = (roleFilter !== 'ALL' ? 1 : 0) + (siteFilter !== 'ALL' ? 1 : 0);
+
   const upsertRow = (row) =>
     setUsers((prev) => {
       const exists = prev.some((user) => user.id === row.id);
@@ -435,14 +440,90 @@ function AdminUsersScreen() {
               : 'Loading accounts'
           }
           actions={
-            <Button onClick={() => setDialog({ mode: 'create', initial: null })}>
+            <Button
+              onClick={() => setDialog({ mode: 'create', initial: null })}
+              // On a phone this is the floating action, down where the thumb is.
+              className="hidden md:inline-flex"
+            >
               <Plus strokeWidth={2.4} />
               Add user
             </Button>
           }
         />
 
-        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
+        {/* Phone: search, and the two filters that are only sometimes wanted
+            folded behind a button that says how many are set. Four full-width
+            controls stacked put the first account two hundred pixels down a
+            screen that is only eight hundred tall. */}
+        <div className="flex flex-col gap-2.5 md:hidden">
+          <div className="flex items-center gap-2">
+            <SearchInput
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(0);
+              }}
+              placeholder="Search by name or email"
+              className="min-w-0 flex-1"
+            />
+            <FilterSheet
+              count={extraFilters}
+              onClear={() => {
+                setRoleFilter('ALL');
+                setSiteFilter('ALL');
+                setPage(0);
+              }}
+            >
+              <Field label="Role" htmlFor="filter-role">
+                <NativeSelect
+                  id="filter-role"
+                  value={roleFilter}
+                  onChange={(event) => {
+                    setRoleFilter(event.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <option value="ALL">Every role</option>
+                  <option value="ADMIN">Administrators</option>
+                  <option value="USER">Site staff</option>
+                </NativeSelect>
+              </Field>
+              <Field label="Site" htmlFor="filter-site">
+                <NativeSelect
+                  id="filter-site"
+                  value={siteFilter}
+                  onChange={(event) => {
+                    setSiteFilter(event.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <option value="ALL">All sites</option>
+                  {siteOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {shortSiteName(name)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </FilterSheet>
+          </div>
+
+          <ChipRow
+            ariaLabel="Filter by status"
+            value={statusFilter}
+            onChange={(value) => {
+              setStatusFilter(value);
+              setPage(0);
+            }}
+            options={[
+              { value: 'ACTIVE', label: 'Active', count: counts.active },
+              { value: 'INACTIVE', label: 'Inactive', count: counts.all - counts.active },
+              { value: 'ALL', label: 'All', count: counts.all },
+            ]}
+          />
+        </div>
+
+        <div className="hidden flex-col gap-2.5 md:flex md:flex-row md:flex-wrap md:items-center">
           <SearchInput
             value={query}
             onChange={(value) => {
@@ -529,39 +610,68 @@ function AdminUsersScreen() {
                   <div
                     key={user.id}
                     className={cn(
-                      'flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-accent/30',
+                      'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30',
                       'md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px_56px] md:items-center md:gap-4',
                       !user.active && 'opacity-70'
                     )}
                   >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <Avatar user={user} className={cn(!user.active && 'bg-muted text-muted-foreground')} />
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5 md:flex-none">
+                      <Avatar user={user} className={cn('shrink-0', !user.active && 'bg-muted text-muted-foreground')} />
                       <div className="flex min-w-0 flex-col">
-                        <span className="flex items-center gap-1.5 truncate text-[13.5px] font-semibold text-foreground">
-                          {user.name} {user.lastname}
+                        <span className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold text-foreground">
+                          <span className="truncate">
+                            {user.name} {user.lastname}
+                          </span>
+                          {/* A phone shows the exception, not the rule: every
+                              account was staff and active, and two badges
+                              saying so on all sixty-five rows said nothing.
+                              Administrator, deactivated and no-password are
+                              the three worth a mark. */}
+                          {user.role === 'ADMIN' && (
+                            <Badge variant="brand" size="sm" className="shrink-0 md:hidden">
+                              Admin
+                            </Badge>
+                          )}
+                          {!user.active && (
+                            <Badge variant="neutral" size="sm" className="shrink-0 md:hidden">
+                              Inactive
+                            </Badge>
+                          )}
                           {user.needsPassword && user.active && (
-                            <Badge variant="warning" size="sm">
+                            <Badge variant="warning" size="sm" className="shrink-0">
                               No password
                             </Badge>
                           )}
                         </span>
                         <span className="truncate text-[12px] text-muted-foreground">{user.email}</span>
+                        <span className="truncate text-[11.5px] text-muted-foreground md:hidden">
+                          {sitesLabel(user)}
+                        </span>
                       </div>
                     </div>
 
-                    <span className="truncate text-[12.5px] text-muted-foreground" title={sitesLabel(user)}>
+                    <span
+                      className="hidden truncate text-[12.5px] text-muted-foreground md:block"
+                      title={sitesLabel(user)}
+                    >
                       {sitesLabel(user)}
                     </span>
 
-                    <Badge variant={user.role === 'ADMIN' ? 'brand' : 'neutral'}>
+                    <Badge
+                      variant={user.role === 'ADMIN' ? 'brand' : 'neutral'}
+                      className="hidden md:inline-flex"
+                    >
                       {user.role === 'ADMIN' ? 'Admin' : 'Staff'}
                     </Badge>
 
-                    <Badge variant={user.active ? 'success' : 'neutral'}>
+                    <Badge
+                      variant={user.active ? 'success' : 'neutral'}
+                      className="hidden md:inline-flex"
+                    >
                       {user.active ? 'Active' : 'Inactive'}
                     </Badge>
 
-                    <div className="flex md:justify-end">
+                    <div className="flex shrink-0 md:justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${user.name}`}>
@@ -660,6 +770,10 @@ function AdminUsersScreen() {
           </>
         )}
       </div>
+
+      <Fab icon={Plus} onClick={() => setDialog({ mode: 'create', initial: null })}>
+        Add user
+      </Fab>
 
       <UserDialog
         open={Boolean(dialog)}

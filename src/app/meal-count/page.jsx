@@ -447,9 +447,9 @@ function MealCountScreen() {
   }
 
   return (
-    <AppShell>
+    <AppShell focus>
       {/* Extra room on phones so the sticky submit bar never covers the last field. */}
-      <div className="flex flex-col gap-5 pb-24 md:pb-0">
+      <div className="flex flex-col gap-5 pb-28 md:pb-0">
         {voided && (
           <div className="flex flex-col gap-2 rounded-lg border border-warning-border bg-warning-soft p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-0.5">
@@ -477,12 +477,22 @@ function MealCountScreen() {
 
         <PageHeader
           title={title}
-          subtitle={subtitle}
+          // The meals this day serves are one word each. On a phone they read
+          // as part of the line that already says where you are, instead of a
+          // third row of chips under the title.
+          subtitle={
+            <>
+              {subtitle}
+              {meals.length > 1 && (
+                <span className="md:hidden"> &middot; {meals.slice(1).map((meal) => meal.label).join(', ')}</span>
+              )}
+            </>
+          }
           backHref="/dashboard"
           backLabel="Back to dashboard"
           actions={
             meals.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="hidden flex-wrap gap-1.5 md:flex">
                 {meals.slice(1).map((meal) => (
                   <Badge key={meal.key} variant="brand" size="lg">
                     {meal.label}
@@ -542,27 +552,78 @@ function MealCountScreen() {
             )}
           </div>
 
-          <Progress value={roster?.length ? (markedCount / roster.length) * 100 : 0} label="Attendance progress" />
+          <Progress
+            value={roster?.length ? (markedCount / roster.length) * 100 : 0}
+            label="Attendance progress"
+            // On a phone the same bar rides the sticky toolbar, where it stays
+            // visible; here it would only be a second copy of it.
+            className="hidden md:block"
+          />
 
           {roster && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                placeholder="Find a student"
-                className="sm:max-w-xs"
-              />
-              <Segmented
-                ariaLabel="Roster filter"
-                value={rosterFilter}
-                onChange={setRosterFilter}
-                options={[
-                  { value: 'all', label: 'All', count: roster.length },
-                  { value: 'unmarked', label: 'Not marked', count: roster.length - markedCount },
-                ]}
-                className="sm:w-auto"
-              />
-            </div>
+            <>
+              {/* Phone: the two controls that matter follow the roster down the
+                  screen instead of staying at the top of it. Two hundred and
+                  fifty names is a long scroll back to a search field, and the
+                  bar along the bottom edge keeps the count of who is marked in
+                  view while the marking is happening. */}
+              <div className="sticky top-14 z-20 -mx-4 flex items-center gap-2 border-b px-4 py-2.5 glass-bar md:hidden">
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder="Find a student"
+                  className="min-w-0 flex-1"
+                />
+                <button
+                  type="button"
+                  aria-pressed={rosterFilter === 'unmarked'}
+                  onClick={() => setRosterFilter(rosterFilter === 'unmarked' ? 'all' : 'unmarked')}
+                  className={cn(
+                    'flex h-11 shrink-0 items-center gap-1.5 rounded-md border px-3 text-[13px] font-semibold outline-none transition-colors',
+                    rosterFilter === 'unmarked'
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-card text-muted-foreground'
+                  )}
+                >
+                  Not marked
+                  <span
+                    className={cn(
+                      'rounded-full px-1.5 text-[11px] font-bold tabular-nums',
+                      rosterFilter === 'unmarked'
+                        ? 'bg-primary-foreground/20 text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {roster.length - markedCount}
+                  </span>
+                </button>
+                <Progress
+                  value={roster.length ? (markedCount / roster.length) * 100 : 0}
+                  label="Attendance progress"
+                  className="absolute inset-x-0 bottom-0 h-[3px] rounded-none bg-transparent"
+                  barClassName="rounded-none"
+                />
+              </div>
+
+              <div className="hidden gap-2 md:flex md:items-center">
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder="Find a student"
+                  className="sm:max-w-xs"
+                />
+                <Segmented
+                  ariaLabel="Roster filter"
+                  value={rosterFilter}
+                  onChange={setRosterFilter}
+                  options={[
+                    { value: 'all', label: 'All', count: roster.length },
+                    { value: 'unmarked', label: 'Not marked', count: roster.length - markedCount },
+                  ]}
+                  className="sm:w-auto"
+                />
+              </div>
+            </>
           )}
 
           {!roster && (
@@ -666,7 +727,7 @@ function MealCountScreen() {
       </div>
 
       {/* Submit bar: sits above the phone tab bar, inline from md up. */}
-      <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] z-30 border-t px-4 py-3 glass-bar md:static md:mt-6 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pt-2.5 glass-bar md:static md:mt-6 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <div className="mx-auto flex max-w-screen-xl flex-col gap-2 md:flex-row md:items-center md:justify-between">
           {missing.length > 0 ? (
             <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground md:text-[13px]">

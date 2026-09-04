@@ -8,6 +8,7 @@ import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import RequestForm from '@/components/requests/RequestForm';
 import StatusBadge from '@/components/requests/StatusBadge';
+import { ChipRow } from '@/components/ui/mobile';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
@@ -96,10 +97,24 @@ function RequestsScreen() {
                     { value: 'open', label: 'Open', count: counts.open },
                     { value: 'resolved', label: 'Resolved', count: counts.resolved },
                   ]}
-                  className="sm:w-auto"
+                  className="hidden sm:flex sm:w-auto"
                 />
               )}
             </div>
+
+            {requests && requests.length > 0 && (
+              <ChipRow
+                ariaLabel="Filter requests"
+                value={filter}
+                onChange={setFilter}
+                className="sm:hidden"
+                options={[
+                  { value: 'all', label: 'All', count: counts.all },
+                  { value: 'open', label: 'Open', count: counts.open },
+                  { value: 'resolved', label: 'Resolved', count: counts.resolved },
+                ]}
+              />
+            )}
 
             {listError && <ErrorState title="Couldn't load your requests" message={listError} onRetry={loadRequests} />}
 
@@ -138,7 +153,17 @@ function RequestsScreen() {
                     className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3.5 sm:flex-row sm:items-center sm:gap-4"
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate text-[14px] font-semibold text-foreground">{request.type}</span>
+                      {/* The status belongs beside what it is the status of.
+                          Under the card it read as a fourth line of the answer. */}
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-[14px] font-semibold text-foreground">
+                          {request.type}
+                        </span>
+                        <StatusBadge
+                          status={request.status}
+                          className="ml-auto shrink-0 sm:hidden"
+                        />
+                      </span>
                       <span className="text-[12px] text-muted-foreground">
                         {requestDetail(request)}, {requestDate(request.createdAt)}
                         {sites.length > 1 && `, ${shortSiteName(request.site)}`}
@@ -161,7 +186,7 @@ function RequestsScreen() {
                         </span>
                       )}
                     </div>
-                    <StatusBadge status={request.status} size="lg" />
+                    <StatusBadge status={request.status} size="lg" className="hidden sm:inline-flex" />
                   </article>
                 ))}
               </div>

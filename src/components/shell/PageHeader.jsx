@@ -5,8 +5,21 @@ import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // One header for every screen: optional back link, title, one line of context,
-// and the screen's actions on the right (stacked under the title on phones).
-export default function PageHeader({ title, subtitle, actions, backHref, backLabel = 'Back', className }) {
+// and the screen's actions.
+//
+// On a desk the actions sit on the right of the title. On a phone they used to
+// wrap into a ragged column - four buttons of four different widths, each as
+// loud as the next - so a phone gets `mobileActions` instead: one control beside
+// the title, and the rest inside the sheet behind it.
+export default function PageHeader({
+  title,
+  subtitle,
+  actions,
+  mobileActions,
+  backHref,
+  backLabel = 'Back',
+  className,
+}) {
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       {backHref && (
@@ -20,14 +33,30 @@ export default function PageHeader({ title, subtitle, actions, backHref, backLab
           {backLabel}
         </Link>
       )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-[22px] font-bold leading-tight tracking-tight text-foreground md:text-[28px]">
-            {title}
-          </h1>
-          {subtitle && <p className="text-[13px] leading-relaxed text-muted-foreground">{subtitle}</p>}
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-6">
+        <div className="flex min-w-0 items-start gap-3 md:block">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 className="text-[26px] font-bold leading-tight tracking-tight text-foreground md:text-[28px]">
+              {title}
+            </h1>
+            {subtitle && <p className="text-[13px] leading-relaxed text-muted-foreground">{subtitle}</p>}
+          </div>
+          {mobileActions && (
+            <div className="flex shrink-0 items-center gap-2 pt-0.5 md:hidden">{mobileActions}</div>
+          )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {actions && (
+          <div
+            className={cn(
+              'flex shrink-0 flex-wrap items-center gap-2',
+              // A phone that has been given its own control does not also get
+              // the desktop rack of buttons underneath it.
+              mobileActions && 'hidden md:flex'
+            )}
+          >
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );

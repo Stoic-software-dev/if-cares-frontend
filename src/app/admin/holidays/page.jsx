@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Fab } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { SearchInput } from '@/components/ui/search-input';
@@ -201,7 +202,7 @@ function HolidaysScreen() {
               : 'Loading the holiday calendar'
           }
           actions={
-            <Button onClick={openNew}>
+            <Button onClick={openNew} className="hidden md:inline-flex">
               <Plus />
               Add holiday
             </Button>
@@ -325,6 +326,10 @@ function HolidaysScreen() {
           label="holidays"
         />
       </div>
+
+      <Fab icon={Plus} onClick={openNew}>
+        Add holiday
+      </Fab>
 
       <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="sm:max-w-lg">

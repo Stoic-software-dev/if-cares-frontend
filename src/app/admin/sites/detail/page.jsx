@@ -40,6 +40,7 @@ import SiteForm, { emptySite } from '@/components/sites/SiteForm';
 import RosterImportDialog from '@/components/sites/RosterImportDialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { ActionSheet, SheetAction } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -351,6 +352,12 @@ function SiteDetailScreen() {
   // repeating the name as a subtitle reads as a bug.
   const subtitle = [siteState(site), siteYear(site)].filter(Boolean).join(', ') || undefined;
 
+  // The same three destinations the buttons carry, named once so the phone's
+  // sheet and the desk's buttons cannot drift apart.
+  const dashboardHref = `/dashboard?site=${encodeURIComponent(site)}`;
+  const calendarHref = `/admin/calendar?site=${encodeURIComponent(site)}`;
+  const reportsHref = `/admin/reports?site=${encodeURIComponent(site)}`;
+
   return (
     <AppShell width="wide">
       <div className="flex flex-col gap-5">
@@ -359,6 +366,37 @@ function SiteDetailScreen() {
           subtitle={subtitle}
           backHref="/admin/sites"
           backLabel="All sites"
+          mobileActions={
+            <ActionSheet title={shortSiteName(site)}>
+              <SheetAction icon={ExternalLink} href={dashboardHref}>
+                Open dashboard
+              </SheetAction>
+              <SheetAction icon={CalendarRange} href={calendarHref} hint="Service days and meals">
+                Calendar
+              </SheetAction>
+              <SheetAction icon={FileText} href={reportsHref} hint="Daily forms and the month summary">
+                Reports
+              </SheetAction>
+              {record && (
+                <>
+                  <SheetAction icon={Pencil} onSelect={openEditor}>
+                    Edit site
+                  </SheetAction>
+                  <SheetAction icon={CalendarRange} onSelect={generateDays} disabled={generating}>
+                    Generate missing days
+                  </SheetAction>
+                  <SheetAction
+                    icon={Power}
+                    destructive={record.active}
+                    disabled={deactivating}
+                    onSelect={() => (record.active ? setConfirmDeactivate(true) : setActive(true))}
+                  >
+                    {record.active ? 'Deactivate site' : 'Reactivate site'}
+                  </SheetAction>
+                </>
+              )}
+            </ActionSheet>
+          }
           actions={
             <>
               <Button variant="outline" asChild>
@@ -427,18 +465,21 @@ function SiteDetailScreen() {
             </TabsList>
 
             <TabsContent value="overview" className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {/* Three numbers are a row, not a column: stacked full width they
+                  were two hundred and forty pixels of phone to say 1, 2 and 0. */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {meals === null ? (
-                  Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[86px] rounded-lg" />)
+                  Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-lg sm:h-[86px]" />)
                 ) : (
                   <>
-                    <Stat label="Submitted this month" value={stats.submitted} tone="success" />
+                    <Stat label="Submitted this month" short="Submitted" value={stats.submitted} tone="success" />
                     <Stat
                       label="Missing this month"
+                      short="Missing"
                       value={stats.missing}
                       tone={stats.missing ? 'danger' : 'neutral'}
                     />
-                    <Stat label="Remaining" value={stats.upcoming} tone="neutral" />
+                    <Stat label="Remaining" short="Ahead" value={stats.upcoming} tone="neutral" />
                   </>
                 )}
               </div>
@@ -642,16 +683,24 @@ function SiteDetailScreen() {
   );
 }
 
-function Stat({ label, value, tone }) {
+function Stat({ label, short, value, tone }) {
   const tones = {
     success: 'text-success-text',
     danger: 'text-destructive-text',
     neutral: 'text-foreground',
   };
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
-      <span className={`text-[26px] font-bold leading-none tabular-nums ${tones[tone]}`}>{value}</span>
+    <div className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 sm:p-4">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground sm:text-[11px] sm:tracking-[0.06em]">
+        {/* A column a third of a phone wide cannot hold "Submitted this month"
+            without going to three lines. The site and the month are already on
+            the screen, so one word carries it. */}
+        <span className="sm:hidden">{short ?? label}</span>
+        <span className="hidden sm:inline">{label}</span>
+      </span>
+      <span className={`text-[22px] font-bold leading-none tabular-nums sm:text-[26px] ${tones[tone]}`}>
+        {value}
+      </span>
     </div>
   );
 }

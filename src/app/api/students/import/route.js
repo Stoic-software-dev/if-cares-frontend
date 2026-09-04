@@ -126,9 +126,46 @@ export const POST = handle(async (req) => {
   let added = 0;
   let revived = 0;
 
-  // Sequential on purpose: roster numbers come from a running maximum, and a
-  // parallel insert would hand two students the same one.
-  for (const item of accepted) {
+  // A transaction per student, each one reading MAX(number) before its insert,
+  // cost 250 round trips against a pooled connection: a real roster of 250 names
+  // took three minutes and seventeen seconds, with the screen holding the whole
+  // time and any proxy timeout able to leave the import half done.
+  //
+  // The sequence was there to stop two students getting the same roster number.
+  // They can: `number` is positional and the schema says so in as many words -
+  // deliberately NOT unique per site - and `/api/students/roster` renumbers
+  // alphabetically on every read anyway. What has to stay unique is the NAME,
+  // and that is a database constraint, not something a loop protects.
+  //
+  // So the maximum is read once and the block written in one statement. The
+  // per-row path below stays as the fallback: if the batch fails for any reason
+  // it runs again row by row, where a failure can still be attributed to a line.
+  const creates = accepted.filter((item) => !item.revives);
+  const revives = accepted.filter((item) => item.revives);
+
+  const valuesFor = (item) => {
+    const birthdate = item.row.birthdate ? ymdToUtcDate(item.row.birthdate) : null;
+    return { birthdate, age: item.row.age ?? (birthdate ? ageFromBirthdate(birthdate) : null) };
+  };
+
+  let batched = false;
+  if (creates.length) {
+    try {
+      const base = await nextRosterNumber(prisma, site.id);
+      await prisma.student.createMany({
+        data: creates.map((item, index) => {
+          const { age, birthdate } = valuesFor(item);
+          return { name: item.row.name, age, birthdate, number: base + index, siteId: site.id };
+        }),
+      });
+      added = creates.length;
+      batched = true;
+    } catch {
+      batched = false; // fall through to the row by row path
+    }
+  }
+
+  for (const item of batched ? revives : accepted) {
     const birthdate = item.row.birthdate ? ymdToUtcDate(item.row.birthdate) : null;
     const age = item.row.age ?? (birthdate ? ageFromBirthdate(birthdate) : null);
     try {

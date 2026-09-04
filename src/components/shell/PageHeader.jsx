@@ -14,7 +14,7 @@ export default function PageHeader({ title, subtitle, actions, backHref, backLab
           href={backHref}
           // `-my-2 py-2` gives the tap target the height a thumb needs without
           // moving the text: this was 20px tall on a screen meant for tablets.
-          className="-my-2 inline-flex min-h-11 w-fit items-center gap-1 rounded-sm py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="-my-2 inline-flex min-h-11 w-fit items-center gap-1 rounded-sm py-2 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronLeft className="h-4 w-4" />
           {backLabel}

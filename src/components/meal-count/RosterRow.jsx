@@ -46,6 +46,11 @@ function RosterRowBase({ student, marks, meals, attention, onToggle }) {
             key={meal.key}
             label={meal.short}
             title={meal.label}
+            // Whose row this is. The button says "Att" and carries aria-pressed,
+            // which between them announce a state and not a person: reading down
+            // a roster without seeing it gave "Attendance, pressed" seventy-five
+            // times with nothing to tell one child from the next.
+            ariaLabel={`${meal.label} — ${student.name}`}
             active={Boolean(marks[meal.key])}
             attention={meal.key === 'att' && attention}
             onClick={() => onToggle(student.id, meal.key)}
@@ -58,11 +63,12 @@ function RosterRowBase({ student, marks, meals, attention, onToggle }) {
 
 export const RosterRow = memo(RosterRowBase);
 
-export function MarkToggle({ label, title, active, attention, onClick, className }) {
+export function MarkToggle({ label, title, ariaLabel, active, attention, onClick, className }) {
   return (
     <button
       type="button"
       title={title}
+      aria-label={ariaLabel ?? title}
       aria-pressed={active}
       onClick={onClick}
       className={cn(

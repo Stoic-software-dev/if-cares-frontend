@@ -66,7 +66,11 @@ export default function AppShell({ children, width = 'default', className }) {
       {/* Desktop bar */}
       <header className="sticky top-0 z-40 hidden border-b glass-bar md:block">
         <div className={cn('mx-auto flex h-[60px] items-center gap-6 px-6 lg:px-8', WIDTHS.wide)}>
-          <Link href="/dashboard" aria-label="IF Cares, go to dashboard" className="rounded-md">
+          <Link
+            href="/dashboard"
+            aria-label="IF Cares, go to dashboard"
+            className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <BrandMark />
           </Link>
 

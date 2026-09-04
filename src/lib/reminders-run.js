@@ -25,7 +25,6 @@ const LAST_RUN_KEY = 'reminders.lastRunDay';
 export const DEFAULTS = {
   enabled: false,
   hour: 9, // local hour in APP_TIMEZONE
-  copyTo: [],
   // How many days back to look. One means "yesterday", which is what the old
   // system did.
   lookBackDays: 1,
@@ -134,55 +133,64 @@ export async function overdueRecipients(settings) {
     overdue.push({ siteId: day.siteId, site: day.site.name, date: ymd });
   }
 
-  const messages = [];
+  // One message per person, carrying every day they are behind on - not one per
+  // person and day. The look-back reaches fourteen days, so the multiplication
+  // was the setting that chases harder doubling as the setting that fills an
+  // inbox: a site three days behind with two staff sent six emails in a run.
+  const byRecipient = new Map();
   for (const item of overdue) {
     for (const user of users) {
       const assigned = user.allSites || user.sites.some((entry) => entry.siteId === item.siteId);
       if (!assigned || !user.email) continue;
-      messages.push({ to: user.email, name: user.name, site: item.site, date: item.date });
+      if (!byRecipient.has(user.email)) {
+        byRecipient.set(user.email, { to: user.email, name: user.name, days: [] });
+      }
+      byRecipient.get(user.email).days.push({ site: item.site, date: item.date });
     }
+  }
+
+  const messages = [...byRecipient.values()];
+  for (const message of messages) {
+    message.days.sort((a, b) => a.date.localeCompare(b.date) || a.site.localeCompare(b.site));
   }
 
   return { since: fromYmd, overdue, messages };
 }
 
 /**
- * One reminder run.
+ * One reminder run. The server's scheduler is the only caller.
  *
- * `force` skips the hour check, for the manual "send now" path. `baseUrl` is
- * where the links point; the scheduler has no request to derive it from, so it
- * passes APP_URL.
+ * `baseUrl` is where the links point; the scheduler has no request to derive it
+ * from, so it passes APP_URL.
  *
  * Returns a plain summary and never throws for an ordinary "nothing to do":
  * being disabled or being the wrong hour is an outcome, not a failure.
  */
-export async function runReminders({ force = false, baseUrl } = {}) {
+export async function runReminders({ baseUrl } = {}) {
   const settings = await readSettings();
   if (!settings.enabled) return { skipped: 'disabled' };
 
   const day = todayYmd();
-  if (!force) {
-    // Once a day, whatever the tick count and whatever restarted in between.
-    if ((await readLastRunDay()) === day) return { skipped: 'already ran today' };
-    // The scheduler ticks often; which of those ticks sends is the
-    // administrator's setting, enforced here. That keeps the choice in the
-    // screen instead of in a cron expression, and resolving the hour in
-    // APP_TIMEZONE means daylight saving never moves the reminder.
-    //
-    // On or after the hour rather than exactly at it, because the alternative
-    // fails silently in the way that matters: Next starts the scheduler on the
-    // first request after a boot, so a deploy at 3am on a quiet night would
-    // arm it at whatever time somebody first opened the app, and an exact match
-    // would then skip that day entirely. Late is a reminder. Never is three
-    // missed days and a site whose meals stop.
-    if (localHour() < settings.hour) return { skipped: 'not the hour', hour: settings.hour };
-  }
+  // Once a day, whatever the tick count and whatever restarted in between.
+  if ((await readLastRunDay()) === day) return { skipped: 'already ran today' };
+  // The scheduler ticks often; which of those ticks sends is the administrator's
+  // setting, enforced here. That keeps the choice in the screen instead of in a
+  // cron expression, and resolving the hour in APP_TIMEZONE means daylight
+  // saving never moves the reminder.
+  //
+  // On or after the hour rather than exactly at it, because the alternative
+  // fails silently in the way that matters: Next starts the scheduler on the
+  // first request after a boot, so a deploy at 3am on a quiet night would arm it
+  // at whatever time somebody first opened the app, and an exact match would
+  // then skip that day entirely. Late is a reminder. Never is three missed days
+  // and a site whose meals stop.
+  if (localHour() < settings.hour) return { skipped: 'not the hour', hour: settings.hour };
 
   if (!mailConfigured()) return { skipped: 'mail not configured' };
 
   // Claimed before the first send, not after the last: a crash halfway through
   // sixty messages must not let the next tick start again from the top.
-  if (!force) await markRanToday(day);
+  await markRanToday(day);
 
   const { since, overdue, messages } = await overdueRecipients(settings);
 
@@ -191,15 +199,16 @@ export async function runReminders({ force = false, baseUrl } = {}) {
   for (const message of messages) {
     const body = countOverdue({
       name: message.name,
-      site: message.site,
-      date: message.date,
-      link: `${baseUrl}/meal-count?date=${message.date}&site=${encodeURIComponent(message.site)}`,
+      days: message.days.map((day) => ({
+        ...day,
+        link: `${baseUrl}/meal-count?date=${day.date}&site=${encodeURIComponent(day.site)}`,
+      })),
     });
     try {
       // Sequential on purpose: a burst of a hundred sends is what trips a
       // sending limit, and this job has all the time it needs.
       // eslint-disable-next-line no-await-in-loop
-      await sendMail({ to: [message.to], cc: settings.copyTo, ...body });
+      await sendMail({ to: [message.to], ...body });
       sent += 1;
     } catch (error) {
       failures.push(`${message.to}: ${error.message}`);

@@ -1,6 +1,6 @@
-import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
+import { handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { mailConfigured, mailRedirect, parseRecipients } from '@/lib/gmail';
+import { mailConfigured, mailRedirect } from '@/lib/gmail';
 import { alertsConfigured } from '@/lib/alerts';
 import { readRequestNotifySettings, writeRequestNotifySettings } from '@/lib/request-notify';
 import {
@@ -9,8 +9,6 @@ import {
   readLastPing,
   readLastRunDay,
   readSettings,
-  runReminders,
-  touchLastPing,
   writeSettings,
 } from '@/lib/reminders-run';
 import { logAudit } from '@/lib/audit';
@@ -24,9 +22,8 @@ export const dynamic = 'force-dynamic';
 // to edit an Apps Script trigger.
 //
 // The schedule is owned by the server itself (`src/lib/reminder-scheduler.js`),
-// which calls the same function this route calls. The route stays because an
-// external scheduler holding the shared secret is still a supported way in, and
-// because it is how the screen previews a run.
+// and that is the only thing that sends. This route reads and writes the
+// settings, and previews a run without sending.
 
 export const GET = handle(async () => {
   await requireAdmin();
@@ -83,12 +80,6 @@ export const PATCH = handle(async (req) => {
     if (!Number.isInteger(days) || days < 1 || days > 14) throw new ApiError(422, 'Look back between 1 and 14 days.');
     next.lookBackDays = days;
   }
-  if (body.copyTo !== undefined) {
-    const { valid, invalid } = parseRecipients(Array.isArray(body.copyTo) ? body.copyTo.join(',') : body.copyTo);
-    if (invalid.length) throw new ApiError(422, `Not an email address: ${invalid[0]}`);
-    next.copyTo = valid;
-  }
-
   await writeSettings(next);
 
   // The request notice lives on the same screen, so it is saved by the same
@@ -115,42 +106,31 @@ export const PATCH = handle(async (req) => {
   return legacyJson({ result: 'success', data: { ...next, requestNotify } });
 });
 
-// Called by an external scheduler, or by the screen for a preview. Guarded by a
-// shared secret rather than a session, because a cron has no session; without
-// the secret configured it refuses instead of running open.
-export const POST = handle(async (req) => {
-  const secret = process.env.REMINDERS_SECRET;
-  const provided = req.headers.get('x-reminders-secret');
-  const url = new URL(req.url);
-  const preview = url.searchParams.get('preview') === '1';
-
-  if (preview) {
-    await requireAdmin();
-    const settings = await readSettings();
-    const { since, overdue, messages } = await overdueRecipients(settings);
-    return legacyJson({
-      result: 'success',
-      data: {
-        since,
-        overdueDays: overdue.length,
-        recipients: [...new Set(messages.map((message) => message.to))].length,
-        sample: messages.slice(0, 5).map((message) => ({ to: message.to, site: message.site, date: message.date })),
-        mailReady: mailConfigured(),
-      },
-    });
-  }
-
-  if (!secret) throw new ApiError(503, 'Reminders are not configured to run.');
-  if (provided !== secret) throw new ApiError(401, 'Bad reminder secret.');
-  // Every real call leaves a mark, before any of the reasons this run might do
-  // nothing. A reminder that stops arriving looks exactly like a reminder with
-  // nothing to say, and the difference matters: three missed days pauses a
-  // site's meal delivery.
-  await touchLastPing();
-
-  const result = await runReminders({
-    force: url.searchParams.get('force') === '1',
-    baseUrl: appBaseUrl(req),
+// The preview: the same search the reminder does, sending nothing.
+//
+// This used to be two endpoints in one - a preview for the screen, and a way for
+// an external cron holding a shared secret to trigger a real run. That cron was
+// replaced by the server's own scheduler because it kept dying quietly, and
+// nothing has called the secret path since. What it left behind was a second way
+// to send sixty emails, guarded by a token sitting in the environment. One
+// sender is easier to reason about than two, and the one that remains is the one
+// this screen can actually see.
+export const POST = handle(async () => {
+  await requireAdmin();
+  const settings = await readSettings();
+  const { since, overdue, messages } = await overdueRecipients(settings);
+  return legacyJson({
+    result: 'success',
+    data: {
+      since,
+      overdueDays: overdue.length,
+      recipients: messages.length,
+      sample: messages.slice(0, 5).map((message) => ({
+        to: message.to,
+        days: message.days.length,
+        first: message.days[0],
+      })),
+      mailReady: mailConfigured(),
+    },
   });
-  return legacyJson({ result: 'success', ...result });
 });

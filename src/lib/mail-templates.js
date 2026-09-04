@@ -78,14 +78,37 @@ export function requestAnswered({ name, type, detail, site, comment, resolvedBy 
   };
 }
 
-export function countOverdue({ name, site, date, link }) {
+/**
+ * Everything one person is behind on, in one message.
+ *
+ * It used to be one email per missing day. A site three days behind with two
+ * staff produced six emails in one run, and the look-back reaches fourteen days
+ * - so the setting that exists to chase harder was also the setting that filled
+ * an inbox and got the whole thing marked as spam. A person needs the list once.
+ */
+export function countOverdue({ name, days }) {
+  const one = days.length === 1;
+  const rows = days
+    .map(
+      (day) =>
+        `<li style="margin:0 0 6px"><strong>${day.date}</strong> — ${day.site} · <a href="${day.link}">submit it</a></li>`
+    )
+    .join('');
+
   return {
-    subject: 'Daily meal count and attendance overdue',
+    subject: one
+      ? 'Daily meal count and attendance overdue'
+      : `${days.length} meal counts overdue`,
     html: SHELL(`
       <p>Hello ${name || 'there'},</p>
-      <p>The <strong>${date}</strong> meal count and attendance for <strong>${site}</strong> is overdue.</p>
-      <p>Three consecutive days missing results in a pause of meal delivery, so please submit it now.</p>
-      ${button(link, 'Submit the count')}
+      <p>${
+        one
+          ? `The <strong>${days[0].date}</strong> meal count and attendance for <strong>${days[0].site}</strong> is overdue.`
+          : `These meal counts have not been filed yet:`
+      }</p>
+      ${one ? '' : `<ul style="padding-left:18px;margin:0 0 16px">${rows}</ul>`}
+      <p>Three consecutive days missing results in a pause of meal delivery, so please submit them now.</p>
+      ${one ? button(days[0].link, 'Submit the count') : ''}
     `),
   };
 }

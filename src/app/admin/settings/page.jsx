@@ -82,7 +82,6 @@ function RemindersScreen() {
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [copyTo, setCopyTo] = useState('');
   const [requestTo, setRequestTo] = useState('');
   const [requestCc, setRequestCc] = useState('');
   const [preview, setPreview] = useState(null);
@@ -93,7 +92,6 @@ function RemindersScreen() {
     apiGet('/api/reminders')
       .then((res) => {
         setSettings(res.data);
-        setCopyTo((res.data.copyTo ?? []).join(', '));
         setRequestTo((res.data.requestNotify?.to ?? []).join(', '));
         setRequestCc((res.data.requestNotify?.cc ?? []).join(', '));
       })
@@ -115,7 +113,6 @@ function RemindersScreen() {
         lastPingAt: settings.lastPingAt,
         lastRunDay: settings.lastRunDay,
       });
-      setCopyTo((res.data.copyTo ?? []).join(', '));
       setRequestTo((res.data.requestNotify?.to ?? []).join(', '));
       setRequestCc((res.data.requestNotify?.cc ?? []).join(', '));
       toast.success('Saved');
@@ -236,24 +233,6 @@ function RemindersScreen() {
                 </Field>
               </div>
 
-              <Field
-                label="Always copy"
-                htmlFor="reminder-copy"
-                hint="Comma separated. These addresses are copied on every reminder."
-              >
-                <div className="flex gap-2">
-                  <Input
-                    id="reminder-copy"
-                    value={copyTo}
-                    onChange={(event) => setCopyTo(event.target.value)}
-                    placeholder="name@ifcares.org, other@ifcares.org"
-                  />
-                  <Button variant="outline" onClick={() => save({ copyTo })} loading={saving} className="shrink-0">
-                    {!saving && <Save />}
-                    Save
-                  </Button>
-                </div>
-              </Field>
             </div>
 
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 md:p-5">
@@ -274,14 +253,15 @@ function RemindersScreen() {
                 <div className="flex flex-col gap-2 rounded-md bg-surface-sunken p-3.5">
                   <span className="text-[13px] font-medium text-foreground">
                     {preview.overdueDays} overdue {preview.overdueDays === 1 ? 'day' : 'days'} since{' '}
-                    {preview.since}, {preview.recipients}{' '}
-                    {preview.recipients === 1 ? 'person' : 'people'} would be written to.
+                    {preview.since}. {preview.recipients}{' '}
+                    {preview.recipients === 1 ? 'person gets one email' : 'people get one email each'}.
                   </span>
                   {preview.sample?.length > 0 && (
                     <ul className="flex flex-col gap-1">
                       {preview.sample.map((item, index) => (
                         <li key={index} className="text-[12.5px] text-muted-foreground">
-                          {item.to}, {item.site}, {item.date}
+                          {item.to} — {item.days} {item.days === 1 ? 'day' : 'days'}
+                          {item.first && `, from ${item.first.date} at ${item.first.site}`}
                         </li>
                       ))}
                     </ul>

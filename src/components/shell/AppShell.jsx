@@ -9,7 +9,7 @@ import BrandMark from '@/components/shell/BrandMark';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Avatar, UserMenu } from '@/components/shell/UserMenu';
-import { activeKeyForPath, navItemsFor } from '@/components/shell/nav';
+import { accountItemsFor, activeKeyForPath, navItemsFor } from '@/components/shell/nav';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +62,12 @@ export default function AppShell({ children, width = 'default', className, focus
     cachedGet(SITES_PATH).catch(() => {});
     cachedGet(ALL_MEALS_PATH).catch(() => {});
   }, [user]);
+
+  // Reminder emails and Client errors live under the profile on a desk. The
+  // phone sheet is the same menu, so they belong in it too: without them the
+  // only way to either one from a phone was to know its name and type it into
+  // the command palette.
+  const accountItems = accountItemsFor(admin, user);
 
   const inlineItems = items.filter((item) => item.primary);
   const overflowItems = items.filter((item) => !item.primary);
@@ -259,6 +265,25 @@ export default function AppShell({ children, width = 'default', className, focus
                   className={cn(
                     'flex items-center gap-2.5 rounded-md border border-border px-3 py-3 text-[13px] font-semibold transition-colors active:bg-accent',
                     item.key === activeKey ? 'bg-primary-soft text-primary-strong dark:text-primary' : 'text-foreground'
+                  )}
+                >
+                  <item.icon className="h-[18px] w-[18px] text-muted-foreground" />
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {accountItems.length > 0 && (
+            <div className="flex flex-col">
+              {accountItems.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  onClick={() => setMoreOpen(false)}
+                  className={cn(
+                    'flex min-h-[52px] items-center gap-3 rounded-md px-3 text-[13.5px] font-semibold transition-colors active:bg-accent',
+                    item.key === activeKey ? 'text-primary-strong dark:text-primary' : 'text-foreground'
                   )}
                 >
                   <item.icon className="h-[18px] w-[18px] text-muted-foreground" />

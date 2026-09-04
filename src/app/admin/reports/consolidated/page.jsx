@@ -56,6 +56,7 @@ function ConsolidatedScreen() {
 
   const [job, setJob] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [reports, setReports] = useState(null);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
@@ -150,10 +151,18 @@ function ConsolidatedScreen() {
     }
   };
 
+  // Queued or running: both are the user waiting.
+  const building = starting || job?.status === 'processing';
+
   const cancel = async () => {
     if (!job) return;
-    await fetch(`/api/reports/consolidated?job=${job.id}`, { method: 'DELETE' });
-    setJob(null);
+    setCancelling(true);
+    try {
+      await fetch(`/api/reports/consolidated?job=${job.id}`, { method: 'DELETE' });
+      setJob(null);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const makeSignLink = async (report) => {
@@ -337,9 +346,19 @@ function ConsolidatedScreen() {
               </span>
             </div>
 
-            <Button onClick={start} loading={starting} disabled={included.length === 0}>
-              {!starting && <Layers />}
-              Build the claim
+            {/* The POST only queues the job; the building happens after it
+                returns. Ending the busy state there put the button back to rest
+                while the claim was still being built, which is the moment the
+                screen most has to say something is happening - the progress
+                panel that does is in the other column, below the fold on a
+                laptop. */}
+            <Button
+              onClick={start}
+              loading={building}
+              disabled={included.length === 0}
+            >
+              {!building && <Layers />}
+              {building ? 'Building the claim' : 'Build the claim'}
             </Button>
           </div>
 
@@ -360,8 +379,14 @@ function ConsolidatedScreen() {
                     {elapsed(job.elapsedMs ?? 0)}
                   </span>
                   {job.status === 'processing' && (
-                    <Button variant="ghost" size="icon-sm" aria-label="Cancel" onClick={cancel}>
-                      <X />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Cancel"
+                      onClick={cancel}
+                      loading={cancelling}
+                    >
+                      {!cancelling && <X />}
                     </Button>
                   )}
                 </div>

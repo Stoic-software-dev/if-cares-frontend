@@ -400,11 +400,17 @@ function AdminUsersScreen() {
     });
 
   const sendResetLink = async (user) => {
+    // This sends a real email, so it takes as long as the mail API does, and it
+    // is reached from a menu that closes on the click. Without the notice the
+    // screen sat still long enough to invite a second click, and a second click
+    // is a second link that invalidates the first.
+    const pending = toast.loading(`Sending a password link to ${user.email}`);
     try {
       const res = await apiPost(`/api/users/${user.id}/reset-link`, { sendEmail: true });
+      toast.dismiss(pending);
       setResetLink({ email: user.email, link: res.data.resetLink, mail: res.data.mail });
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message, { id: pending });
     }
   };
 
@@ -597,11 +603,12 @@ function AdminUsersScreen() {
                               ) : (
                                 <DropdownMenuItem
                                   onClick={async () => {
+                                    const pending = toast.loading(`Reactivating ${user.name}`);
                                     try {
                                       await setActive(user, true);
-                                      toast.success(`${user.name} reactivated`);
+                                      toast.success(`${user.name} reactivated`, { id: pending });
                                     } catch (err) {
-                                      toast.error(err.message);
+                                      toast.error(err.message, { id: pending });
                                     }
                                   }}
                                 >

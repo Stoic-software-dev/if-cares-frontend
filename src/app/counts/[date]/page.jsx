@@ -139,12 +139,16 @@ function CountDetailScreen() {
 
   const undoApproval = async () => {
     setApproving(true);
+    // This one is reached from the menu, which closes on the click: there is no
+    // button left on the screen to turn into a spinner, so the notice carries
+    // the wait instead.
+    const pending = toast.loading('Undoing the approval');
     try {
       await apiPut('/api/meal-counts/approve', { site, date });
       setCount((prev) => ({ ...prev, approved: null }));
-      toast.success('Approval undone. The count can be corrected again.');
+      toast.success('Approval undone. The count can be corrected again.', { id: pending });
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message, { id: pending });
     } finally {
       setApproving(false);
     }

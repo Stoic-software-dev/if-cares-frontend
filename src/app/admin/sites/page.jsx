@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Building2, ChevronRight, CircleAlert, CircleCheck, Plus } from 'lucide-react';
+import { Building2, ChevronRight, CircleAlert, CircleCheck, MapPin, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
+import { SITES_TABS, SectionTabs } from '@/components/shell/SectionTabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import SiteForm, { emptySite } from '@/components/sites/SiteForm';
+import StatesDialog from '@/components/sites/StatesDialog';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +26,14 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiPost } from '@/lib/api-client';
-import { ALL_MEALS_PATH, SITES_PATH, SITES_WITH_INACTIVE_PATH, invalidate, useCachedGet } from '@/lib/data-cache';
+import {
+  ALL_MEALS_PATH,
+  SITES_PATH,
+  SITES_WITH_INACTIVE_PATH,
+  SITE_STATES_PATH,
+  invalidate,
+  useCachedGet,
+} from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
 import { shortSiteName, siteInitials, stateOf, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
@@ -59,6 +68,7 @@ function AdminSitesScreen() {
   const [sort, setSort] = useState('name');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [editingStates, setEditingStates] = useState(false);
   const [draft, setDraft] = useState(emptySite);
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,6 +81,8 @@ function AdminSitesScreen() {
   // program any more - but there has to be a way back to one.
   const siteList = useCachedGet(showInactive ? SITES_WITH_INACTIVE_PATH : SITES_PATH);
   const mealList = useCachedGet(ALL_MEALS_PATH);
+  const stateList = useCachedGet(SITE_STATES_PATH);
+  const siteStates = useMemo(() => stateList.data?.data?.states ?? [], [stateList.data]);
 
   const sites = useMemo(
     () => (siteList.data ? sortSiteNames(siteList.data.map((site) => site.name)) : null),
@@ -179,18 +191,26 @@ function AdminSitesScreen() {
               : 'Loading sites'
           }
           actions={
-            <Button
-              onClick={() => {
-                setDraft(emptySite);
-                setAttempted(false);
-                setCreating(true);
-              }}
-            >
-              <Plus />
-              Add site
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setEditingStates(true)}>
+                <MapPin />
+                States
+              </Button>
+              <Button
+                onClick={() => {
+                  setDraft(emptySite);
+                  setAttempted(false);
+                  setCreating(true);
+                }}
+              >
+                <Plus />
+                Add site
+              </Button>
+            </div>
           }
         />
+
+        <SectionTabs options={SITES_TABS} ariaLabel="Sites section" />
 
         <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
           <SearchInput value={query} onChange={setQuery} placeholder="Search sites" className="md:min-w-[14rem] md:max-w-md md:flex-1" />
@@ -334,7 +354,13 @@ function AdminSitesScreen() {
           </DialogHeader>
 
           <div className="max-h-[65vh] overflow-y-auto pr-1">
-            <SiteForm value={draft} onChange={setDraft} attempted={attempted} mode="create" />
+            <SiteForm
+              value={draft}
+              onChange={setDraft}
+              attempted={attempted}
+              mode="create"
+              states={siteStates}
+            />
           </div>
 
           <DialogFooter>
@@ -347,6 +373,13 @@ function AdminSitesScreen() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StatesDialog
+        open={editingStates}
+        onOpenChange={setEditingStates}
+        states={siteStates}
+        onSaved={() => stateList.refresh()}
+      />
     </AppShell>
   );
 }

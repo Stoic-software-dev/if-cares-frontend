@@ -103,6 +103,9 @@ export function useCachedGet(path, { maxAge = DEFAULT_MAX_AGE, enabled = true } 
 export const SITES_PATH = '/api/sites';
 export const SITES_WITH_INACTIVE_PATH = '/api/sites?includeInactive=1';
 export const ALL_MEALS_PATH = '/api/meal-counts/all';
+// The states a site can be filed under. Read on every site screen, changed
+// once in a while by an administrator.
+export const SITE_STATES_PATH = '/api/site-states';
 // Menus still come from Drive through the legacy Apps Script; they are the
 // slowest read in the product and change once a month.
 export const MENUS_PATH = '/api/reports/files';

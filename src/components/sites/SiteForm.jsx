@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { CalendarRange } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Field } from '@/components/ui/field';
+import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_KEYS } from '@/lib/site-calendar';
@@ -52,7 +52,7 @@ function countDays({ programStart, programEnd, weeklyTemplate }) {
  * The one site form. Creating uses every field; editing an existing site keeps
  * the same shape so there is nothing to learn twice.
  */
-export default function SiteForm({ value, onChange, attempted, mode = 'create' }) {
+export default function SiteForm({ value, onChange, attempted, mode = 'create', states = [] }) {
   const [showSchedule, setShowSchedule] = useState(mode === 'create');
 
   const set = (patch) => onChange({ ...value, ...patch });
@@ -83,7 +83,9 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
   // new site cannot be born into the exact gap that caused a claim to drop 7
   // real sites without anyone noticing.
   const stateError =
-    attempted && mode === 'create' && !value.state.trim() ? 'Pick TX or OK.' : undefined;
+    attempted && mode === 'create' && !(value.state ?? '').trim()
+      ? 'Pick the state this site files under.'
+      : undefined;
   const rangeError =
     attempted && value.programStart && value.programEnd && value.programStart > value.programEnd
       ? 'The program ends before it starts.'
@@ -111,19 +113,23 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create' }
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="State"
-          htmlFor="site-state"
-          hint="TX or OK. Drives the consolidated reports."
-          error={stateError}
-        >
-          <Input
+        <Field label="State" htmlFor="site-state" hint="Drives the consolidated reports." error={stateError}>
+          <NativeSelect
             id="site-state"
-            value={value.state}
-            onChange={(event) => set({ state: event.target.value.toUpperCase().slice(0, 2) })}
-            placeholder="TX"
+            value={value.state ?? ''}
+            onChange={(event) => set({ state: event.target.value })}
             aria-invalid={Boolean(stateError)}
-          />
+          >
+            <option value="">No state</option>
+            {/* A site already filed under a state that has since left the list
+                still has to show its own value, or opening it to change
+                something else would silently move it to another claim. */}
+            {[...new Set([...(states ?? []), value.state].filter(Boolean))].sort().map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </NativeSelect>
         </Field>
         <Field label="Site number" htmlFor="site-number">
           <Input

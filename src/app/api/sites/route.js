@@ -3,6 +3,7 @@ import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireUser, requireAdmin, visibleSites } from '@/lib/auth';
 import { toLegacySiteListItem } from '@/lib/legacy';
 import { siteCreateSchema } from '@/lib/validation';
+import { checkedState } from '@/lib/site-states';
 import { generateServiceDays, normalizeTemplate } from '@/lib/site-calendar';
 import { ymdToUtcDate } from '@/lib/dates';
 import { logAudit } from '@/lib/audit';
@@ -34,6 +35,7 @@ export const GET = handle(async (req) => {
 export const POST = handle(async (req) => {
   const session = await requireAdmin();
   const body = siteCreateSchema.parse(await readJsonBody(req));
+  const state = await checkedState(body.state);
 
   const existing = await prisma.site.findUnique({ where: { name: body.name } });
   if (existing) throw new ApiError(409, 'A site with that name already exists.');
@@ -49,7 +51,7 @@ export const POST = handle(async (req) => {
     const created = await tx.site.create({
       data: {
         name: body.name,
-        state: body.state ?? '',
+        state,
         ceName: body.ceName ?? '',
         ceId: body.ceId ?? '',
         siteName: body.siteName ?? '',

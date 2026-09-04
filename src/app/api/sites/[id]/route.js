@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { siteUpdateSchema } from '@/lib/validation';
+import { checkedState } from '@/lib/site-states';
 import { generateServiceDays, normalizeTemplate } from '@/lib/site-calendar';
 import { ymdToUtcDate, dateToYmd } from '@/lib/dates';
 import { toSiteRecord, SITE_RECORD_INCLUDE } from '@/lib/site-record';
@@ -37,7 +38,7 @@ export const PATCH = handle(async (req, { params }) => {
     data: {
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.active !== undefined ? { active: body.active } : {}),
-      ...(body.state !== undefined ? { state: body.state } : {}),
+      ...(body.state !== undefined ? { state: await checkedState(body.state) } : {}),
       ...(body.ceName !== undefined ? { ceName: body.ceName } : {}),
       ...(body.ceId !== undefined ? { ceId: body.ceId } : {}),
       ...(body.siteName !== undefined ? { siteName: body.siteName } : {}),

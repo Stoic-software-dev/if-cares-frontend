@@ -200,13 +200,20 @@ const weeklyTemplateSchema = z.object({
 // The empty string stays legal on update because a site can genuinely belong to
 // no claim - the training site does - and the claim screen already says so.
 // Creating one that way is not allowed: that is how a real site goes missing.
-export const SITES_STATES = ['TX', 'OK'];
-const stateRequired = z.string().trim().toUpperCase().pipe(z.enum(SITES_STATES, { error: 'Pick TX or OK.' }));
+//
+// Which states exist is a setting an administrator edits (`src/lib/site-states.js`),
+// so only the shape can be checked here. Membership is checked in the route,
+// where the current list can be read.
+const stateRequired = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .pipe(z.string().regex(/^[A-Z]{2}$/, 'Pick the state this site files under.'));
 const stateOptional = z
   .string()
   .trim()
   .toUpperCase()
-  .pipe(z.enum([...SITES_STATES, ''], { error: 'A site is in TX, in OK, or in no claim at all.' }));
+  .pipe(z.string().regex(/^([A-Z]{2})?$/, 'A site is in one state, or in no claim at all.'));
 
 const siteFields = {
   // The full legacy name with its school-year prefix: it is the identity every

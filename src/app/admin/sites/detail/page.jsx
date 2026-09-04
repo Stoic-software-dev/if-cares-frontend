@@ -46,7 +46,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
 import { apiPut } from '@/lib/api-client';
-import { ALL_MEALS_PATH, SITES_PATH, cachedGet, invalidate } from '@/lib/data-cache';
+import {
+  ALL_MEALS_PATH,
+  SITES_PATH,
+  SITE_STATES_PATH,
+  cachedGet,
+  invalidate,
+  useCachedGet,
+} from '@/lib/data-cache';
 import { todayYmd } from '@/lib/calendar';
 import { shortSiteName, siteState, siteYear } from '@/lib/sites';
 
@@ -275,6 +282,9 @@ function SiteDetailScreen() {
 
   const generateDays = async () => {
     setGenerating(true);
+    // Generating a cycle writes a couple of hundred rows and is reached from
+    // the menu, which is gone the moment it is clicked.
+    const pending = toast.loading('Generating the service days');
     try {
       const res = await apiPut(`/api/sites/${record.id}`, {});
       invalidate(ALL_MEALS_PATH);
@@ -282,10 +292,11 @@ function SiteDetailScreen() {
       toast.success(
         res.added
           ? `${res.added} service ${res.added === 1 ? 'day' : 'days'} added`
-          : 'The calendar already matches the cycle'
+          : 'The calendar already matches the cycle',
+        { id: pending }
       );
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message, { id: pending });
     } finally {
       setGenerating(false);
     }
@@ -305,6 +316,9 @@ function SiteDetailScreen() {
     }
   };
 
+
+  const stateList = useCachedGet(SITE_STATES_PATH);
+  const siteStates = useMemo(() => stateList.data?.data?.states ?? [], [stateList.data]);
 
   const stats = useMemo(() => {
     const submitted = (meals?.excludedDates ?? []).filter((ymd) => ymd.startsWith(monthPrefix)).length;
@@ -573,7 +587,13 @@ function SiteDetailScreen() {
           </DialogHeader>
 
           <div className="max-h-[65vh] overflow-y-auto pr-1">
-            <SiteForm value={draft} onChange={setDraft} attempted={attempted} mode="edit" />
+            <SiteForm
+              value={draft}
+              onChange={setDraft}
+              attempted={attempted}
+              mode="edit"
+              states={siteStates}
+            />
           </div>
 
           <DialogFooter>

@@ -5,8 +5,24 @@ de IF Cares. El staff de cada sitio registra día a día la asistencia y las com
 por estudiante; los administradores gestionan sitios, usuarios, calendarios y correcciones,
 y generan los reportes consolidados mensuales que se presentan por estado (TX / OK).
 
-Sistema de registro: **PostgreSQL** propio. Las Google Sheets del sistema anterior quedaron
-congeladas como archivo histórico en el cutover; ningún proceso las lee ni las escribe.
+> ### Dónde está el proyecto hoy (3-sep-2026)
+>
+> **El cutover todavía no ocurrió.** Los 56 sitios operan sobre el sistema anterior: la rama
+> `main`, que no tiene API propia y lee y escribe las Google Sheets a través del Apps Script.
+> Las Sheets siguen vivas y siguen siendo el registro real.
+>
+> Este README describe la **aplicación 2.0**, que vive en `v2-mock` y deploya a
+> `if-cares-frontend-production.up.railway.app`. Ese nombre dice "production" y **no lo es**:
+> es el entorno de la 2.0, contra su propia base de Supabase.
+>
+> Esa distinción no es burocracia. En septiembre se borró entera la base de Supabase porque
+> quien la tocaba había leído aquí que el cutover ya había ocurrido y la trató como el
+> sistema del que dependen los sitios. No lo era — y aun así costó una reconstrucción
+> completa, porque no hay backup.
+
+Sistema de registro de la 2.0: **PostgreSQL** propio. Al cutover las Google Sheets quedarán
+congeladas como archivo histórico y ningún proceso las leerá ni las escribirá. Hasta
+entonces son la fuente de la que `scripts/import-*` reconstruye esta base.
 
 > 📄 Especificación técnica completa: [SPECS.md](SPECS.md) · Ruta de trabajo: [ROADMAP.md](ROADMAP.md)
 
@@ -98,7 +114,7 @@ congeladas como archivo histórico en el cutover; ningún proceso las lee ni las
 | UI | Tailwind CSS + shadcn/ui; librerías headless (react-hook-form + zod, TanStack Table, react-day-picker, Sonner, Vaul, lucide, motion). Estética por tokens (CSS vars) |
 | Archivos | Google Drive vía service account: menús y todos los PDFs generados (`docs/DRIVE-STORAGE.md`) |
 | Email | Gmail del Workspace de ifcares.org (reset de contraseña, requests, reminders, envío de reportes) |
-| Hosting | Railway — prod deploya desde `main` |
+| Hosting | Railway — `v2-mock` deploya a `if-cares-frontend-production.up.railway.app`, que pese al nombre es el entorno de la 2.0 y no el sistema en uso (ver arriba) |
 
 ## Desarrollo local
 

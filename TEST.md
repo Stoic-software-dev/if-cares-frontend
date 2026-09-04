@@ -29,9 +29,17 @@ despeinarse**, porque la pantalla decía que todo estaba bien. §8 existe por el
 
 ### 1.1 Dónde correrlo
 
-Contra **producción** (`https://if-cares-frontend-production.up.railway.app`) mientras la app
-no esté en uso real. Es el único entorno con las integraciones de verdad conectadas: Drive,
-Gmail, Supabase. Un bug de integración no aparece en local, y §8 es justamente eso.
+Contra el **entorno de la 2.0** (`https://if-cares-frontend-production.up.railway.app`, que
+deploya desde `v2-mock`). Es el único con las integraciones de verdad conectadas: Drive,
+Gmail y la base de Supabase. Un bug de integración no aparece en local, y §8 es justamente eso.
+
+**Ese nombre dice "production" y no lo es.** El sistema del que dependen los 56 sitios sigue
+siendo la app de Google Sheets en `main`, porque el cutover no ocurrió. Testear acá no puede
+frenar a un sitio ni tocar un reclamo real.
+
+Lo que sí puede es costar días: **esa base de Supabase no tiene backup** — el proyecto está
+en el tier gratis — y es la única copia de todo lo importado. El 3-sep-2026 se borró entera
+y hubo que reconstruirla desde `migration-data/history` y las Sheets. Ver la regla 7 de §1.4.
 
 Antes de empezar, anotá el commit desplegado. Un hallazgo sin commit no es reproducible.
 
@@ -47,7 +55,11 @@ Antes de empezar, anotá el commit desplegado. Un hallazgo sin commit no es repr
 | Sin contraseña | crear sin mandar mail | Debe comportarse igual que una cuenta inexistente |
 
 Creá las que falten desde `/admin/users` y **prefijalas con `ZZ `** para poder barrerlas
-después. Ese prefijo ya se usa en producción para alumnos dados de baja.
+después. Ese prefijo ya se usa para alumnos dados de baja.
+
+> Al 3-sep-2026 **ninguna de las dos primeras existe**: se perdieron cuando se borró la base
+> y se volvieron a borrar al terminar esa ronda de testeo. Las contraseñas de la tabla son
+> las que hay que ponerles al recrearlas, para que este documento siga siendo cierto.
 
 ### 1.3 Datos de prueba
 
@@ -65,6 +77,16 @@ después. Ese prefijo ya se usa en producción para alumnos dados de baja.
 4. Los mails salen **de verdad**. Usá direcciones tuyas o `@example.org` (que no existe).
 5. Antes de un test destructivo, anotá cómo revertirlo. Si no sabés, no lo hagas.
 6. **Nada de datos personales reales** en capturas o reportes.
+7. **Ningún comando de Prisma que no sea de lectura, contra la base de Supabase.** No hay
+   backup. Dos formas concretas de perderla, las dos usadas el 3-sep-2026:
+   - `--shadow-database-url` apuntando a esa base. Prisma **resetea** la shadow database
+     antes de usarla: `migrate diff --from-migrations` con el `DIRECT_URL` real la dropeó
+     entera. Para generar el SQL de una migración, escribilo a mano.
+   - Borrar por query en vez de por id. Limpiar con `where: { siteId, date }` se llevó
+     puestas filas anuladas de otro que compartían el día. Guardá el id que te devuelve la
+     creación y borrá sólo por ése.
+8. Si vas a limpiar lo que creaste, **contá primero y borrá después**: listá las filas, mirá
+   quién las creó y cuándo, y recién entonces borrá.
 
 ---
 

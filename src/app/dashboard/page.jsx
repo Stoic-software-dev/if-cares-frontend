@@ -145,13 +145,13 @@ function DashboardScreen() {
     <AppShell width="wide">
       <div className="flex flex-col gap-4">
         {/* One control bar: which site, which month, what to show. */}
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-2 lg:flex-row lg:items-center lg:gap-3">
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-2 md:flex-row md:flex-wrap md:items-center md:gap-3">
           <SiteSwitcher
             sites={sites}
             value={selectedSite}
             onChange={pickSite}
             variant="bare"
-            className="lg:w-[21rem]"
+            className="md:w-[21rem]"
           />
 
           <span className="hidden h-8 w-px shrink-0 bg-border lg:block" />
@@ -184,7 +184,7 @@ function DashboardScreen() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:ml-auto">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:ml-auto">
             <Segmented
               ariaLabel="Filter days"
               value={filter}

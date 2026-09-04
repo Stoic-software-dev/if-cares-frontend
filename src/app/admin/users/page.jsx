@@ -436,7 +436,7 @@ function AdminUsersScreen() {
           }
         />
 
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
           <SearchInput
             value={query}
             onChange={(value) => {
@@ -444,7 +444,7 @@ function AdminUsersScreen() {
               setPage(0);
             }}
             placeholder="Search by name or email"
-            className="lg:w-80"
+            className="md:min-w-[14rem] md:max-w-md md:flex-1"
           />
 
           <Segmented
@@ -459,7 +459,7 @@ function AdminUsersScreen() {
               { value: 'INACTIVE', label: 'Inactive' },
               { value: 'ALL', label: 'All' },
             ]}
-            className="lg:w-auto"
+            className="md:w-auto"
           />
 
           <NativeSelect
@@ -469,7 +469,7 @@ function AdminUsersScreen() {
               setRoleFilter(event.target.value);
               setPage(0);
             }}
-            className="lg:w-44"
+            className="md:w-44"
           >
             <option value="ALL">Every role</option>
             <option value="ADMIN">Administrators</option>
@@ -483,7 +483,7 @@ function AdminUsersScreen() {
               setSiteFilter(event.target.value);
               setPage(0);
             }}
-            className="lg:ml-auto lg:w-64"
+            className="md:ml-auto md:w-64"
           >
             <option value="ALL">All sites</option>
             {siteOptions.map((name) => (
@@ -507,7 +507,7 @@ function AdminUsersScreen() {
         {users && (
           <>
             <div className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px_56px] gap-4 border-b border-border bg-surface-sunken px-4 py-2 lg:grid">
+              <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px_56px] gap-4 border-b border-border bg-surface-sunken px-4 py-2 md:grid">
                 {['User', 'Sites', 'Role', 'Status', ''].map((heading, i) => (
                   <span
                     key={heading || i}
@@ -524,7 +524,7 @@ function AdminUsersScreen() {
                     key={user.id}
                     className={cn(
                       'flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-accent/30',
-                      'lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px_56px] lg:items-center lg:gap-4',
+                      'md:grid md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px_56px] md:items-center md:gap-4',
                       !user.active && 'opacity-70'
                     )}
                   >
@@ -555,7 +555,7 @@ function AdminUsersScreen() {
                       {user.active ? 'Active' : 'Inactive'}
                     </Badge>
 
-                    <div className="flex lg:justify-end">
+                    <div className="flex md:justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${user.name}`}>

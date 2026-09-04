@@ -210,7 +210,7 @@ function HolidaysScreen() {
 
         <SectionTabs options={CALENDAR_TABS} ariaLabel="Calendar section" />
 
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
           <Segmented
             ariaLabel="Filter holidays"
             value={scope}
@@ -219,13 +219,13 @@ function HolidaysScreen() {
               { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
               { value: 'past', label: 'Past', count: counts.past },
             ]}
-            className="lg:w-auto"
+            className="md:w-auto"
           />
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search by name or site"
-            className="lg:ml-auto lg:w-80"
+            className="md:ml-auto md:min-w-[13rem] md:max-w-sm md:flex-1"
           />
         </div>
 

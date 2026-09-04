@@ -195,7 +195,7 @@ function InboxScreen() {
           }
         />
 
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
           <Segmented
             ariaLabel="Filter by status"
             value={status}
@@ -206,20 +206,20 @@ function InboxScreen() {
               { value: 'RESOLVED', label: 'Resolved', count: counts.RESOLVED },
               { value: 'ALL', label: 'All', count: counts.ALL },
             ]}
-            className="lg:w-auto"
+            className="md:w-auto"
           />
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search type, site or requester"
-            className="lg:ml-auto lg:w-72"
+            className="md:ml-auto md:min-w-[13rem] md:max-w-sm md:flex-1"
           />
           {siteOptions.length > 1 && (
             <NativeSelect
               aria-label="Filter by site"
               value={siteFilter}
               onChange={(event) => setSiteFilter(event.target.value)}
-              className="lg:w-60"
+              className="md:w-60"
             >
               <option value="ALL">All sites</option>
               {siteOptions.map((name) => (

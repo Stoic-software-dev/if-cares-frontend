@@ -94,7 +94,7 @@ function MonitoringScreen() {
           }
         />
 
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
           <Segmented
             ariaLabel="Filter"
             value={scope}
@@ -103,13 +103,13 @@ function MonitoringScreen() {
               { value: 'open', label: 'Still happening' },
               { value: 'all', label: 'Everything' },
             ]}
-            className="lg:w-auto"
+            className="md:w-auto"
           />
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search message, screen or user"
-            className="lg:ml-auto lg:w-80"
+            className="md:ml-auto md:min-w-[13rem] md:max-w-sm md:flex-1"
           />
         </div>
 

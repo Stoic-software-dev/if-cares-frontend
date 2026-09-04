@@ -192,14 +192,14 @@ function AdminSitesScreen() {
           }
         />
 
-        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center">
-          <SearchInput value={query} onChange={setQuery} placeholder="Search sites" className="lg:w-96" />
+        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
+          <SearchInput value={query} onChange={setQuery} placeholder="Search sites" className="md:min-w-[14rem] md:max-w-md md:flex-1" />
           {states.length > 1 && (
             <NativeSelect
               aria-label="Filter by state"
               value={stateFilter}
               onChange={(event) => setStateFilter(event.target.value)}
-              className="lg:w-44"
+              className="md:w-44"
             >
               <option value="ALL">Every state</option>
               {states.map((state) => (
@@ -213,7 +213,7 @@ function AdminSitesScreen() {
             aria-label="Sort sites"
             value={sort}
             onChange={(event) => setSort(event.target.value)}
-            className="lg:ml-auto lg:w-56"
+            className="md:ml-auto md:w-56"
           >
             <option value="name">Sort by name</option>
             <option value="missing">Sort by missing counts</option>

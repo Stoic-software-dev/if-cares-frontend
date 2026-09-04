@@ -180,8 +180,8 @@ function ReportsScreen() {
         />
 
         {sites && (
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-            <SiteSwitcher sites={sites} value={site} onChange={setSite} className="lg:w-[26rem]" />
+          <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between">
+            <SiteSwitcher sites={sites} value={site} onChange={setSite} className="md:w-[26rem]" />
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon-sm" aria-label="Previous month" onClick={() => step(-1)}>
                 <ChevronLeft />

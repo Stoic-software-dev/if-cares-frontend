@@ -266,12 +266,12 @@ function CalendarScreen() {
         <SectionTabs options={CALENDAR_TABS} ariaLabel="Calendar section" />
 
         {sites && (
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between">
             <SiteSwitcher
               sites={sites}
               value={site}
               onChange={(name) => (dirty ? setPendingSite(name) : setSite(name))}
-              className="lg:w-[26rem]"
+              className="md:w-[26rem]"
             />
 
             <div className="flex items-center gap-2">

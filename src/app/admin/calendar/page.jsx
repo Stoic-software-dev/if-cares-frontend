@@ -271,7 +271,7 @@ function CalendarScreen() {
               sites={sites}
               value={site}
               onChange={(name) => (dirty ? setPendingSite(name) : setSite(name))}
-              className="md:w-[26rem]"
+              className="md:w-auto md:max-w-[26rem]"
             />
 
             <div className="flex items-center gap-2">

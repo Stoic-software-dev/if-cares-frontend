@@ -151,12 +151,12 @@ function DashboardScreen() {
             value={selectedSite}
             onChange={pickSite}
             variant="bare"
-            className="md:w-[21rem]"
+            className="md:w-auto md:max-w-[22rem]"
           />
 
           <span className="hidden h-8 w-px shrink-0 bg-border lg:block" />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 md:ml-auto lg:ml-0">
             <button
               type="button"
               aria-label="Previous month"
@@ -187,6 +187,9 @@ function DashboardScreen() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:w-full lg:ml-auto lg:w-auto">
             <Segmented
               ariaLabel="Filter days"
+              // En tablet los filtros tienen su propia fila: que la ocupen entera,
+              // en vez de quedar chicos a la izquierda con media fila vacia.
+              className="md:w-full lg:w-auto"
               value={filter}
               onChange={setFilter}
               options={[

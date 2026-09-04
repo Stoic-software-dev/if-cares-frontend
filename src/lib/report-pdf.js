@@ -178,7 +178,9 @@ async function drawSignature(ctx, y, { signature, signedBy, title }) {
   if (signature?.startsWith('data:image/png;base64,')) {
     try {
       png = await doc.embedPng(Buffer.from(signature.split(',')[1], 'base64'));
-      const scale = Math.min(boxWidth / png.width, 44 / png.height);
+      // Never enlarged past its own size: upscaling a small pad's PNG only
+      // makes it blurry, and the two documents scale signatures the same way.
+      const scale = Math.min(boxWidth / png.width, 44 / png.height, 1);
       sigWidth = png.width * scale;
       sigHeight = png.height * scale;
     } catch {

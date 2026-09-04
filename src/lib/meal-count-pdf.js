@@ -174,8 +174,23 @@ export async function buildMealCountPdf(count) {
   cellText(count.totals.sup, 7, 9, { bold: true });
   y -= ROW_HEIGHT;
 
-  // Certification + signature block, kept together
-  const blockHeight = 130;
+  // Certification + signature block, kept together.
+  //
+  // The signature is decoded before the break is decided, because how tall it
+  // is decides how tall the block is. A fixed 130 was right for the blank line
+  // and about twenty points short for a full height signature, which dropped
+  // "Staff signature" into the bottom margin on a page that ended just so.
+  let png = null;
+  if (count.signature?.startsWith('data:image/png;base64,')) {
+    try {
+      png = await doc.embedPng(count.signature.slice('data:image/png;base64,'.length));
+    } catch {
+      png = null; // falls through to the blank signature line below
+    }
+  }
+  const sigScale = png ? Math.min(180 / png.width, 55 / png.height, 1) : 0;
+  const sigHeight = png ? png.height * sigScale : 0;
+  const blockHeight = png ? 94 + sigHeight : 124;
   if (y < MARGIN + blockHeight) newPage();
   y -= 16;
   text('Certification', MARGIN, 9, { bold: true });
@@ -193,24 +208,15 @@ export async function buildMealCountPdf(count) {
   // ago became a count whose daily form answered 500, at the moment somebody
   // needed the form. The row is still on the dashboard, still in the monthly
   // report and still in the claim; only its own document was unbuildable.
-  let png = null;
-  if (count.signature?.startsWith('data:image/png;base64,')) {
-    try {
-      png = await doc.embedPng(count.signature.slice('data:image/png;base64,'.length));
-    } catch {
-      png = null; // falls through to the blank signature line below
-    }
-  }
-
+  // Decoding happens above, where the block's height is worked out.
   if (png) {
-    const scale = Math.min(180 / png.width, 55 / png.height, 1);
     page.drawImage(png, {
       x: MARGIN,
-      y: y - png.height * scale,
-      width: png.width * scale,
-      height: png.height * scale,
+      y: y - sigHeight,
+      width: png.width * sigScale,
+      height: sigHeight,
     });
-    y -= png.height * scale + 6;
+    y -= sigHeight + 6;
   } else {
     y -= 30;
     text('Signature on file in the previous system', MARGIN, 8, { color: MUTED });

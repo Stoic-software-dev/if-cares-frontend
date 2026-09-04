@@ -107,6 +107,18 @@ function AdminSitesScreen() {
     return mapped;
   }, [sites, allMeals, query, stateFilter, sort, monthPrefix, today, stateByName]);
 
+  const totals = useMemo(
+    () =>
+      rows.reduce(
+        (acc, row) => ({
+          missing: acc.missing + row.stats.missing,
+          submitted: acc.submitted + row.stats.submitted,
+        }),
+        { missing: 0, submitted: 0 }
+      ),
+    [rows]
+  );
+
   // Any change to what is being listed starts the listing over: page 7 of a
   // filter that now returns four sites is an empty screen.
   useEffect(() => {

@@ -70,10 +70,22 @@ export const POST = handle(async (req) => {
     const parsed = rowSchema.safeParse(raw);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
+      // Zod's own text cannot be shown to anybody: under the Next runtime an
+      // issue without a message of its own arrives as the bare string "Invalid
+      // input", so a spreadsheet with the word "nueve" in the age column told
+      // the administrator "Invalid input" and left them to guess which column.
+      // The field name is the useful half when the schema has nothing to say.
+      const written = (issue?.message ?? '').trim();
+      const useless = !written || /^(invalid input|required)\b/i.test(written);
+      const field = issue?.path?.length ? issue.path.join('.') : '';
       skipped.push({
         line,
         name: typeof raw?.name === 'string' ? raw.name : '',
-        reason: issue?.message ?? 'That row could not be read.',
+        reason: useless
+          ? field
+            ? `That is not a valid ${field}.`
+            : 'That row could not be read.'
+          : written,
       });
       return;
     }

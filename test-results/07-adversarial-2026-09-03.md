@@ -8,6 +8,50 @@
 > ~120 requests de API, barridos responsive de 320 a 1440 px sobre 15 pantallas, y lectura
 > de las 42 rutas de API y de los 39 módulos de `src/lib`.
 
+## Cuarta pasada (4-sep-2026): leer los documentos, no medirlos
+
+Esta pasada fue contra lo que las tres anteriores habían dejado sin tocar. Casi todo pasó.
+
+**Los PDFs dicen lo que dice la base.** Hasta acá sólo había comparado tamaños y cantidad de
+filas, que es no haber verificado nada. Extrayendo el texto real (pypdf; el contenido va en
+strings hex, por eso los extractores caseros anteriores devolvían vacío):
+
+- *Mensual*, BGC Cooke oct-2025: 23 filas de día, la suma de las filas y la línea "Totals"
+  coinciden exactas con la base — att 2803, brk 0, lun 427, snk 1147, sup 2375.
+- *Claim consolidado* TX oct-2025: **41 de 41 sitios presentes, ninguno ausente**, totales
+  exactos (11594 / 0 / 448 / 7698 / 7065), foundation id y encabezado correctos, y las 17
+  filas por sitio que el parser pudo aislar coinciden todas.
+
+**La firma pública, de punta a punta.** Token emitido, GET anónimo sin filtrar nada, PDF sin
+firmar servido, firma de un punto rechazada (el chequeo nuevo la agarra), firma válida
+aceptada, token quemado al primer uso. El PDF pasa a nombrar al firmante y el registro guarda
+`signedBy`, `signedTitle`, `signedAt` y la imagen.
+
+**El import de roster.** Diez filas, dos buenas y ocho problemáticas: cada una rechazada con
+su motivo y su número de línea, el dry-run idéntico a la corrida real, espacios normalizados,
+edad derivada del cumpleaños. Un solo defecto, el mismo del §27 en un lugar que no había
+tocado: una edad no numérica se reportaba como `"Invalid input"`, porque este endpoint arma
+su propio motivo y no pasa por `handle()`. **Arreglado** — ahora dice *"That is not a valid
+age."*
+
+**Modo oscuro y contraste.** 6 pantallas × 2 temas, midiendo luminancia relativa WCAG de cada
+texto contra su fondo realmente pintado: **cero fallos AA**. (Un primer intento dio 7 falsos
+positivos por forzar la clase `dark` después del pintado; medido cargando el tema desde el
+arranque, no hay ninguno.)
+
+**Compuerta de reminders.** Sin secreto → 401, secreto equivocado → 401, con secreto y
+`enabled:false` → `skipped: disabled`. Correcto.
+
+> **Nota de método.** Al probar la compuerta puse `hour: 3` creyendo que "no es la hora
+> actual" saltearía. La regla es **`localHour() < settings.hour`** — a esa hora *o después* —
+> y está documentada en el propio código que yo ya había leído. Así que no salteó: **disparó
+> una corrida real**. El desvío aguantó y todo cayó en las dos casillas de prueba, ningún
+> sitio real fue notificado; corté el server, restauré `enabled:false, hour:9` y borré
+> `reminders.lastRunDay`. Prueba, de paso, que el camino de envío de reminders funciona — que
+> era justamente lo que faltaba verificar. No es la forma de haberlo averiguado.
+
+---
+
 ## Tercera pasada (4-sep-2026): las integraciones, por fin con mail conectado
 
 Con `MAIL_FROM`, `MAIL_AS` y `MAIL_REDIRECT_TO` cargados desde Railway se pudo hacer lo que

@@ -76,17 +76,30 @@ export function handle(fn) {
       if (error instanceof ZodError) {
         const first = error.issues?.[0];
         const field = first?.path?.length ? first.path.join('.') : '';
-        // The schema's own message is written for the person reading it. Only
-        // when there is none - a field left out entirely, where Zod has nothing
-        // to say - is the field name worth showing, and then it is the whole
-        // point of the message rather than a technical suffix on the end of one.
-        // A field left out entirely has no message worth showing. Zod's own text
-        // for it - "Invalid input", or "Invalid input: expected string, received
-        // undefined" depending on the version - tells the reader nothing, so
-        // that is the one case where naming the field IS the message.
-        const generic = !first?.message || /^(required|invalid input)/i.test(first.message);
+        const written = (first?.message ?? '').trim();
+
+        // A message the schema author wrote is always the best one, so it wins.
+        //
+        // What CANNOT be trusted is Zod's own text. Under the Next runtime every
+        // issue without a custom message arrives as the bare string "Invalid
+        // input" - not the "Too small: expected number to be >0" that the same
+        // schema produces under plain node. Deciding between "missing" and
+        // "wrong" by reading that string therefore always chose "missing", and
+        // the API told people that a field they had just filled in was required:
+        // an age of 999 came back as "age is required", a negative amount as
+        // "amount is required". A form that says a filled field is empty is
+        // worse than one that says nothing.
+        //
+        // So the CODE decides, not the wording. `invalid_type` is the shape
+        // being wrong, which for a form is almost always a field left out;
+        // everything else - too_small, too_big, invalid_value, invalid_format -
+        // means something WAS given and it is not allowed.
+        const isZodDefault = !written || /^invalid input\b/i.test(written) || /^required\b/i.test(written);
+        if (!isZodDefault) return legacyError(written, 422);
+
+        if (!field) return legacyError('Invalid input.', 422);
         return legacyError(
-          generic ? (field ? `${field} is required.` : 'Invalid input.') : first.message,
+          first?.code === 'invalid_type' ? `${field} is required.` : `${field} is not valid.`,
           422
         );
       }

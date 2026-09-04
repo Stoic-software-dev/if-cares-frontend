@@ -8,6 +8,30 @@
 > ~120 requests de API, barridos responsive de 320 a 1440 px sobre 15 pantallas, y lectura
 > de las 42 rutas de API y de los 39 módulos de `src/lib`.
 
+## Segunda pasada (4-sep-2026): tres hallazgos más, todos en lo que arreglé
+
+Re-corrida completa contra el código ya arreglado y la base reconstruida. Los 24 arreglos
+siguen en pie, el barrido de contrato dio **81 comprobaciones y 0 desvíos**, scoping 7/7,
+concurrencia 1 éxito + 5 conflictos limpios, y el ciclo de vida completo de un count
+(corregir → aprobar → desaprobar → anular → restaurar) se comporta. También verifiqué lo que
+**no** tenía que romperse: un día con los cuatro flags en false sigue aceptando las cuatro
+comidas (son el 89% del calendario importado), editar un sitio sin estado sigue guardando, y
+el reset de contraseña funciona de punta a punta con token de un solo uso.
+
+Aparecieron tres cosas, y las tres son consecuencia de arreglos míos:
+
+| # | Qué | Cómo quedó |
+|---|---|---|
+| **25** | **`correct` aceptaba comidas que el día no sirve.** El fix de §2 cubrió el submit y no la corrección, así que el agujero seguía abierto — más angosto, sólo para admins, pero la corrección escribe directo sobre el count que alimenta el claim, y la pantalla no dibuja esa columna. Otra vez "la regla vive en el navegador" | Permitido = lo que abre el calendario **∪** lo que el count ya tiene. Un count viejo con un calendario que cambió sigue siendo corregible; una comida que ni el calendario abre ni el count tiene, no |
+| **26** | **`/admin/requests` con scroll horizontal a 320 px** (389 vs 310). El control segmentado del filtro: botones `flex-1` sin `min-w-0`, que por eso nunca bajan de su ancho mínimo y desbordan su propio contenedor. Misma familia que el bug del grid de §7. En la primera pasada la salida se truncó justo en esa fila y nunca lo vi | `min-w-0` en el botón, la etiqueta trunca, el contador nunca |
+| **27** | **Todo mensaje de validación decía "X is required", aunque el campo viniera lleno.** Bajo el runtime de Next, Zod devuelve el string pelado `"Invalid input"` para cualquier issue sin mensaje propio — no los textos detallados que da Node suelto. `handle()` decidía entre "falta" y "está mal" **leyendo ese texto**, así que siempre elegía "falta": edad 999 → *"age is required"*, monto −5 → *"amount is required"*. Un formulario que dice que un campo lleno está vacío es peor que uno que no dice nada | Decide el `code` del issue, no el texto. `invalid_type` es "falta"; `too_small`, `too_big`, `invalid_value` son "está mal". Más mensajes propios en los campos que la gente toca |
+
+El 27 es el que más me importa de los tres: no lo encontró ninguna prueba de las de "¿devuelve
+el código correcto?", porque el status siempre fue 422. Sólo aparece leyendo lo que el usuario
+lee.
+
+---
+
 ## Estado de los arreglos (3-sep-2026)
 
 **Los 23 hallazgos están cerrados.** Verificados contra la app corriendo, salvo donde se

@@ -3,10 +3,15 @@ import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { ymdToUtcDate, toCanonicalTime } from '@/lib/dates';
+import { mealsNotServed, mealsOrAll } from '@/lib/calendar';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Where each meal sits in a correction row, which is the submit row's shape:
+// [number, name, age, attendance, breakfast, lunch, snack, supper].
+const MEAL_COLUMN = { brk: 4, lunch: 5, snk: 6, sup: 7 };
 
 // Bounded for the same reason the submit path is: a roster is a few hundred
 // names, and a position or an age below zero is not one.
@@ -67,6 +72,35 @@ export const POST = handle(async (req) => {
   const timeOut = toCanonicalTime(body.timeOut);
   if (!timeIn || !timeOut) throw new ApiError(422, 'Time in and time out are required.');
   if (timeOut <= timeIn) throw new ApiError(422, 'Time out has to be after time in.');
+
+  // The meals a correction may touch: what this day's calendar opens, plus what
+  // the count already carries.
+  //
+  // The second half is why this is not simply the submit rule. A count filed
+  // years ago on a calendar that has since changed still has to be correctable
+  // as what it is - refusing the meals already in it would make the record
+  // unfixable. But a meal that neither the calendar opens nor the count holds is
+  // a new claim being written from nothing, and the screen does not even draw a
+  // column for it: it offers exactly this union. Without the check here the API
+  // was again the looser of the two.
+  const serviceDay = await prisma.serviceDay.findUnique({
+    where: { siteId_date: { siteId: site.id, date } },
+    select: { brk: true, lunch: true, snk: true, sup: true },
+  });
+  const open = mealsOrAll(serviceDay);
+  const allowed = {
+    brk: open.brk || count.entries.some((entry) => entry.breakfast),
+    lunch: open.lunch || count.entries.some((entry) => entry.lunch),
+    snk: open.snk || count.entries.some((entry) => entry.snack),
+    sup: open.sup || count.entries.some((entry) => entry.supper),
+  };
+  const refused = mealsNotServed(allowed).filter((meal) =>
+    body.data.some((row) => row[MEAL_COLUMN[meal.key]])
+  );
+  if (refused.length) {
+    const names = refused.map((meal) => meal.label.toLowerCase()).join(', ');
+    throw new ApiError(422, `This site does not serve ${names} on that day.`);
+  }
 
   const roster = await prisma.student.findMany({
     where: { siteId: site.id },

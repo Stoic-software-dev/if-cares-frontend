@@ -34,7 +34,7 @@ export const addStudentSchema = z
       (v) => (typeof v === 'string' ? v.trim().replace(/\s{2,}/g, ' ') : v),
       z.string().min(1, 'Please enter a name.')
     ),
-    age: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(120).optional()),
+    age: z.preprocess(emptyToUndefined, z.coerce.number('Type an age.').int('Whole numbers only.').min(0, 'An age cannot be negative.').max(120, 'That age is not plausible.').optional()),
     site: z.string().min(1, 'Please select a Site.'),
     birthdate: z.preprocess(
       emptyToUndefined,
@@ -51,7 +51,7 @@ export const editStudentSchema = z.object({
     (v) => (typeof v === 'string' ? v.trim().replace(/\s{2,}/g, ' ') : v),
     z.string().min(1, 'Please enter a name.')
   ),
-  age: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).max(120).optional()),
+  age: z.preprocess(emptyToUndefined, z.coerce.number('Type an age.').int('Whole numbers only.').min(0, 'An age cannot be negative.').max(120, 'That age is not plausible.').optional()),
   site: z.string().min(1, 'Please select a Site.'),
 });
 
@@ -96,8 +96,11 @@ export const mealCountSchema = z.object({
 });
 
 export const requestSchema = z.object({
-  requestType: z.enum(REQUEST_TYPES),
-  amount: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional()),
+  requestType: z.enum(REQUEST_TYPES, { error: 'Pick one of the request types.' }),
+  amount: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number('Type a number.').int('Whole numbers only.').positive('It has to be more than zero.').optional()
+  ),
   time: z.preprocess(emptyToUndefined, z.string().optional()),
   // The number says how many; this says what. Optional, because a request for
   // twelve condiments explains itself.
@@ -106,7 +109,7 @@ export const requestSchema = z.object({
 });
 
 export const requestStatusSchema = z.object({
-  status: z.enum(['NEW', 'IN_PROGRESS', 'RESOLVED']),
+  status: z.enum(['NEW', 'IN_PROGRESS', 'RESOLVED'], { error: 'That is not one of the three states.' }),
   // What the administrator answers when resolving. Optional, because moving a
   // request to In Progress does not need an explanation.
   responseComment: z.string().trim().max(1000).optional(),

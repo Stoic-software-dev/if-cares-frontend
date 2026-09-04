@@ -56,18 +56,24 @@ export function Segmented({ options, value, onChange, size = 'default', classNam
             data-active={active}
             aria-selected={active}
             onClick={() => onChange(option.value)}
+            // `min-w-0` is what lets `flex-1` actually shrink. Without it a flex
+            // item never goes below its own min-content, so three options
+            // carrying count badges overflowed their own container and put the
+            // whole requests inbox into a sideways scroll at 320px. The label
+            // gives way first; the count never does, because a filter that
+            // shows no number is not worth keeping.
             className={cn(
-              'relative z-10 flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-semibold outline-none transition-colors duration-fast',
+              'relative z-10 flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-semibold outline-none transition-colors duration-fast',
               'focus-visible:ring-2 focus-visible:ring-ring',
               size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[13px]',
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            {option.label}
+            <span className="truncate">{option.label}</span>
             {option.count !== undefined && (
               <span
                 className={cn(
-                  'rounded-full px-1.5 py-px text-[10.5px] font-semibold tabular-nums',
+                  'shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-semibold tabular-nums',
                   active ? 'bg-primary-soft text-primary-strong dark:text-primary' : 'bg-border/70 text-muted-foreground'
                 )}
               >

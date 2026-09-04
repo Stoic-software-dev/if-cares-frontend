@@ -51,9 +51,9 @@ export function accountItemsFor(admin, user) {
 // Which nav entry owns a given pathname, so the active state survives deep
 // links (/admin/sites/<name> still lights up Sites).
 export function activeKeyForPath(pathname = '') {
-  if (pathname.startsWith('/admin/sites')) return 'sites';
-  // Holidays is a tab of the calendar now, so it lights up the same entry.
-  if (pathname.startsWith('/admin/calendar') || pathname.startsWith('/admin/holidays')) return 'calendar';
+  // Holidays is a tab of Sites now, so it lights up the same entry.
+  if (pathname.startsWith('/admin/sites') || pathname.startsWith('/admin/holidays')) return 'sites';
+  if (pathname.startsWith('/admin/calendar')) return 'calendar';
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin/requests')) return 'inbox';
   if (pathname.startsWith('/admin/users')) return 'users';

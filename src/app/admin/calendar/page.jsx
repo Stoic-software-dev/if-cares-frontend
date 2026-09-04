@@ -8,7 +8,6 @@ import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
-import { CALENDAR_TABS, SectionTabs } from '@/components/shell/SectionTabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -262,8 +261,6 @@ function CalendarScreen() {
             </>
           }
         />
-
-        <SectionTabs options={CALENDAR_TABS} ariaLabel="Calendar section" />
 
         {sites && (
           <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:justify-between">

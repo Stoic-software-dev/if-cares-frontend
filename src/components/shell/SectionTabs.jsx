@@ -3,10 +3,10 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { Segmented } from '@/components/ui/segmented';
 
-// Two routes, one subject. The service calendar and the holidays that close it
-// were separate entries in the navigation, which asked an administrator to know
-// they are separate screens before knowing they are the same job. As tabs, the
-// question is just "which half am I looking at".
+// Two routes, one subject. A holiday is a property of the sites it closes -
+// which sites, and on what day - so it lives with them rather than as an entry
+// of its own in the navigation. As tabs, the question is just "which half am I
+// looking at".
 export function SectionTabs({ options, ariaLabel }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -18,12 +18,14 @@ export function SectionTabs({ options, ariaLabel }) {
       value={current}
       onChange={(next) => next !== current && router.push(next)}
       options={options}
-      className="sm:w-auto"
+      // `w-auto` alone loses to the column's stretch, so the strip spanned the
+      // whole screen for the sake of two tabs.
+      className="sm:w-auto sm:self-start"
     />
   );
 }
 
-export const CALENDAR_TABS = [
-  { value: '/admin/calendar', label: 'Service days' },
+export const SITES_TABS = [
+  { value: '/admin/sites', label: 'Sites' },
   { value: '/admin/holidays', label: 'Holidays' },
 ];

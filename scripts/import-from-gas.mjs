@@ -2,7 +2,10 @@
 // Read-only against GAS (GET endpoints the app itself uses). Re-runs converge:
 // upserts on natural keys (Site.name, Student.id, [siteId, date]).
 //
-//   node scripts/import-from-gas.mjs [--dry-run] [--only=sites|students|meals] [--snapshot]
+//   node scripts/import-from-gas.mjs [--dry-run] [--only=sites|details|students|meals] [--snapshot]
+//
+// `--only=details` fills the CE block for the active sites that are still
+// missing it, without touching the roster or the calendar.
 //
 // GAS remains the source of truth until cutover; local edits may be overwritten.
 
@@ -101,6 +104,14 @@ function cleanBirthdate(value) {
 }
 
 async function importSites() {
+  // `--only=details` is the CE half on its own, for the sites that are still
+  // missing it. There was no way to ask for that: `--only=sites` deliberately
+  // SKIPS the per-site detail calls, and a full run to reach them also reruns
+  // the roster and the calendar - which is not a neutral thing to do, because
+  // the calendar phase recreates the empty submitted-date stubs for every day
+  // the live sheets have and the history export did not.
+  if (only === 'details') return importSiteDetails({ missingOnly: true });
+
   console.log('▸ Importing sites…');
   const raw = await gasGet('sites');
   await snapshot('sites', raw);
@@ -139,26 +150,45 @@ async function importSites() {
   }
   console.log(`  sites: ${seen.size} imported, ${activeCount} active`);
 
-  if (only !== 'sites') {
-    const activeSites = DRY ? [] : await prisma.site.findMany({ where: { active: true } });
-    for (const site of activeSites) {
-      const data = await gasGet('siteData', { site: site.name }, { soft: true });
-      if (!data || typeof data !== 'object') {
-        warn(`siteData missing for ${site.name}`);
-        continue;
-      }
-      await prisma.site.update({
-        where: { id: site.id },
-        data: {
-          ceName: String(data.name ?? ''),
-          ceId: String(data.ceId ?? ''),
-          siteName: String(data.siteName ?? ''),
-          siteNumber: String(data.siteNumber ?? ''),
-        },
-      });
-    }
-    if (!DRY) console.log(`  CE details filled for ${activeSites.length} active sites`);
+  if (only !== 'sites') await importSiteDetails({ missingOnly: false });
+}
+
+// The CE block a claim prints: sponsor name, CE id, site name and number. One
+// GAS call per site, and the Apps Script is the flaky half of this import, so
+// `missingOnly` exists to ask for just the handful still empty rather than
+// walking all fifty-six to fix two.
+async function importSiteDetails({ missingOnly }) {
+  console.log(`▸ Importing CE details${missingOnly ? ' (only the sites missing them)' : ''}…`);
+  if (DRY) return;
+
+  const sites = await prisma.site.findMany({
+    where: { active: true, ...(missingOnly ? { ceId: '' } : {}) },
+    orderBy: { name: 'asc' },
+  });
+  if (!sites.length) {
+    console.log('  nothing to fill.');
+    return;
   }
+
+  let filled = 0;
+  for (const site of sites) {
+    const data = await gasGet('siteData', { site: site.name }, { soft: true });
+    if (!data || typeof data !== 'object') {
+      warn(`siteData missing for ${site.name}`);
+      continue;
+    }
+    await prisma.site.update({
+      where: { id: site.id },
+      data: {
+        ceName: String(data.name ?? ''),
+        ceId: String(data.ceId ?? ''),
+        siteName: String(data.siteName ?? ''),
+        siteNumber: String(data.siteNumber ?? ''),
+      },
+    });
+    filled += 1;
+  }
+  console.log(`  CE details filled for ${filled} of ${sites.length} sites`);
 }
 
 async function importStudents() {
@@ -421,7 +451,7 @@ async function importMeals() {
 
 async function main() {
   console.log(`Import from GAS ${DRY ? '(DRY RUN) ' : ''}— active SY: ${ACTIVE_SY}`);
-  if (!only || only === 'sites') await importSites();
+  if (!only || only === 'sites' || only === 'details') await importSites();
   if (!only || only === 'students') await importStudents();
   if (!only || only === 'meals') await importMeals();
 

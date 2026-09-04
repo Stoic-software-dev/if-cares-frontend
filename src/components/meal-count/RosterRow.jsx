@@ -33,8 +33,12 @@ function RosterRowBase({ student, marks, meals, attention, onToggle }) {
         ) : (
           student.age !== '' &&
           student.age !== null && (
-            <span className="ml-auto shrink-0 text-[11px] text-muted-foreground md:ml-3">
-              Age {student.age}
+            <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground md:w-8 md:text-right">
+              {/* The phone has no column header to read it from, so it keeps the
+                  word; the table on wider screens gets the number alone, under
+                  the heading, lined up with the ones above and below it. */}
+              <span className="md:sr-only">Age </span>
+              {student.age}
             </span>
           )
         )}

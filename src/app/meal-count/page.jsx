@@ -577,9 +577,13 @@ function MealCountScreen() {
             <div className="overflow-hidden rounded-lg border border-border bg-card">
               {/* Column header doubles as a bulk action per meal. */}
               <div className="hidden items-center gap-4 border-b border-border bg-surface-sunken px-4 py-2 md:flex">
-                <span className="w-[22rem] shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                  Student
-                </span>
+                <div className="flex w-[22rem] shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                  <span>Student</span>
+                  {/* Age is a column of the roster, not a suffix on every name:
+                      the word belongs here once instead of two hundred and
+                      fifty times down the list. */}
+                  <span className="ml-auto w-8 text-right">Age</span>
+                </div>
                 <div className="ml-auto flex max-w-[34rem] flex-1 gap-1.5">
                   {meals.map((meal) => (
                     <button

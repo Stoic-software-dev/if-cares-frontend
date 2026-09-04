@@ -56,14 +56,18 @@ export function Segmented({ options, value, onChange, size = 'default', classNam
             data-active={active}
             aria-selected={active}
             onClick={() => onChange(option.value)}
-            // `min-w-0` is what lets `flex-1` actually shrink. Without it a flex
-            // item never goes below its own min-content, so three options
-            // carrying count badges overflowed their own container and put the
-            // whole requests inbox into a sideways scroll at 320px. The label
-            // gives way first; the count never does, because a filter that
-            // shows no number is not worth keeping.
+            // `min-w-0` is what lets a flex item shrink at all: without it one
+            // never goes below its own min-content, so three options carrying
+            // count badges overflowed their container and put the requests inbox
+            // into a sideways scroll at 320px.
+            //
+            // `flex-auto` rather than `flex-1` is the other half. `flex-1` is
+            // basis-0, which hands every option an equal share whatever its
+            // label - so with min-w-0 added, "Missing" and "Submitted" truncated
+            // on a 1568px monitor with room to spare. Basis-auto starts each
+            // option at its own width and only shrinks it under real pressure.
             className={cn(
-              'relative z-10 flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-semibold outline-none transition-colors duration-fast',
+              'relative z-10 flex min-w-0 flex-auto items-center justify-center gap-1.5 whitespace-nowrap rounded-sm font-semibold outline-none transition-colors duration-fast',
               'focus-visible:ring-2 focus-visible:ring-ring',
               size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[13px]',
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'

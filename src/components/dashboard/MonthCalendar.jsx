@@ -68,8 +68,7 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
             key={weekday}
             className="py-2 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
           >
-            <span className="md:hidden">{weekday.slice(0, 1)}</span>
-            <span className="hidden md:inline">{weekday}</span>
+            {weekday}
           </div>
         ))}
       </div>
@@ -81,7 +80,7 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
       >
         {cells.map((cell, index) => {
           if (!cell) {
-            return <div key={`blank-${index}`} className="h-14 md:h-[104px]" style={{ '--stagger-i': index }} />;
+            return <div key={`blank-${index}`} className="h-[68px] md:h-[116px] lg:h-[104px]" style={{ '--stagger-i': index }} />;
           }
 
           const style = STATUS[cell.status] ?? STATUS.none;
@@ -104,16 +103,16 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
                 : { 'aria-hidden': cell.status === 'none' ? 'true' : undefined })}
               style={{ '--stagger-i': index }}
               className={cn(
-                'group relative flex h-14 flex-col items-center justify-center overflow-hidden rounded-md border text-left outline-none',
+                'group relative flex h-[68px] flex-col items-center justify-center overflow-hidden rounded-md border text-left outline-none',
                 'transition-[filter,opacity,transform] duration-fast ease-out',
-                'md:h-[104px] md:items-stretch md:justify-start md:p-2',
+                'md:h-[116px] md:items-stretch md:justify-start md:p-2 lg:h-[104px]',
                 style.cell,
                 clickable && 'cursor-pointer active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring',
                 dimmed && 'opacity-25'
               )}
             >
               <span className="flex w-full items-center justify-between">
-                <span className={cn('text-[13px] font-bold tabular-nums md:text-[15px]', style.number)}>
+                <span className={cn('text-[15px] font-bold tabular-nums md:text-[15px]', style.number)}>
                   {cell.day}
                 </span>
                 {cell.status === 'submitted' &&
@@ -134,7 +133,7 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
               {cell.status !== 'none' && cell.status !== 'upcoming' && (
                 <span
                   className={cn(
-                    'mt-1 h-1 w-1 rounded-full md:hidden',
+                    'mt-1.5 h-1 w-4 rounded-full md:hidden',
                     cell.status === 'submitted' && 'bg-success',
                     cell.status === 'missing' && 'bg-destructive',
                     cell.status === 'today' && 'bg-primary',

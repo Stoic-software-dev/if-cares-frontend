@@ -184,7 +184,7 @@ function DashboardScreen() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:ml-auto">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:w-full lg:ml-auto lg:w-auto">
             <Segmented
               ariaLabel="Filter days"
               value={filter}

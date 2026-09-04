@@ -111,22 +111,37 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
                 dimmed && 'opacity-25'
               )}
             >
-              <span className="flex w-full items-center justify-between">
+              <span className="flex w-full items-center justify-between gap-1">
                 <span className={cn('text-[15px] font-bold tabular-nums md:text-[15px]', style.number)}>
                   {cell.day}
                 </span>
-                {cell.status === 'submitted' &&
-                  (cell.approved ? (
-                    // An approved day is still a submitted day. The check is the
-                    // difference, not a fifth colour that would read as a state
-                    // of its own.
-                    <BadgeCheck className="hidden h-3.5 w-3.5 text-success md:block" aria-label="Approved" />
-                  ) : (
-                    <span className="hidden h-1.5 w-1.5 rounded-full bg-success md:block" aria-hidden="true" />
-                  ))}
-                {cell.status === 'missing' && (
-                  <span className="hidden h-1.5 w-1.5 rounded-full bg-destructive md:block" aria-hidden="true" />
-                )}
+                <span className="flex shrink-0 items-center gap-1">
+                  {/* A corrected day is still a submitted day, so it keeps the
+                      colour and gains a mark. STOIC-2201 asks for it to be
+                      visible here and not only inside the count: the month view
+                      is where someone notices a day was touched after the fact.
+                      It sits in the flow beside the status, not floating over
+                      the corner, because there it covered the date. */}
+                  {cell.corrected && (
+                    <PencilLine
+                      className="hidden h-3.5 w-3.5 text-warning-text md:block"
+                      strokeWidth={2.4}
+                      aria-label="Corrected after it was submitted"
+                    />
+                  )}
+                  {cell.status === 'submitted' &&
+                    (cell.approved ? (
+                      // An approved day is still a submitted day. The check is the
+                      // difference, not a fifth colour that would read as a state
+                      // of its own.
+                      <BadgeCheck className="hidden h-3.5 w-3.5 text-success md:block" aria-label="Approved" />
+                    ) : (
+                      <span className="hidden h-1.5 w-1.5 rounded-full bg-success md:block" aria-hidden="true" />
+                    ))}
+                  {cell.status === 'missing' && (
+                    <span className="hidden h-1.5 w-1.5 rounded-full bg-destructive md:block" aria-hidden="true" />
+                  )}
+                </span>
               </span>
 
               {/* Phones: one dot under the number keeps the grid readable at 40px. */}
@@ -141,20 +156,6 @@ export default function MonthCalendar({ month, site, filter = 'all', mealPattern
                   )}
                   aria-hidden="true"
                 />
-              )}
-
-              {/* A corrected day is still a submitted day, so it keeps the
-                  colour and gains a mark. STOIC-2201 asks for it to be visible
-                  here and not only inside the count: from the month view is
-                  where someone notices that a day was touched after the fact. */}
-              {cell.corrected && (
-                <span
-                  className="absolute left-1.5 top-1.5 hidden items-center gap-0.5 rounded-xs bg-warning-soft px-1 py-px text-[9.5px] font-bold uppercase tracking-wide text-warning-text md:inline-flex"
-                  title="This count was corrected after it was submitted"
-                >
-                  <PencilLine className="h-2.5 w-2.5" strokeWidth={2.6} />
-                  Corr
-                </span>
               )}
 
               <span className="mt-auto hidden w-full flex-col gap-1 md:flex">

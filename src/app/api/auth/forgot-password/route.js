@@ -28,47 +28,55 @@ const ANSWER_FLOOR_MS = 400;
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_PER_EMAIL = 5;
 
+// The token, the mail and the audit row, detached from the request that asked
+// for them. A failure reaches the team through the alert, never the caller.
+async function issueResetLink(user, base) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await prisma.$transaction([
+    // One live link at a time. Every request used to add another usable token
+    // and only using one retired the rest, so an address that was asked for a
+    // link five times had five keys to it for the hour.
+    prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
+        expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+      },
+    }),
+  ]);
+  if (mailConfigured()) {
+    const link = `${base}/reset-password?token=${token}`;
+    const message = passwordReset({ name: user.name, link });
+    // A slow or broken mail provider must not become a slow login screen; the
+    // failure still reaches the team through the alert.
+    sendMail({ to: [user.email], ...message }).catch((error) => {
+      notifyFailure({ area: 'Password reset email', error, context: { to: user.email } });
+    });
+  }
+  await logAudit({ actor: user, action: 'auth.forgot_password', entity: 'user', entityId: user.id });
+}
+
 export const POST = handle(async (req) => {
   const startedAt = Date.now();
   const { email } = forgotPasswordSchema.parse(await readJsonBody(req));
   const { limited } = hit({ bucket: 'forgot', key: email, limit: MAX_PER_EMAIL, windowMs: WINDOW_MS });
   const user = limited ? null : await prisma.user.findUnique({ where: { email } });
   if (user && user.active) {
-    const token = crypto.randomBytes(32).toString('hex');
-    await prisma.$transaction([
-      // One live link at a time. Every request used to add another usable token
-      // and only using one retired the rest, so an address that was asked for a
-      // link five times had five keys to it for the hour.
-      prisma.passwordResetToken.updateMany({
-        where: { userId: user.id, usedAt: null },
-        data: { usedAt: new Date() },
-      }),
-      prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: crypto.createHash('sha256').update(token).digest('hex'),
-          expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-        },
-      }),
-    ]);
-    // The mail is sent alongside the answer, never in front of it: a slow or
-    // broken mail provider must not turn into a slow login screen, and must not
-    // become a way to find out whether an address exists.
-    if (mailConfigured()) {
-      const base = appBaseUrl(req);
-      const link = `${base}/reset-password?token=${token}`;
-      const message = passwordReset({ name: user.name, link });
-      // Deliberately NOT awaited, for the reason above: awaiting a mail send
-      // here would put its whole latency on the "this address exists" branch and
-      // turn a ~50ms timing difference into a plainly measurable one. The
-      // failure still reaches the team through the alert instead of a log line
-      // nobody reads.
-      sendMail({ to: [user.email], ...message }).catch((error) => {
-        notifyFailure({ area: 'Password reset email', error, context: { to: user.email } });
-      });
-    }
-
-    await logAudit({ actor: user, action: 'auth.forgot_password', entity: 'user', entityId: user.id });
+    // Everything the real branch does happens after the answer is on its way,
+    // not in front of it. Writing the token and the audit row took about three
+    // seconds against the hosted database while the made up address answered
+    // in one, and the floor below covers work of the same shape, not of that
+    // size: with the writes awaited, the timing said which addresses exist just
+    // as plainly as a different message would have. The person asking sees the
+    // same screen either way; the link reaches their inbox a moment later.
+    const base = appBaseUrl(req);
+    issueResetLink(user, base).catch((error) => {
+      notifyFailure({ area: 'Password reset link', error, context: { to: user.email } });
+    });
   }
   const elapsed = Date.now() - startedAt;
   if (elapsed < ANSWER_FLOOR_MS) {

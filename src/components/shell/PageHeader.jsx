@@ -34,7 +34,7 @@ export default function PageHeader({
         </Link>
       )}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-6">
-        <div className="flex min-w-0 items-start gap-3 md:block">
+        <div className="flex min-w-0 flex-1 items-start gap-3 md:block">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h1 className="text-[26px] font-bold leading-tight tracking-tight text-foreground md:text-[28px]">
               {title}
@@ -48,7 +48,7 @@ export default function PageHeader({
         {actions && (
           <div
             className={cn(
-              'flex shrink-0 flex-wrap items-center gap-2',
+              'flex min-w-0 flex-wrap items-center gap-2 md:max-w-[55%] md:justify-end lg:max-w-none',
               // A phone that has been given its own control does not also get
               // the desktop rack of buttons underneath it.
               mobileActions && 'hidden md:flex'

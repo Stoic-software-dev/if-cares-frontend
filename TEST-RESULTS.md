@@ -179,6 +179,93 @@ De esta tanda: **3 hallazgos reales, los 3 arreglados y re-verificados**; 0 qued
 
 ---
 
+### Quinta tanda (4-sep-2026, sobre `72d1636`) — recorrido completo sin agentes
+
+Pedido del usuario: "testea toda la webapp, verifica cada pantalla, resolución, funcionalidad".
+Un solo tester, sin subagentes. Escrituras contra el **servidor local** (misma base de Supabase,
+`MAIL_REDIRECT_TO` cargado: todo mail cayó en la casilla del desarrollador, nada llegó a
+IF Cares); lecturas, barrido de resoluciones y capturas contra **Railway** con la sesión del
+navegador, sin escribir nada desde ahí. Cuenta de trabajo: `qa.admin@example.org`. Sitio de
+trabajo: `Training Only`.
+
+**Cobertura.** 18 pantallas × 6 anchos (375, 390, 768, 820, 1024, 1440) = 108 cargas
+automáticas midiendo desborde horizontal, error boundary y página vacía: 99 limpias, 6 son el
+redirect de `/login` con sesión, **3 desbordes reales** (abajo). Capturas compuestas teléfono +
+tablet de dashboard, meal count, detalle de count, sitios, detalle de sitio, calendario,
+reportes, consolidados, usuarios, inbox de requests y menús. Matriz anónima: 42 rutas × 5
+métodos = 210 llamadas, **cero 500**, todo 401/405/404/422. Flujos ejecutados de verdad: abrir
+un día en el calendario → cargar el count (validación pre-submit, trazo mínimo de firma
+rechazado, doble envío 409) → corregir con nota → aprobar (2 destinatarios, mail redirigido) →
+corregir aprobado (409 con el mensaje correcto) → deshacer → anular → restaurar → PDF diario y
+mensual → mail del PDF → mail de prueba. Feriado (rango invertido 422, crear, se refleja en
+dashboard, borrar). Alumno (alta, duplicado 409, editar, "remove" desactiva, re-agregar
+revive con el mismo id). Sitio (estado requerido 422, fechas al revés 422, ciclo + plantilla
+semanal + "Generate missing days": 18 días agregados sobre 22 esperados). Usuario (alta sin
+mail devuelve el link, duplicado 409, promover, link de reset, auto-desactivarse 422,
+desactivar). Requests (alta con nota y con horario, monto negativo 422, New → In progress →
+Resolved con respuesta, `respondedBy/At`, estado inválido 422, id inexistente 404). Menús
+(listar, descargar, **publicar** — verificado en Drive: carpeta Menu, dueño `GOOGLE_DRIVE_AS`).
+Consolidado (job hasta `completed`, 41 filas, **archivo verificado en Drive** en `2026-08` con
+`modifiedTime` de la corrida), link de firma, revocar (404 después), link nuevo, firma pública
+con PNG inválido 422 y válido 200, un solo uso, PDF firmado más grande, link sobre claim
+firmado 409. Recordatorios (leer, alternar y revertir, hora inválida 422). Monitoreo (404 para
+quien no está en la lista, alta pública de errores 200, 0 errores nuevos en 24 h). Cuerpos
+basura (null, no-JSON, 10.000 caracteres, tipos equivocados): 400/422 con el campo nombrado.
+**AuditLog**: 26 tipos de acción registrados en la sesión, uno por cada cosa que se tocó.
+
+**Hallazgos y qué se hizo con cada uno.**
+
+| Sev. | Hallazgo | Estado |
+|---|---|---|
+| Alto | **Login delataba qué cuentas existen por el tiempo**: contraseña incorrecta de una cuenta real ~2,0 s, cuenta inexistente ~1,2 s, consistente en 3 mediciones. Causa: el camino real cargaba los sitios asignados (dos consultas más) antes de comparar la contraseña. | **Arreglado**: la consulta de decisión trae solo `id/active/passwordHash`; los sitios se cargan después de verificar. Medido después: 1,22 s en los dos casos. |
+| Alto | **Forgot-password delataba lo mismo**: cuenta real ~3,3 s (escritura del token + auditoría esperadas), inexistente ~1,0 s. El piso de 400 ms no cubría trabajo de ese tamaño. | **Arreglado**: token, mail y auditoría corren desacoplados de la respuesta; falla → alerta. Medido después: ~1,0 s en los dos casos. |
+| Medio | **Se podía marcar una comida a un alumno ausente** (Snk sin Att): el count quedaba con 5 snacks para 4 participantes, que es lo primero que suma un auditor. | **Arreglado** en el formulario (marcar comida marca asistencia; sacar asistencia saca comidas) y normalizado en el servidor al cargar y al corregir. |
+| Medio | `POST /api/reminders` **no existía** (405) aunque `docs/EMAIL.md`, README, `.env.example` y TEST.md lo describen como disparador manual con `x-reminders-secret`. | **Arreglado**: POST con secreto (503 sin configurar, 401 sin/mal header), `?force=1` manda ya aunque no sea la hora o ya haya corrido hoy. |
+| Medio | `/admin/reports` a 768 px desbordaba 47 px: las cuatro acciones del encabezado (`shrink-0`) aplastaban el subtítulo a una palabra por línea. | **Arreglado** en `PageHeader`: las acciones envuelven y ceden ancho al título en tablet. |
+| Medio | `/admin/reports/consolidated` a 375 px desbordaba 18 px: los cuatro botones de cada claim guardado no envolvían. | **Arreglado**: envuelven en teléfono. |
+| Bajo | `page=0`, `page=-1` y `page=9999` en `/api/users` devuelven la primera página en vez de vacío o 422. | Anotado; no rompe nada. |
+| Bajo | Una corrección por API con menos filas que el roster **borra en silencio** a los alumnos que no manda (la UI siempre manda el roster entero). | Anotado; solo alcanzable por API. |
+
+**Datos, para decidir con IF Cares (no es código).**
+
+- **Sitios duplicados activos**: 7 sitios con nombre sin prefijo de ciclo duplican a uno
+  `2025/2026 ...` con el **mismo número de sitio** (BGC Cooke 125, COD Churchill 205, COD
+  Pleasant Oaks 203, COD Reverchon 204, PTNT Owenwood 173, Readers2Leaders 201, TWU Clubhouse
+  106), y hay más pares por número que el nombre no delata (Harry Stone 207, Lake Highlands
+  North 202, JJ Craft 200, VOH Uplift Grand 198, Voice of Hope 197, Christ's Foundry 177).
+  Ninguno cargó un count desde agosto, pero siguen publicando días de servicio y **aparecen
+  dos veces en el claim de TX y en la lista de sitios**. El consolidado oficial de mayo tenía
+  18 filas; el nuestro tiene 41. Hay que desactivar los del ciclo viejo.
+- 3 sitios con el CE mal escrito (`Intrinsic Foundtion`, `Intrinsic Foudation`); 2 sitios
+  activos sin nombre oficial ni CE ID. Se corrigen desde el detalle del sitio.
+- 136.807 filas de `MealCountEntry` sin `studentId`: son las del histórico importado que no
+  matchearon por nombre ("Last, First" viejo), no borrados duros. Esperado, documentado en
+  julio.
+- Cuentas de la vieja planilla como `123@123.com` y `julio@julio.com` siguen activas.
+- El log del servidor de desarrollo mostró un `uncaughtException: ReadableStream is already
+  closed` cuando el barrido cerraba iframes a mitad del streaming SSR. Es del runtime de Next
+  en dev, no de la app; anotado por si aparece en Railway.
+
+**Lo que NO se probó esta vuelta y por qué.** El rol staff por UI (entrar con otra cuenta
+implica tipear una contraseña, que es una acción vedada para el agente; la tanda anterior lo
+cubrió por API y UI). Borrar el menú de prueba desde la app (bloqueado por el clasificador de
+permisos por ser un borrado en el Drive del cliente). Tema oscuro, teclado y los 6 charters de
+§10. `POST /api/reminders` con el secreto real (solo los caminos 401/503).
+
+**Rastro que quedó, y que es a propósito o hay que limpiar a mano.**
+
+- `Training Only`: count del 2026-09-04 (3 correcciones, sin aprobar); ciclo 1 al 30 de
+  septiembre con plantilla L-V Snk+Sup (22 días de servicio); dos requests (uno resuelto);
+  alumno `ZZ QA Student Ñandú` desactivado.
+- Usuario `zz.qa.<timestamp>@example.org` desactivado.
+- Claim `TX 2026-08 claim by site.pdf` firmado por "QA Signer", en Drive `Consolidated
+  Reports/2026-08` (no hay borrado de claims en la app).
+- **`ZZ QA test menu.pdf` sigue en la carpeta `Menu` del Drive del cliente**
+  (`1bA0iKAfjYUXp-M6DsWJf5eLgCOtS_e0Q`): borrarlo desde `/menus` (Remove) o desde Drive.
+- ~12 mails de prueba en la casilla del desarrollador con el aviso de redirección.
+
+---
+
 ## 1. Cómo se ejecutó
 
 | Agente | Área | Duración | Hallazgos |

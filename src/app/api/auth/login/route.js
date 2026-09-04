@@ -30,23 +30,30 @@ export const POST = handle(async (req) => {
     return legacyError('Too many sign in attempts. Wait a few minutes and try again.', 429);
   }
 
-  const user = await prisma.user.findUnique({
+  // Only what deciding the sign in needs. The assigned sites used to come along
+  // here, two more round trips to the database that only the "address exists"
+  // branch paid: a wrong password on a real account answered in two seconds and
+  // a made up address in one, which told anyone with a stopwatch which
+  // addresses are real. The sites are loaded once the password has checked out.
+  const account = await prisma.user.findUnique({
     where: { email: body.email },
-    include: { sites: { include: { site: true } } },
+    select: { id: true, active: true, passwordHash: true },
   });
 
-  if (!user || !user.active) {
+  if (!account || !account.active) {
     await dummyPasswordCompare(body.password); // timing parity
     return legacyError(BAD_CREDENTIALS, 401);
   }
-  if (!user.passwordHash) {
+  if (!account.passwordHash) {
     // Same answer as any other failed sign in. Telling this apart is telling a
     // stranger the address has an account and has never been used; the person it
     // actually happens to gets where they need to go through "Forgot your
     // password?", which issues a link for an account with no password just fine.
+    // The compare keeps this branch as slow as the other two.
+    await dummyPasswordCompare(body.password);
     return legacyError(BAD_CREDENTIALS, 401);
   }
-  const valid = await verifyPassword(body.password, user.passwordHash);
+  const valid = await verifyPassword(body.password, account.passwordHash);
   if (!valid) {
     return legacyError(BAD_CREDENTIALS, 401);
   }
@@ -56,6 +63,10 @@ export const POST = handle(async (req) => {
   // success.
   clear('login.email', body.email);
 
+  const user = await prisma.user.findUnique({
+    where: { id: account.id },
+    include: { sites: { include: { site: true } } },
+  });
   const expiresAt = await issueSessionCookie(user);
   await logAudit({ actor: user, action: 'auth.login', entity: 'user', entityId: user.id });
 

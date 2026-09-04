@@ -452,7 +452,10 @@ function ConsolidatedScreen() {
                     </span>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  {/* Four small buttons are wider than a 375px phone; on one
+                      they wrap under the title instead of pushing the row
+                      past the edge of the screen. */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
                     <Button variant="outline" size="sm" asChild>
                       <a href={`/api/reports/generated/${report.id}`}>
                         <Download />

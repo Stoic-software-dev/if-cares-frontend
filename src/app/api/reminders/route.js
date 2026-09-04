@@ -1,8 +1,8 @@
-import { handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
+import { appBaseUrl, handle, readJsonBody, requireObjectBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { mailConfigured, mailRedirect } from '@/lib/gmail';
 import { readRequestNotifySettings, writeRequestNotifySettings } from '@/lib/request-notify';
-import { SETTINGS_KEY, readSettings, writeSettings } from '@/lib/reminders-run';
+import { SETTINGS_KEY, readSettings, writeSettings, runReminders } from '@/lib/reminders-run';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
@@ -13,9 +13,21 @@ export const dynamic = 'force-dynamic';
 // which is the whole point of the requirement: the old system needed a developer
 // to edit an Apps Script trigger.
 //
-// The schedule is owned by the server itself (`src/lib/reminder-scheduler.js`),
-// and that is the only thing that sends. This route only reads and writes the
-// settings behind it.
+// The schedule is owned by the server itself (`src/lib/reminder-scheduler.js`).
+// GET and PATCH read and write the settings behind it; POST runs it by hand.
+
+// The manual trigger the runbooks describe: no session, the shared secret in a
+// header, because the caller is a person at a terminal or a job with no cookie.
+// `?force=1` sends now whatever the hour and whether or not today already ran.
+export const POST = handle(async (req) => {
+  const secret = process.env.REMINDERS_SECRET;
+  if (!secret) throw new ApiError(503, 'Reminders are not configured to run.');
+  if (req.headers.get('x-reminders-secret') !== secret) throw new ApiError(401, 'Not allowed.');
+
+  const force = new URL(req.url).searchParams.get('force') === '1';
+  const summary = await runReminders({ baseUrl: process.env.APP_URL || appBaseUrl(req), force });
+  return legacyJson({ result: 'success', data: summary });
+});
 
 export const GET = handle(async () => {
   await requireAdmin();

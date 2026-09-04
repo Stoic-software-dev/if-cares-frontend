@@ -292,9 +292,13 @@ function MealCountScreen() {
       const current = next.get(studentId) ?? { ...EMPTY_MARKS };
       const value = !current[key];
       // Meals are only served to students who were there: unmarking attendance
-      // clears the meals with it, so a row can never claim a meal for someone
-      // absent.
-      const updated = key === 'att' && !value ? { ...EMPTY_MARKS } : { ...current, [key]: value };
+      // clears the meals with it, and marking a meal marks the attendance, so a
+      // row can never claim a meal for someone absent. Without the second half a
+      // count could carry five snacks for four participants, which is the first
+      // thing an auditor adds up.
+      let updated;
+      if (key === 'att') updated = value ? { ...current, att: true } : { ...EMPTY_MARKS };
+      else updated = { ...current, [key]: value, att: value ? true : current.att };
       next.set(studentId, updated);
       return next;
     });

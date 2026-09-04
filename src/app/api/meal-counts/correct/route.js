@@ -140,7 +140,8 @@ export const POST = handle(async (req) => {
         number,
         name: String(name),
         age: age === '' || age === null ? null : Number(age),
-        attendance,
+        // Same rule as filing: a meal is served to somebody who was there.
+        attendance: attendance || breakfast || lunch || snack || supper,
         breakfast,
         lunch,
         snack,

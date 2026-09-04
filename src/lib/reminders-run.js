@@ -137,21 +137,24 @@ async function overdueRecipients(settings) {
 }
 
 /**
- * One reminder run. The server's scheduler is the only caller.
+ * One reminder run. The server's scheduler calls it on its own clock, and
+ * `POST /api/reminders` calls it by hand with the shared secret.
  *
  * `baseUrl` is where the links point; the scheduler has no request to derive it
- * from, so it passes APP_URL.
+ * from, so it passes APP_URL. `force` is the manual trigger's: it sends now
+ * whatever the hour and whether or not today's run already went, because a
+ * person asking for it has decided that. Being switched off still holds.
  *
  * Returns a plain summary and never throws for an ordinary "nothing to do":
  * being disabled or being the wrong hour is an outcome, not a failure.
  */
-export async function runReminders({ baseUrl } = {}) {
+export async function runReminders({ baseUrl, force = false } = {}) {
   const settings = await readSettings();
   if (!settings.enabled) return { skipped: 'disabled' };
 
   const day = todayYmd();
   // Once a day, whatever the tick count and whatever restarted in between.
-  if ((await readLastRunDay()) === day) return { skipped: 'already ran today' };
+  if (!force && (await readLastRunDay()) === day) return { skipped: 'already ran today' };
   // The scheduler ticks often; which of those ticks sends is the administrator's
   // setting, enforced here. That keeps the choice in the screen instead of in a
   // cron expression, and resolving the hour in APP_TIMEZONE means daylight
@@ -163,7 +166,7 @@ export async function runReminders({ baseUrl } = {}) {
   // at whatever time somebody first opened the app, and an exact match would
   // then skip that day entirely. Late is a reminder. Never is three missed days
   // and a site whose meals stop.
-  if (localHour() < settings.hour) return { skipped: 'not the hour', hour: settings.hour };
+  if (!force && localHour() < settings.hour) return { skipped: 'not the hour', hour: settings.hour };
 
   if (!mailConfigured()) return { skipped: 'mail not configured' };
 

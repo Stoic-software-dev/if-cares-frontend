@@ -114,7 +114,9 @@ export const POST = handle(async (req) => {
           number,
           name: String(name),
           age: age === '' || age === null ? null : Number(age),
-          attendance,
+          // A meal is served to somebody who was there. The form enforces it;
+          // this keeps any other client from filing a snack for an absentee.
+          attendance: attendance || breakfast || lunch || snack || supper,
           breakfast,
           lunch,
           snack,

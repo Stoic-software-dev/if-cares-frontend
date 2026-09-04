@@ -107,28 +107,6 @@ function AdminSitesScreen() {
     return mapped;
   }, [sites, allMeals, query, stateFilter, sort, monthPrefix, today, stateByName]);
 
-  const totals = useMemo(
-    () =>
-      rows.reduce(
-        (acc, row) => ({
-          missing: acc.missing + row.stats.missing,
-          submitted: acc.submitted + row.stats.submitted,
-        }),
-        { missing: 0, submitted: 0 }
-      ),
-    [rows]
-  );
-
-  // Sites that cannot be used tomorrow. Counted over every active site rather
-  // than the filtered page, because the number is only useful if it is the whole
-  // program: a filter that hides them is exactly how this went unnoticed.
-  const emptyCalendars = useMemo(() => {
-    if (!sites || !allMeals) return [];
-    return sites.filter(
-      (name) => !inactiveNames.has(name) && monthStats(allMeals[name], monthPrefix, today).ahead === 0
-    );
-  }, [sites, allMeals, inactiveNames, monthPrefix, today]);
-
   // Any change to what is being listed starts the listing over: page 7 of a
   // filter that now returns four sites is an empty screen.
   useEffect(() => {
@@ -229,28 +207,6 @@ function AdminSitesScreen() {
             <option value="missing">Sort by missing counts</option>
           </NativeSelect>
         </div>
-
-        {emptyCalendars.length > 0 && (
-          <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-soft p-4">
-            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
-            <div className="flex flex-col gap-1">
-              <span className="text-[13px] font-semibold text-warning-text">
-                {emptyCalendars.length === 1
-                  ? '1 site has no service days ahead'
-                  : `${emptyCalendars.length} sites have no service days ahead`}
-              </span>
-              <span className="text-[12.5px] leading-relaxed text-warning-text/90">
-                A count can only be filed on a day the calendar has. Until these sites have days,
-                nobody there can file anything, and the day never shows as missing either. Open a
-                site to set its cycle and weekly meals, then generate the days.
-              </span>
-              <span className="text-[12px] leading-relaxed text-warning-text/80">
-                {emptyCalendars.slice(0, 4).map((name) => shortSiteName(name)).join(', ')}
-                {emptyCalendars.length > 4 && `, and ${emptyCalendars.length - 4} more`}
-              </span>
-            </div>
-          </div>
-        )}
 
         {error && <ErrorState title="Couldn't load the sites" message={error} onRetry={load} />}
 

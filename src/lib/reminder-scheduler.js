@@ -1,4 +1,4 @@
-import { runReminders, touchLastPing } from '@/lib/reminders-run';
+import { runReminders } from '@/lib/reminders-run';
 import { notifyFailure } from '@/lib/alerts';
 
 // The server schedules its own reminders.
@@ -30,8 +30,6 @@ const FLAG = Symbol.for('ifcares.reminderScheduler');
 
 async function tick() {
   try {
-    await touchLastPing();
-
     // Every reminder is a link to the day that needs filing, and the scheduler
     // has no request to derive the address from. Sending sixty messages whose
     // only button is broken is worse than sending none, and it is the kind of

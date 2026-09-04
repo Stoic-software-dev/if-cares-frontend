@@ -282,10 +282,6 @@ function ReportsScreen() {
               )}
             </div>
 
-            <p className="text-[12px] leading-relaxed text-muted-foreground">
-              Monthly and consolidated reports, saving to storage, emailing and the signature step are the
-              reports module (SPECS.md 11.2). Daily forms are live today and come out of the same data.
-            </p>
           </>
         )}
       </div>

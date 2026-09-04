@@ -8,13 +8,11 @@ import { logAudit } from '@/lib/audit';
 
 // The daily nudge for counts that were not filed, as a plain function.
 //
-// It lives here rather than in the route because two callers need it: the route,
-// for an external scheduler holding the shared secret, and the server's own
-// scheduler, which has no request and no business making an HTTP call to itself
-// carrying a secret it already trusts.
+// The server's own scheduler is the only caller. It lives here rather than in
+// the route because the scheduler has no request, and no business making an HTTP
+// call to itself to do work it can do directly.
 
 export const SETTINGS_KEY = 'reminders';
-const LAST_PING_KEY = 'reminders.lastPing';
 // The program day a run last completed on. In the database rather than in the
 // process because the guard has to survive a restart: two things depend on it,
 // and both are the difference between a reminder and a mistake. It stops a
@@ -48,22 +46,7 @@ export async function writeSettings(next) {
   });
 }
 
-/** When the scheduler last got as far as this code with a valid trigger. */
-export async function touchLastPing() {
-  const now = new Date().toISOString();
-  await prisma.appSetting.upsert({
-    where: { key: LAST_PING_KEY },
-    create: { key: LAST_PING_KEY, value: now },
-    update: { value: now },
-  });
-}
-
-export async function readLastPing() {
-  const row = await prisma.appSetting.findUnique({ where: { key: LAST_PING_KEY } });
-  return row?.value ?? null;
-}
-
-export async function readLastRunDay() {
+async function readLastRunDay() {
   const row = await prisma.appSetting.findUnique({ where: { key: LAST_RUN_KEY } });
   return row?.value ?? '';
 }
@@ -87,12 +70,8 @@ function withinReminderWindow(site, today) {
   return today >= start && today <= end;
 }
 
-/**
- * Who is overdue right now, and who would hear about it. Used both by the run
- * and by the preview, so what an administrator sees before turning it on is
- * exactly what would go out.
- */
-export async function overdueRecipients(settings) {
+/** Who is overdue right now, and who hears about it. */
+async function overdueRecipients(settings) {
   const today = todayYmd();
   const from = new Date(`${today}T00:00:00Z`);
   from.setUTCDate(from.getUTCDate() - settings.lookBackDays);

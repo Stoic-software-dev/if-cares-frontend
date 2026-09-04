@@ -446,9 +446,6 @@ function CountDetailScreen() {
             ))}
           </ol>
 
-          <p className="border-t border-border pt-3 text-[12px] leading-relaxed text-muted-foreground">
-            The values submitted originally are kept on record and never overwritten.
-          </p>
         </DialogContent>
       </Dialog>
 

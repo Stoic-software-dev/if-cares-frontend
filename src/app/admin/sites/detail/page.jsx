@@ -454,11 +454,6 @@ function SiteDetailScreen() {
                   </dl>
                 )}
               </div>
-
-              <p className="text-[12px] leading-relaxed text-muted-foreground">
-                Contact details for the site - address, phone, supervisor - are not stored yet: IF Cares has to confirm whether the paper form carries them.
-                Everything on this screen reads from the live database.
-              </p>
             </TabsContent>
 
             <TabsContent value="roster" className="flex flex-col gap-3">

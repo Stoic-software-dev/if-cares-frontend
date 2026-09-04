@@ -332,10 +332,6 @@ function CalendarScreen() {
               </div>
             </div>
 
-            <p className="text-[12px] leading-relaxed text-muted-foreground">
-              Changes are applied to the whole calendar of this site when you save. Days that already carry a
-              submitted count are never rewritten.
-            </p>
           </>
         )}
       </div>

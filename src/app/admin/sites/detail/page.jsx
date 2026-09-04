@@ -374,7 +374,7 @@ function SiteDetailScreen() {
               <SheetAction icon={CalendarRange} href={calendarHref} hint="Service days and meals">
                 Calendar
               </SheetAction>
-              <SheetAction icon={FileText} href={reportsHref} hint="Daily forms and the month summary">
+              <SheetAction icon={FileText} href={reportsHref} hint="Daily forms, and the month as one bundle">
                 Reports
               </SheetAction>
               {record && (

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import { ApiError } from '@/lib/http';
 import { requireSiteAccess } from '@/lib/auth';
 import { ymdToUtcDate } from '@/lib/dates';
+import { siteHeaderOf } from '@/lib/report-data';
 
 // Each correction stores the snapshot taken right before it ran. Comparing that
 // snapshot against the state that followed turns "corrected 3 times" into the
@@ -108,6 +109,9 @@ export async function loadMealCountDetail(session, siteName, ymd) {
   return {
     date: ymd,
     site: site.name,
+    // The boxes at the top of the printed form: contracting entity, its id,
+    // the site's name on file and its number.
+    siteHeader: siteHeaderOf(site),
     dayMeals: serviceDay
       ? { brk: serviceDay.brk, lunch: serviceDay.lunch, snk: serviceDay.snk, sup: serviceDay.sup }
       : null,
@@ -120,6 +124,7 @@ export async function loadMealCountDetail(session, siteName, ymd) {
       ? { at: count.approvedAt.toISOString(), by: count.approvedByEmail }
       : null,
     corrected: count.corrections.length > 0,
+    correctionCount: count.corrections.length,
     corrections: count.corrections.map((c, i, list) => ({
       by: c.correctedByEmail,
       at: c.createdAt.toISOString(),

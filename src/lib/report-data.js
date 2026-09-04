@@ -29,6 +29,30 @@ export function monthBounds(year, month) {
 
 const emptyTotals = () => ({ att: 0, brk: 0, lun: 0, snk: 0, sup: 0 });
 
+/** The five boxes at the top of the daily form, as the site's record holds them. */
+export function siteHeaderOf(site) {
+  return {
+    ceName: site?.ceName ?? '',
+    ceId: site?.ceId ?? '',
+    siteName: site?.siteName ?? '',
+    siteNumber: site?.siteNumber ?? '',
+  };
+}
+
+// The contracting entity a claim is filed by. Every site carries its own copy
+// of the name, and a few carry it misspelt, so the claim prints the spelling
+// most of them agree on; the template's own default stands in when none do.
+function ceNameOf(sites) {
+  const tally = new Map();
+  for (const site of sites) {
+    const name = String(site.ceName ?? '').trim();
+    if (name) tally.set(name, (tally.get(name) ?? 0) + 1);
+  }
+  let best = '';
+  for (const [name, hits] of tally) if (hits > (tally.get(best) ?? 0)) best = name;
+  return best || 'Intrinsic Foundation';
+}
+
 function addEntries(totals, entries) {
   for (const entry of entries) {
     if (entry.attendance) totals.att += 1;
@@ -106,7 +130,7 @@ export async function consolidatedBySite({ year, month, state, excludeSites = []
     year,
     month,
     state,
-    select: { id: true, name: true, siteNumber: true, state: true },
+    select: { id: true, name: true, siteNumber: true, state: true, ceName: true },
   });
 
   const excluded = new Set(excludeSites);
@@ -139,6 +163,7 @@ export async function consolidatedBySite({ year, month, state, excludeSites = []
     period: monthLabel(year, month),
     state: state ?? 'All',
     foundationId: await foundationIdFor(state),
+    ceName: ceNameOf(included),
     excluded: [...excluded],
   };
 }
@@ -148,7 +173,7 @@ export async function consolidatedBySite({ year, month, state, excludeSites = []
  * meals served across every included site.
  */
 export async function consolidatedByDay({ year, month, state, excludeSites = [] }) {
-  const sites = await claimSites({ year, month, state, select: { id: true, name: true } });
+  const sites = await claimSites({ year, month, state, select: { id: true, name: true, ceName: true } });
   const excluded = new Set(excludeSites);
   const included = sites.filter((site) => !excluded.has(site.name));
   const counts = await loadCounts({ year, month, siteIds: included.map((site) => site.id) });
@@ -174,6 +199,7 @@ export async function consolidatedByDay({ year, month, state, excludeSites = [] 
     period: monthLabel(year, month),
     state: state ?? 'All',
     foundationId: await foundationIdFor(state),
+    ceName: ceNameOf(included),
   };
 }
 
@@ -208,4 +234,58 @@ export async function siteMonth({ site: siteName, year, month }) {
     days,
     totals,
   };
+}
+
+/**
+ * Every count a site filed in a month, each in the shape the daily form is
+ * drawn from, for the monthly bundle. Only the newest correction travels: the
+ * form prints when it was last touched and by whom, not the history.
+ */
+export async function siteMonthCounts({ site: siteName, year, month }) {
+  const site = await prisma.site.findUnique({ where: { name: siteName } });
+  if (!site) return null;
+
+  const { from, to } = monthBounds(year, month);
+  const counts = await prisma.mealCount.findMany({
+    where: { siteId: site.id, date: { gte: from, lte: to }, voidedAt: null },
+    include: {
+      entries: { orderBy: { number: 'asc' } },
+      corrections: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: { createdAt: true, correctedByEmail: true },
+      },
+      _count: { select: { corrections: true } },
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  return counts.map((count) => {
+    const entries = count.entries.map((entry) => ({
+      number: entry.number,
+      name: entry.name,
+      age: entry.age,
+      attendance: entry.attendance,
+      breakfast: entry.breakfast,
+      lunch: entry.lunch,
+      snack: entry.snack,
+      supper: entry.supper,
+    }));
+    const last = count.corrections[0];
+    return {
+      date: dateToYmd(count.date),
+      site: site.name,
+      siteHeader: siteHeaderOf(site),
+      timeIn: count.timeIn,
+      timeOut: count.timeOut,
+      signature: count.signature,
+      source: count.source,
+      submittedBy: count.submittedByEmail,
+      corrected: count._count.corrections > 0,
+      correctionCount: count._count.corrections,
+      corrections: last ? [{ at: last.createdAt.toISOString(), by: last.correctedByEmail }] : [],
+      totals: addEntries(emptyTotals(), entries),
+      entries,
+    };
+  });
 }

@@ -1,40 +1,124 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
-// Daily meal count PDF (STOIC-2203). Mirrors the paper form's structure —
-// roster with attendance and meal marks, totals, certification text and the
-// staff signature. Field-by-field fidelity gets validated against the real
-// paper form with IF Cares.
+// The daily form, drawn to match the one the sites have always filed: the
+// "Daily Meal Count and Attendance Record: At-Risk" sheet the old system
+// exported from each site's spreadsheet, two hundred numbered rows in two
+// columns, the five header boxes, the totals grid, the certification and the
+// site representative's signature. The geometry is measured off those exports
+// (`Meal Count PDF's` in the client's Drive), so an auditor gets the same page
+// whichever system produced it.
+//
+// The one thing the paper form never had is a corrected mark. STOIC-2201 asks
+// for one, so a corrected count says so under the title, in the only colour on
+// the page.
 
-const PAGE = { width: 612, height: 792 }; // US Letter
-const MARGIN = 40;
-const ROW_HEIGHT = 16;
+const PAGE = { width: 612, height: 792 }; // US Letter portrait
+const LEFT = 50.4;
+const RIGHT = 562;
+const TOP = 54; // measured from the top edge, the way the form is read
+const FLOOR = 740; // the roster stops here and continues on the next page
+const ROW = 8.8;
+const SIZE = 5.7;
+const HALF = (RIGHT - LEFT) / 2;
 
-const INK = rgb(0.06, 0.09, 0.16); // slate-900
-const MUTED = rgb(0.39, 0.45, 0.55); // slate-500
-const LINE = rgb(0.89, 0.91, 0.94); // slate-200
-const HEADER_BG = rgb(0.97, 0.98, 0.99); // slate-50
-const WARN = rgb(0.71, 0.33, 0.05); // amber-700, readable when this prints in grey
+const INK = rgb(0, 0, 0);
+const GRID = rgb(0.72, 0.72, 0.72);
+const CHECK = rgb(0.36, 0.36, 0.36);
+const WHITE = rgb(1, 1, 1);
+const WARN = rgb(0.71, 0.33, 0.05);
 
-const CERTIFICATION_TEXT =
-  'I certify that the information on this form is true and correct to the best of my ' +
-  'knowledge, and that meal counts were taken at the point of service.';
+const CERTIFICATION =
+  'I certify that the information on this form is true and correct to the best of my knowledge ' +
+  'and that I will claim reimbursement only for eligible meals served to eligible Program ' +
+  'participants. I understand that misrepresentation may result in prosecution under applicable ' +
+  'state or federal laws.';
 
-function timeLabel(canonical) {
-  if (!canonical) return 'Not recorded';
+// One half of the roster, in the proportions of the original sheet. Scaled so
+// the two halves fill the width exactly.
+const COLUMNS = [
+  { key: 'num', w: 15 },
+  { key: 'name', w: 78 },
+  { key: 'age', w: 18.8, label: 'Age' },
+  { key: 'at', w: 15, label: 'At', flag: 'attendance' },
+  { key: 'in', w: 37.6, label: 'In' },
+  { key: 'out', w: 27.4, label: 'Out' },
+  { key: 'brk', w: 14.3, label: 'Brk', flag: 'breakfast' },
+  { key: 'lu', w: 14.3, label: 'Lu', flag: 'lunch' },
+  { key: 'snk', w: 14.3, label: 'Snk', flag: 'snack' },
+  { key: 'sup', w: 14.3, label: 'Sup', flag: 'supper' },
+];
+const COLUMNS_WIDTH = COLUMNS.reduce((sum, column) => sum + column.w, 0);
+
+// The sheet came in 200, 250 and 300 row editions (STOIC-235); a roster is
+// printed on the smallest one it fits, blank numbered rows included, because
+// those rows are part of the form the sites know.
+function capacityFor(rows) {
+  if (rows <= 200) return 200;
+  if (rows <= 250) return 250;
+  if (rows <= 300) return 300;
+  return Math.ceil(rows / 50) * 50;
+}
+
+const Y = (top) => PAGE.height - top;
+
+export function timeLabel(canonical) {
+  if (!canonical) return '';
   const [h, m] = canonical.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
   const period = h >= 12 ? 'PM' : 'AM';
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-function dateLabel(ymd) {
-  return new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+/** mm/dd/yyyy, which is what the form's own date box asks for. */
+export function formDate(ymd) {
+  const [y, m, d] = String(ymd).split('-');
+  return y && m && d ? `${m}/${d}/${y}` : String(ymd ?? '');
+}
+
+// The standard fonts cover Latin-1 and nothing beyond it. A name with a
+// character outside that (a Vietnamese tone mark, an emoji pasted into the
+// roster) must not take the whole form down, so it is drawn without it.
+function encodable(font, text) {
+  try {
+    font.widthOfTextAtSize(text, SIZE);
+    return text;
+  } catch {
+    const stripped = String(text)
+      .normalize('NFKD')
+      .replace(/[^\x20-\x7e\xa0-\xff]/g, '');
+    try {
+      font.widthOfTextAtSize(stripped, SIZE);
+      return stripped;
+    } catch {
+      return stripped.replace(/[^\x20-\x7e]/g, '');
+    }
+  }
+}
+
+/** Shrinks, then truncates, so a long name never runs into the next cell. */
+function fit(font, text, size, maxWidth) {
+  let s = size;
+  while (s > 4.2 && font.widthOfTextAtSize(text, s) > maxWidth) s -= 0.2;
+  let t = text;
+  while (t.length > 1 && font.widthOfTextAtSize(t, s) > maxWidth) t = t.slice(0, -1);
+  return { text: t, size: s };
+}
+
+function wrap(font, text, size, maxWidth) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(next, size) > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 export async function buildMealCountPdf(count) {
@@ -42,194 +126,258 @@ export async function buildMealCountPdf(count) {
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const tableWidth = PAGE.width - MARGIN * 2;
-  const markWidth = 42;
-  const columns = [
-    { key: 'number', label: '#', width: 26, align: 'left' },
-    { key: 'name', label: 'Student', width: tableWidth - 26 - 30 - markWidth * 5, align: 'left' },
-    { key: 'age', label: 'Age', width: 30, align: 'center' },
-    { key: 'attendance', label: 'Att', width: markWidth, align: 'center' },
-    { key: 'breakfast', label: 'Brk', width: markWidth, align: 'center' },
-    { key: 'lunch', label: 'Lun', width: markWidth, align: 'center' },
-    { key: 'snack', label: 'Snk', width: markWidth, align: 'center' },
-    { key: 'supper', label: 'Sup', width: markWidth, align: 'center' },
-  ];
+  const scale = HALF / COLUMNS_WIDTH;
+  const columns = COLUMNS.map((column) => ({ ...column, w: column.w * scale }));
+  const columnX = (side, index) =>
+    LEFT + side * HALF + columns.slice(0, index).reduce((sum, column) => sum + column.w, 0);
 
-  let page = doc.addPage([PAGE.width, PAGE.height]);
-  let y = PAGE.height - MARGIN;
+  const entries = [...(count.entries ?? [])].sort((a, b) => a.number - b.number);
+  const capacity = capacityFor(entries.length);
+  const half = capacity / 2;
+  const header = count.siteHeader ?? {};
+  const timeIn = timeLabel(count.timeIn);
+  const timeOut = timeLabel(count.timeOut);
 
-  const text = (value, x, size = 9, options = {}) => {
-    page.drawText(String(value), {
-      x,
-      y: y - size,
-      size,
-      font: options.bold ? bold : font,
-      color: options.color ?? INK,
-    });
+  const text = (page, value, x, top, options = {}) => {
+    const size = options.size ?? SIZE;
+    const used = options.bold ? bold : font;
+    const str = encodable(used, String(value ?? ''));
+    let drawX = x;
+    if (options.align === 'center') drawX = x - used.widthOfTextAtSize(str, size) / 2;
+    if (options.align === 'right') drawX = x - used.widthOfTextAtSize(str, size);
+    page.drawText(str, { x: drawX, y: Y(top), size, font: used, color: options.color ?? INK });
   };
 
-  const cellX = (index) => MARGIN + columns.slice(0, index).reduce((sum, c) => sum + c.width, 0);
+  const hline = (page, x1, x2, top, thickness = 0.3, color = GRID) =>
+    page.drawLine({ start: { x: x1, y: Y(top) }, end: { x: x2, y: Y(top) }, thickness, color });
+  const vline = (page, x, top1, top2, thickness = 0.3, color = GRID) =>
+    page.drawLine({ start: { x, y: Y(top1) }, end: { x, y: Y(top2) }, thickness, color });
+  const box = (page, x, top, width, height, thickness = 0.8, color = INK) =>
+    page.drawRectangle({ x, y: Y(top + height), width, height, borderColor: color, borderWidth: thickness });
 
-  const cellText = (value, index, size = 9, options = {}) => {
-    const column = columns[index];
-    const usedFont = options.bold ? bold : font;
-    let x = cellX(index) + 2;
-    if (column.align === 'center') {
-      const w = usedFont.widthOfTextAtSize(String(value), size);
-      x = cellX(index) + (column.width - w) / 2;
+  const checkbox = (page, cx, cy, checked) => {
+    const s = 5.6;
+    const x = cx - s / 2;
+    const y = Y(cy + s / 2);
+    if (!checked) {
+      page.drawRectangle({ x, y, width: s, height: s, borderColor: CHECK, borderWidth: 0.5 });
+      return;
     }
-    text(value, x, size, options);
+    page.drawRectangle({ x, y, width: s, height: s, color: CHECK });
+    page.drawLine({ start: { x: x + 1.2, y: y + 2.7 }, end: { x: x + 2.4, y: y + 1.4 }, thickness: 0.8, color: WHITE });
+    page.drawLine({ start: { x: x + 2.4, y: y + 1.4 }, end: { x: x + 4.5, y: y + 4.4 }, thickness: 0.8, color: WHITE });
   };
 
-  const drawTableHeader = () => {
-    page.drawRectangle({
-      x: MARGIN,
-      y: y - ROW_HEIGHT,
-      width: tableWidth,
-      height: ROW_HEIGHT,
-      color: HEADER_BG,
+  // The column header sits at the top of every page of the roster: the first
+  // under the form's header boxes, the rest under nothing.
+  const drawColumnHeader = (page, top) => {
+    const bottom = top + 15;
+    for (const side of [0, 1]) {
+      columns.forEach((column, index) => {
+        const x = columnX(side, index);
+        if (column.key === 'num') return;
+        if (column.key === 'name') {
+          text(page, "Participant's Name", x + 0.5, top + 6.6, { bold: true });
+          text(page, '(First & Last Name Required)', x + 0.5, top + 13.2, { bold: true });
+          return;
+        }
+        text(page, column.label, x + column.w / 2, top + 10.2, { bold: true, align: 'center' });
+      });
+    }
+    hline(page, LEFT, RIGHT, bottom, 0.8, INK);
+    return bottom;
+  };
+
+  const drawFormHeader = (page) => {
+    const titleBottom = TOP + 18;
+    const fieldsBottom = titleBottom + 24;
+    const rowsTop = drawColumnHeader(page, fieldsBottom);
+    box(page, LEFT, TOP, RIGHT - LEFT, rowsTop - TOP);
+
+    text(page, 'Daily Meal Count and Attendance Record: At-Risk', PAGE.width / 2, TOP + 12.5, {
+      bold: true,
+      size: 9.3,
+      align: 'center',
     });
-    y -= 3;
-    columns.forEach((column, i) => cellText(column.label, i, 8, { bold: true, color: MUTED }));
-    y -= ROW_HEIGHT - 3;
-    page.drawLine({
-      start: { x: MARGIN, y },
-      end: { x: MARGIN + tableWidth, y },
-      thickness: 0.8,
-      color: LINE,
+    hline(page, LEFT, RIGHT, titleBottom, 0.8, INK);
+
+    const cells = [
+      { label: 'Name of Contracting Entity (CE)', value: header.ceName, from: LEFT, to: 270 },
+      { label: 'CE ID', value: header.ceId, from: 270, to: LEFT + HALF },
+      { label: 'Name of Site', value: header.siteName || count.site, from: LEFT + HALF, to: 465 },
+      { label: 'Site #', value: header.siteNumber, from: 465, to: 514 },
+      { label: 'Date (mm/dd/yyyy)', value: formDate(count.date), from: 514, to: RIGHT },
+    ];
+    for (const cell of cells) {
+      text(page, cell.label, cell.from + 1.5, titleBottom + 6.6, { bold: true, size: 5.2 });
+      const value = fit(font, encodable(font, String(cell.value ?? '')), 6.2, cell.to - cell.from - 4);
+      text(page, value.text, (cell.from + cell.to) / 2, fieldsBottom - 5, { size: value.size, align: 'center' });
+      if (cell.to !== RIGHT) vline(page, cell.to, titleBottom, fieldsBottom, 0.8, INK);
+    }
+    hline(page, LEFT, RIGHT, fieldsBottom, 0.8, INK);
+    return rowsTop;
+  };
+
+  const drawRow = (page, side, top, number, entry) => {
+    const baseline = top + 6.5;
+    columns.forEach((column, index) => {
+      const x = columnX(side, index);
+      const centre = x + column.w / 2;
+      switch (column.key) {
+        case 'num':
+          text(page, number, x + 1.2, baseline);
+          break;
+        case 'name': {
+          if (!entry) break;
+          const name = fit(font, encodable(font, entry.name ?? ''), SIZE, column.w - 2.5);
+          text(page, name.text, x + 0.5, baseline, { size: name.size });
+          break;
+        }
+        case 'age':
+          if (entry?.age !== null && entry?.age !== undefined && entry?.age !== '') {
+            text(page, entry.age, centre, baseline, { align: 'center' });
+          }
+          break;
+        case 'in':
+          if (entry?.attendance) text(page, timeIn, centre, baseline, { align: 'center' });
+          break;
+        case 'out':
+          if (entry?.attendance) text(page, timeOut, centre, baseline, { align: 'center' });
+          break;
+        default:
+          checkbox(page, centre, top + ROW / 2, Boolean(entry?.[column.flag]));
+      }
     });
   };
 
-  const newPage = () => {
-    page = doc.addPage([PAGE.width, PAGE.height]);
-    y = PAGE.height - MARGIN;
-    drawTableHeader();
+  const drawRows = (page, top, rows, offset) => {
+    for (let r = 0; r < rows; r++) {
+      const rowTop = top + r * ROW;
+      for (const side of [0, 1]) {
+        const number = side * half + offset + r + 1;
+        drawRow(page, side, rowTop, number, entries[number - 1]);
+      }
+      hline(page, LEFT, RIGHT, rowTop + ROW);
+    }
+    const bottom = top + rows * ROW;
+    for (const side of [0, 1]) {
+      columns.forEach((column, index) => {
+        if (index === 0) return;
+        const heavy = column.key === 'name' || column.key === 'age' || column.key === 'in' || column.key === 'brk';
+        vline(page, columnX(side, index), top, bottom, heavy ? 0.5 : 0.3, heavy ? CHECK : GRID);
+      });
+    }
+    vline(page, LEFT + HALF, top, bottom, 0.8, INK);
+    box(page, LEFT, top, RIGHT - LEFT, bottom - top);
+    return bottom;
   };
 
-  // Header block
-  text('IF Cares Daily Meal Count', MARGIN, 15, { bold: true });
-  const dateStr = dateLabel(count.date);
-  const dateWidth = bold.widthOfTextAtSize(dateStr, 11);
-  text(dateStr, PAGE.width - MARGIN - dateWidth, 11, { bold: true });
-  y -= 24;
-  text(count.site, MARGIN, 11);
-  y -= 18;
-  text(`Time in: ${timeLabel(count.timeIn)}`, MARGIN, 9, { color: MUTED });
-  text(`Time out: ${timeLabel(count.timeOut)}`, MARGIN + 110, 9, { color: MUTED });
-  if (count.submittedBy && count.submittedBy !== 'gas-import') {
-    text(`Submitted by: ${count.submittedBy}`, MARGIN + 230, 9, { color: MUTED });
+  // A page's worth of rows in each column. Two hundred rows on the 200 row
+  // sheet came out as 1-70 beside 101-170 and then 71-100 beside 171-200,
+  // which is what the sites are used to reading.
+  let page = doc.addPage([PAGE.width, PAGE.height]);
+  let rowsTop = drawFormHeader(page);
+  let slot = 0;
+  let bottom = rowsTop;
+  while (slot < half) {
+    const rows = Math.min(Math.floor((FLOOR - rowsTop) / ROW), half - slot);
+    bottom = drawRows(page, rowsTop, rows, slot);
+    slot += rows;
+    if (slot < half) {
+      page = doc.addPage([PAGE.width, PAGE.height]);
+      rowsTop = drawColumnHeader(page, TOP);
+    }
   }
 
-  // A corrected count prints its current values, so on paper it is
-  // indistinguishable from one that was right the first time. Whoever receives
-  // this has to be able to see that it was touched after it was signed, and
-  // when - that is the whole point of keeping the original values.
-  if (count.corrected) {
-    y -= 15;
-    const last = count.corrections?.[0];
-    const when = last?.at ? new Date(last.at) : null;
-    const stamp = when
-      ? ` on ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-      : '';
-    const times = count.corrections?.length ?? 1;
-    text(
-      `CORRECTED after submission - ${times} ${times === 1 ? 'correction' : 'corrections'}, last${stamp}${last?.by ? ` by ${last.by}` : ''}`,
-      MARGIN,
-      9,
-      { bold: true, color: WARN }
-    );
-  }
-  y -= 20;
-
-  drawTableHeader();
-
-  for (const entry of count.entries) {
-    if (y < MARGIN + ROW_HEIGHT) newPage();
-    y -= 3;
-    cellText(entry.number, 0, 9);
-    cellText(entry.name.slice(0, 55), 1, 9);
-    cellText(entry.age ?? '', 2, 9);
-    cellText(entry.attendance ? 'X' : '', 3, 9);
-    cellText(entry.breakfast ? 'X' : '', 4, 9);
-    cellText(entry.lunch ? 'X' : '', 5, 9);
-    cellText(entry.snack ? 'X' : '', 6, 9);
-    cellText(entry.supper ? 'X' : '', 7, 9);
-    y -= ROW_HEIGHT - 3;
-    page.drawLine({
-      start: { x: MARGIN, y },
-      end: { x: MARGIN + tableWidth, y },
-      thickness: 0.5,
-      color: LINE,
-    });
-  }
-
-  // Totals row
-  if (y < MARGIN + ROW_HEIGHT) newPage();
-  y -= 3;
-  cellText('TOTALS', 1, 9, { bold: true });
-  cellText(count.totals.att, 3, 9, { bold: true });
-  cellText(count.totals.brk, 4, 9, { bold: true });
-  cellText(count.totals.lun, 5, 9, { bold: true });
-  cellText(count.totals.snk, 6, 9, { bold: true });
-  cellText(count.totals.sup, 7, 9, { bold: true });
-  y -= ROW_HEIGHT;
-
-  // Certification + signature block, kept together.
-  //
-  // The signature is decoded before the break is decided, because how tall it
-  // is decides how tall the block is. A fixed 130 was right for the blank line
-  // and about twenty points short for a full height signature, which dropped
-  // "Staff signature" into the bottom margin on a page that ended just so.
+  // The signature is decoded before the footer is placed, because its height is
+  // part of what has to fit.
   let png = null;
   if (count.signature?.startsWith('data:image/png;base64,')) {
     try {
       png = await doc.embedPng(count.signature.slice('data:image/png;base64,'.length));
     } catch {
-      png = null; // falls through to the blank signature line below
+      png = null; // a signature that will not decode must not cost the form
     }
   }
-  const sigScale = png ? Math.min(180 / png.width, 55 / png.height, 1) : 0;
-  const sigHeight = png ? png.height * sigScale : 0;
-  const blockHeight = png ? 94 + sigHeight : 124;
-  if (y < MARGIN + blockHeight) newPage();
-  y -= 16;
-  text('Certification', MARGIN, 9, { bold: true });
-  y -= 14;
-  // Naive two-line wrap is enough for the fixed certification sentence.
-  const midpoint = CERTIFICATION_TEXT.lastIndexOf(' ', Math.ceil(CERTIFICATION_TEXT.length / 2) + 10);
-  text(CERTIFICATION_TEXT.slice(0, midpoint), MARGIN, 8, { color: MUTED });
-  y -= 11;
-  text(CERTIFICATION_TEXT.slice(midpoint + 1), MARGIN, 8, { color: MUTED });
-  y -= 24;
+  const sigScale = png ? Math.min(112 / png.width, 26 / png.height, 1) : 0;
 
-  // A signature that will not decode must not take the document down with it.
-  // pdf-lib throws on a truncated PNG ("Invalid typed array length: 0"), and
-  // this is the only place the bytes are ever read - so a count accepted months
-  // ago became a count whose daily form answered 500, at the moment somebody
-  // needed the form. The row is still on the dashboard, still in the monthly
-  // report and still in the claim; only its own document was unbuildable.
-  // Decoding happens above, where the block's height is worked out.
-  if (png) {
-    page.drawImage(png, {
-      x: MARGIN,
-      y: y - sigHeight,
-      width: png.width * sigScale,
-      height: sigHeight,
-    });
-    y -= sigHeight + 6;
-  } else {
-    y -= 30;
-    text('Signature on file in the previous system', MARGIN, 8, { color: MUTED });
-    y -= 6;
+  let top = bottom + 10;
+  if (top + 96 > PAGE.height - 30) {
+    page = doc.addPage([PAGE.width, PAGE.height]);
+    top = TOP;
   }
-  page.drawLine({
-    start: { x: MARGIN, y },
-    end: { x: MARGIN + 220, y },
-    thickness: 0.8,
-    color: INK,
+
+  // Totals, in the sheet's own two by three grid. Non-program meals were never
+  // recorded by the app and print as zero, as they always did.
+  const totals = count.totals ?? {};
+  const grid = [
+    [
+      ['Total breakfasts:', totals.brk],
+      ['Total snacks:', totals.snk],
+      ['Total Non-Program Meals:', 0],
+    ],
+    [
+      ['Total lunches:', totals.lun],
+      ['Total suppers:', totals.sup],
+      ['Total Program Participants:', totals.att],
+    ],
+  ];
+  const slots = [
+    { labelRight: 143.3, valueFrom: 146, valueTo: 168 },
+    { labelRight: 257.3, valueFrom: 260, valueTo: 284 },
+    { labelRight: 390.9, valueFrom: 394, valueTo: 422 },
+  ];
+  grid.forEach((row, r) => {
+    const rowTop = top + r * (ROW + 1);
+    row.forEach(([label, value], i) => {
+      const slotAt = slots[i];
+      text(page, label, slotAt.labelRight, rowTop + 6.6, { bold: true, align: 'right' });
+      box(page, slotAt.valueFrom, rowTop, slotAt.valueTo - slotAt.valueFrom, ROW + 1, 0.4, GRID);
+      text(page, value ?? 0, (slotAt.valueFrom + slotAt.valueTo) / 2, rowTop + 6.6, { align: 'center' });
+    });
   });
-  y -= 12;
-  text('Staff signature', MARGIN, 8, { color: MUTED });
+
+  // A corrected count prints its current values, so on paper it would pass for
+  // one that was right the first time. The mark sits beside the totals, where
+  // whoever audits the form is already looking.
+  if (count.corrected) {
+    const times = count.correctionCount ?? count.corrections?.length ?? 1;
+    const last = count.corrections?.[0];
+    const when = last?.at ? formDate(new Date(last.at).toISOString().slice(0, 10)) : '';
+    const detail = [when && `last ${when}`, last?.by && `by ${last.by}`].filter(Boolean).join(' ');
+    text(page, `CORRECTED AFTER SUBMISSION (${times})`, RIGHT - 2, top + 6.6, { bold: true, size: 5.4, align: 'right', color: WARN });
+    if (detail) text(page, detail, RIGHT - 2, top + ROW + 1 + 6.6, { size: 5.2, align: 'right', color: WARN });
+  }
+  top += 2 * (ROW + 1) + 14;
+
+  // Certification, with "eligible" underlined twice as the form prints it.
+  const certLines = wrap(bold, CERTIFICATION, SIZE, 214);
+  certLines.forEach((line, i) => {
+    const baseline = top + i * 6.9 + 5.7;
+    text(page, line, LEFT + 1.2, baseline, { bold: true });
+    let from = 0;
+    while (from < line.length) {
+      const at = line.indexOf('eligible', from);
+      if (at < 0) break;
+      const x1 = LEFT + 1.2 + bold.widthOfTextAtSize(line.slice(0, at), SIZE);
+      const x2 = x1 + bold.widthOfTextAtSize('eligible', SIZE);
+      hline(page, x1, x2, baseline + 1.1, 0.4, INK);
+      from = at + 'eligible'.length;
+    }
+  });
+
+  const lineTop = top + 22;
+  if (png) {
+    const w = png.width * sigScale;
+    const h = png.height * sigScale;
+    page.drawImage(png, { x: 359 - w / 2, y: Y(lineTop - 1), width: w, height: h });
+  }
+  hline(page, 300, 418, lineTop, 0.6, INK);
+  text(page, 'Signature - Site Representative', 359, lineTop + 7.5, { size: 4.7, align: 'center' });
+
+  text(page, formDate(count.date), 514, lineTop - 2, { size: 5.2, align: 'center' });
+  hline(page, 470, 558, lineTop, 0.6, INK);
+  text(page, 'Date', 514, lineTop + 7.5, { size: 4.7, align: 'center' });
 
   return doc.save();
 }

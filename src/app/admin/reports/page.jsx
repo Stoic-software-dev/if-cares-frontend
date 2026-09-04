@@ -158,12 +158,12 @@ function ReportsScreen() {
                   href={`/api/reports/monthly?site=${encodeURIComponent(site)}&year=${cursor.year}&month=${cursor.month}`}
                   hint={`${monthLabel(cursor.year, cursor.month)} ${cursor.year}`}
                 >
-                  Monthly summary
+                  Monthly forms
                 </SheetAction>
               )}
               {site && submitted.length > 0 && (
                 <SheetAction icon={Send} onSelect={() => setEmailing(true)}>
-                  Email the summary
+                  Email the month
                 </SheetAction>
               )}
             </ActionSheet>
@@ -182,14 +182,14 @@ function ReportsScreen() {
                     href={`/api/reports/monthly?site=${encodeURIComponent(site)}&year=${cursor.year}&month=${cursor.month}`}
                   >
                     <FileText />
-                    Monthly summary
+                    Monthly forms
                   </a>
                 </Button>
               )}
               {site && submitted.length > 0 && (
                 <Button variant="outline" onClick={() => setEmailing(true)}>
                   <Send />
-                  Email the summary
+                  Email the month
                 </Button>
               )}
               {submitted.length > 0 && (
@@ -344,7 +344,7 @@ function ReportsScreen() {
         site={site}
         year={cursor.year}
         month={cursor.month}
-        label={`The ${monthLabel(cursor.year, cursor.month)} summary for ${shortSiteName(site ?? '')}`}
+        label={`The ${monthLabel(cursor.year, cursor.month)} forms for ${shortSiteName(site ?? '')}`}
       />
     </AppShell>
   );

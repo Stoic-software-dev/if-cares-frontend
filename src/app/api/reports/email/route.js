@@ -5,8 +5,8 @@ import { mailConfigured, sendMail, parseRecipients, MailError } from '@/lib/gmai
 import { countSent } from '@/lib/mail-templates';
 import { loadMealCountDetail } from '@/lib/meal-count-detail';
 import { buildMealCountPdf } from '@/lib/meal-count-pdf';
-import { siteMonth, monthLabel } from '@/lib/report-data';
-import { buildSiteMonthPdf } from '@/lib/report-pdf';
+import { siteMonth, siteMonthCounts, monthLabel } from '@/lib/report-data';
+import { buildSiteMonthBundlePdf } from '@/lib/report-pdf';
 import { safeName } from '@/lib/pdf-archive';
 import { dateLabel } from '@/lib/calendar';
 import { logAudit } from '@/lib/audit';
@@ -85,7 +85,10 @@ export const POST = handle(async (req) => {
     const data = await siteMonth({ site: body.site, year: body.year, month: body.month });
     if (!data) throw new ApiError(404, 'Site not found.');
     if (!data.days.length) throw new ApiError(422, 'That month has no counts to send.');
-    bytes = await buildSiteMonthPdf(data);
+    bytes = await buildSiteMonthBundlePdf({
+      summary: data,
+      counts: await siteMonthCounts({ site: body.site, year: body.year, month: body.month }),
+    });
     fileName = `${safeName(body.site)} ${body.year}-${String(body.month).padStart(2, '0')} monthly.pdf`;
     period = monthLabel(body.year, body.month);
   }

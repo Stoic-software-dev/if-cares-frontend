@@ -371,6 +371,19 @@ día con las cuatro banderas en false + feriado que cierra solo el desayuno → 
 almuerzo, snack y cena. **17 sitios tienen días así.** Feriado de día completo y feriado
 que cierra las cuatro siguen cerrando el día.
 
+**Segunda pasada de la misma tanda: concurrencia, recordatorios y los mails por dentro.**
+
+| Sev. | Hallazgo | Estado |
+|---|---|---|
+| **Alto** | **Dos personas sobre el mismo count, con un segundo de diferencia, y la aprobación deja de significar algo.** Corregir verifica que no esté aprobado y después escribe, en dos pasos. Entre medio entra la aprobación de otro y la corrección pasa igual: los números se mueven debajo de una firma. Reproducido con 5 pedidos simultáneos — la corrección quedó guardada **2,6 s después** de la aprobación que debía rechazarla. | **Arreglado**: la condición viaja dentro de la escritura (`updateMany … where approvedAt: null, voidedAt: null`) y si no matchea se descarta la transacción. Aprobar lleva el mismo candado, porque dos aprobaciones simultáneas pasaban las dos. Re-corrida: gana una, el resto 409, cero correcciones post-aprobación. |
+| Medio | **El texto que escribe un sitio entraba crudo en el HTML del mail.** Una nota con `<b>` se renderizaba como negrita; una escrita para cerrar el `blockquote` y abrir su propio encabezado podía poner cualquier frase dentro de un mail que llega de IF Cares. La base ya tiene notas con tags adentro. | **Arreglado**: todo valor que viene de una persona pasa por un `esc()`; los links no, porque los arma la app. El asunto ya estaba a salvo (un salto de línea cae fuera del ASCII imprimible y se codifica en base64). |
+
+**Verificado en esta pasada.** Concurrencia de envío: 6 simultáneos, gana 1, los otros 5 en 409, count íntegro. Recordatorios de verdad con el secreto real: **18 enviados, 0 fallidos** — y 16 de esos 18 son cuentas `allSites`. Mail del claim (`/send`). Import de roster real. Charter 4 (sitio vacío): nombra lo que falta en vez de mostrar blanco. Tema oscuro en las 15 pantallas, con el CSS verificado en cada carga: cero textos por debajo de 2,2:1. El PDF adjunto vuelve **byte por byte idéntico** tras la codificación MIME.
+
+**Lo que NO se pudo probar, y por qué.** El **teclado**: las teclas no llegan a la página por la herramienta del agente (el mouse sí, comprobado con un listener), así que orden de tabulación, Escape y trampa de foco siguen sin verificarse — la auditoría de estructura sí está limpia. **Abrir los mails en un cliente real**: falta conectar Gmail. **Railway**: todo fue local.
+
+**Ojo con `APP_URL`.** El scheduler se niega a correr sin esa variable y sólo deja una alerta, así que **si no está en Railway los recordatorios no salen nunca**. La ruta manual sí funciona porque cae al origen del request.
+
 **Datos, para decidir con IF Cares (no es código).**
 
 - **Los 57 sitios ya tienen calendario de servicio.** El bloqueante del corte que venía

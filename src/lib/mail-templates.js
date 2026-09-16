@@ -1,6 +1,27 @@
 // The messages the app sends. They are plain and short on purpose: these arrive
 // on phones at a rec center, and the point is the one thing the reader has to do.
 
+/**
+ * Everything that reaches these templates from a person goes through this.
+ *
+ * A site's request note, the answer an administrator writes, a site's name, the
+ * type of thing being asked for - all of it was interpolated straight into the
+ * message body. An ampersand in a name rendered wrong; a note that happened to
+ * contain a tag rendered as that tag; and a note written to close the quote
+ * block and open its own heading could put any sentence it liked into an email
+ * that arrives from IF Cares, which is somebody else's words in the office's
+ * mailbox. The data already holds notes with tags in them.
+ *
+ * Links are not escaped here: they are built by the app, never typed.
+ */
+const esc = (value) =>
+  String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
 const SHELL = (body) => `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#0f172a;max-width:560px">
   ${body}
@@ -21,7 +42,7 @@ export function passwordReset({ name, link, hours = 1 }) {
   return {
     subject: 'Reset your IF Cares password',
     html: SHELL(`
-      <p>Hello ${name || 'there'},</p>
+      <p>Hello ${esc(name) || 'there'},</p>
       <p>Use the link below to set a new password. It works once and expires in ${hours} hour${hours === 1 ? '' : 's'}.</p>
       ${button(link, 'Set a new password')}
       <p>If you did not ask for this, you can ignore this message. Nothing has changed.</p>
@@ -37,8 +58,8 @@ export function welcome({ name, link, sites = [], hours = 24 }) {
   return {
     subject: 'Your IF Cares account is ready',
     html: SHELL(`
-      <p>Hello ${name || 'there'},</p>
-      <p>An account was created for you in the IF Cares meal count app${where ? ` for <strong>${where}</strong>` : ''}.</p>
+      <p>Hello ${esc(name) || 'there'},</p>
+      <p>An account was created for you in the IF Cares meal count app${where ? ` for <strong>${esc(where)}</strong>` : ''}.</p>
       <p>Set your password with the link below to get in. It works once and expires in ${hours} hour${hours === 1 ? '' : 's'}.</p>
       ${button(link, 'Set your password')}
       <p>After that you sign in with this address and the password you chose. If the link has expired,
@@ -55,13 +76,13 @@ export function requestReceived({ site, type, value, note, requestedBy, when, li
   return {
     subject: 'New Request Received',
     html: SHELL(`
-      <p>The <strong>${site} Site</strong> has received a new request on <strong>${when}</strong></p>
+      <p>The <strong>${esc(site)} Site</strong> has received a new request on <strong>${esc(when)}</strong></p>
       <p><u>Details of the request:</u><br>
-      <strong>Type:</strong> ${type}<br>
-      <strong>Value:</strong> ${value || '—'}</p>
-      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${note}</blockquote>` : ''}
+      <strong>Type:</strong> ${esc(type)}<br>
+      <strong>Value:</strong> ${esc(value) || '—'}</p>
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(note)}</blockquote>` : ''}
       ${link ? button(link, 'Open the request') : ''}
-      <p style="font-size:13px;color:#475569">Sent by ${requestedBy}.</p>
+      <p style="font-size:13px;color:#475569">Sent by ${esc(requestedBy)}.</p>
     `),
   };
 }
@@ -70,10 +91,10 @@ export function requestAnswered({ name, type, detail, site, comment, resolvedBy 
   return {
     subject: `Your request was answered: ${type}`,
     html: SHELL(`
-      <p>Hello ${name || 'there'},</p>
-      <p>Your request for <strong>${type}</strong>${detail ? ` (${detail})` : ''} at ${site} has been resolved.</p>
-      ${comment ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${comment}</blockquote>` : ''}
-      <p style="font-size:13px;color:#475569">Resolved by ${resolvedBy}.</p>
+      <p>Hello ${esc(name) || 'there'},</p>
+      <p>Your request for <strong>${esc(type)}</strong>${detail ? ` (${esc(detail)})` : ''} at ${esc(site)} has been resolved.</p>
+      ${comment ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(comment)}</blockquote>` : ''}
+      <p style="font-size:13px;color:#475569">Resolved by ${esc(resolvedBy)}.</p>
     `),
   };
 }
@@ -91,7 +112,7 @@ export function countOverdue({ name, days }) {
   const rows = days
     .map(
       (day) =>
-        `<li style="margin:0 0 6px"><strong>${day.date}</strong> — ${day.site} · <a href="${day.link}">submit it</a></li>`
+        `<li style="margin:0 0 6px"><strong>${esc(day.date)}</strong> — ${esc(day.site)} · <a href="${day.link}">submit it</a></li>`
     )
     .join('');
 
@@ -100,10 +121,10 @@ export function countOverdue({ name, days }) {
       ? 'Daily meal count and attendance overdue'
       : `${days.length} meal counts overdue`,
     html: SHELL(`
-      <p>Hello ${name || 'there'},</p>
+      <p>Hello ${esc(name) || 'there'},</p>
       <p>${
         one
-          ? `The <strong>${days[0].date}</strong> meal count and attendance for <strong>${days[0].site}</strong> is overdue.`
+          ? `The <strong>${esc(days[0].date)}</strong> meal count and attendance for <strong>${esc(days[0].site)}</strong> is overdue.`
           : `These meal counts have not been filed yet:`
       }</p>
       ${one ? '' : `<ul style="padding-left:18px;margin:0 0 16px">${rows}</ul>`}
@@ -120,8 +141,8 @@ export function countApproved({ name, site, date }) {
   return {
     subject: `Meal count approved: ${site}, ${date}`,
     html: SHELL(`
-      <p>Hello ${name || 'there'},</p>
-      <p>The daily meal count and attendance for <b>${site}</b> on <b>${date}</b> has been
+      <p>Hello ${esc(name) || 'there'},</p>
+      <p>The daily meal count and attendance for <b>${esc(site)}</b> on <b>${esc(date)}</b> has been
       <b>approved</b>. A copy of what was approved is attached.</p>
       <p>Nothing else is needed from you for that day.</p>
     `),
@@ -132,8 +153,8 @@ export function claimSent({ period, state, fileName, note }) {
   return {
     subject: `Documentation of meals claimed, ${state ? `${state} ` : ''}${period}`,
     html: SHELL(`
-      <p>Attached is <strong>${fileName}</strong>.</p>
-      ${note ? `<p>${note}</p>` : ''}
+      <p>Attached is <strong>${esc(fileName)}</strong>.</p>
+      ${note ? `<p>${esc(note)}</p>` : ''}
     `),
   };
 }
@@ -145,9 +166,9 @@ export function countSent({ site, period, fileName, note, senderName }) {
   return {
     subject: `Meal count: ${site}, ${period}`,
     html: SHELL(`
-      <p>Attached is the meal count for <strong>${site}</strong>, ${period}.</p>
-      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${note}</blockquote>` : ''}
-      <p style="font-size:13px;color:#475569">${fileName}${senderName ? ` · sent by ${senderName}` : ''}</p>
+      <p>Attached is the meal count for <strong>${esc(site)}</strong>, ${esc(period)}.</p>
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(note)}</blockquote>` : ''}
+      <p style="font-size:13px;color:#475569">${esc(fileName)}${senderName ? ` · sent by ${esc(senderName)}` : ''}</p>
     `),
   };
 }

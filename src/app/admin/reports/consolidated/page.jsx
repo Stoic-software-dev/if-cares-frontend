@@ -508,21 +508,26 @@ function ConsolidatedScreen() {
                 {included.length} of {inScope.length} sites included
               </span>
             </div>
-
-            {/* The POST only queues the job; the building happens after it
-                returns. Ending the busy state there put the button back to rest
-                while the report was still being built, which is the moment the
-                screen most has to say something is happening - and this dialog
-                closes, so what says it is the progress card behind it. */}
-            <Button
-              onClick={start}
-              loading={building}
-              disabled={included.length === 0}
-            >
-              {!building && <Layers />}
-              {building ? 'Building the report' : 'Build the report'}
-            </Button>
           </div>
+
+          {/* Outside the scrolling half, like every other dialog here. Inside
+              it the button stretched the full width and scrolled away with the
+              site list, so the way out of the dialog was above the way to
+              finish it.
+
+              The POST only queues the job; the building happens after it
+              returns. Ending the busy state there put the button back to rest
+              while the report was still being built - and this dialog closes
+              anyway, so what says it is happening is the card behind it. */}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBuilder(false)} disabled={building}>
+              Cancel
+            </Button>
+            <Button onClick={start} loading={building} disabled={included.length === 0}>
+              {!building && <Layers />}
+              {building ? 'Building' : 'Build the report'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarOff, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarOff, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -25,7 +25,6 @@ import { Fab } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { SearchInput } from '@/components/ui/search-input';
-import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiGet, apiPatch, apiPost } from '@/lib/api-client';
@@ -70,7 +69,6 @@ function dateRange(holiday) {
 function HolidaysScreen() {
   const [holidays, setHolidays] = useState(null);
   const [error, setError] = useState('');
-  const [scope, setScope] = useState('upcoming');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
 
@@ -97,18 +95,24 @@ function HolidaysScreen() {
   useEffect(load, []);
   useEffect(() => {
     setPage(1);
-  }, [query, scope]);
+  }, [query]);
 
   const today = todayYmd();
 
-  const rows = useMemo(() => {
+  // One list, not a filter. "Upcoming / Past" was a second strip of pills
+  // directly under the Sites/Holidays one - the same control twice, once for
+  // navigation and once for a filter - and it hid the half nobody was looking
+  // at behind a tab. What is ahead is the screen; what is over folds up under
+  // it, because it is only ever read to check what happened.
+  const matching = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (holidays ?? [])
-      .filter((holiday) => (scope === 'upcoming' ? holiday.endDate >= today : holiday.endDate < today))
-      .filter((holiday) =>
-        q ? [holiday.name, ...holiday.sites].join(' ').toLowerCase().includes(q) : true
-      );
-  }, [holidays, scope, query, today]);
+    return (holidays ?? []).filter((holiday) =>
+      q ? [holiday.name, ...holiday.sites].join(' ').toLowerCase().includes(q) : true
+    );
+  }, [holidays, query]);
+
+  const ahead = useMemo(() => matching.filter((h) => h.endDate >= today), [matching, today]);
+  const past = useMemo(() => matching.filter((h) => h.endDate < today), [matching, today]);
 
   const counts = useMemo(() => {
     const list = holidays ?? [];
@@ -118,9 +122,9 @@ function HolidaysScreen() {
     };
   }, [holidays, today]);
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(ahead.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
-  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+  const pageRows = ahead.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
 
   const openNew = () => {
     setDraft(blank());
@@ -211,24 +215,12 @@ function HolidaysScreen() {
 
         <SectionTabs options={SITES_TABS} ariaLabel="Sites section" />
 
-        <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center">
-          <Segmented
-            ariaLabel="Filter holidays"
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: 'upcoming', label: 'Upcoming', count: counts.upcoming },
-              { value: 'past', label: 'Past', count: counts.past },
-            ]}
-            className="md:w-auto"
-          />
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Search by name or site"
-            className="md:ml-auto md:min-w-[13rem] md:max-w-sm md:flex-1"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by name or site"
+          className="md:max-w-sm"
+        />
 
         {error && <ErrorState title="Couldn't load the holidays" message={error} onRetry={load} />}
 
@@ -240,11 +232,11 @@ function HolidaysScreen() {
           </div>
         )}
 
-        {holidays && rows.length === 0 && (
+        {holidays && ahead.length === 0 && past.length === 0 && (
           <div className="rounded-lg border border-dashed border-border-strong bg-card">
             <EmptyState
               icon={CalendarOff}
-              title={query ? 'No holiday matches' : scope === 'upcoming' ? 'No holidays ahead' : 'No past holidays'}
+              title={query ? 'No holiday matches' : 'No holidays yet'}
               description={
                 query
                   ? 'Try a different name, or clear the search.'
@@ -266,53 +258,16 @@ function HolidaysScreen() {
           </div>
         )}
 
+        {holidays && ahead.length === 0 && past.length > 0 && (
+          <p className="rounded-lg border border-dashed border-border-strong bg-card px-4 py-3 text-[13px] text-muted-foreground">
+            {query ? 'Nothing ahead matches that search.' : 'No holidays ahead.'} What is over is below.
+          </p>
+        )}
+
         {pageRows.length > 0 && (
           <div className="flex flex-col gap-2">
             {pageRows.map((holiday) => (
-              <article
-                key={holiday.id}
-                className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-warning-soft text-warning-text">
-                  <CalendarOff className="h-4 w-4" />
-                </span>
-
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-[14px] font-semibold text-foreground">{holiday.name}</span>
-                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
-                    <span className="tabular-nums">{dateRange(holiday)}</span>
-                    <span>
-                      {holiday.allSites
-                        ? 'Every site'
-                        : `${holiday.sites.length} ${holiday.sites.length === 1 ? 'site' : 'sites'}`}
-                    </span>
-                    {!holiday.allMeals && (
-                      <span className="flex flex-wrap gap-1">
-                        {MEALS.filter((meal) => holiday[meal.key]).map((meal) => (
-                          <Badge key={meal.key} size="sm" variant="neutral">
-                            {meal.label}
-                          </Badge>
-                        ))}
-                      </span>
-                    )}
-                  </span>
-                  {!holiday.allSites && holiday.sites.length > 0 && (
-                    <span className="truncate text-[12px] text-muted-foreground">
-                      {holiday.sites.map(shortSiteName).join(', ')}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(holiday)}>
-                    <Pencil />
-                    Edit
-                  </Button>
-                  <Button variant="ghost" size="icon" aria-label="Remove holiday" onClick={() => setRemoving(holiday)}>
-                    <Trash2 className="text-destructive" />
-                  </Button>
-                </div>
-              </article>
+              <HolidayRow key={holiday.id} holiday={holiday} onEdit={openEdit} onRemove={setRemoving} />
             ))}
           </div>
         )}
@@ -321,10 +276,34 @@ function HolidaysScreen() {
           page={current}
           pageCount={pageCount}
           onPageChange={setPage}
-          total={rows.length}
+          total={ahead.length}
           pageSize={PAGE_SIZE}
           label="holidays"
         />
+
+        {past.length > 0 && (
+          <details className="group rounded-lg border border-border bg-card">
+            <summary
+              className={cn(
+                'flex cursor-pointer list-none items-center gap-2 px-4 py-3 outline-none',
+                'text-[13px] font-semibold text-muted-foreground',
+                'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                'hover:text-foreground'
+              )}
+            >
+              <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-fast group-open:rotate-90" />
+              Past
+              <span className="rounded-full bg-muted px-1.5 text-[11px] font-bold tabular-nums text-muted-foreground">
+                {past.length}
+              </span>
+            </summary>
+            <div className="flex flex-col gap-2 border-t border-border p-3">
+              {past.map((holiday) => (
+                <HolidayRow key={holiday.id} holiday={holiday} onEdit={openEdit} onRemove={setRemoving} />
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <Fab icon={Plus} onClick={openNew}>
@@ -516,6 +495,55 @@ function HolidaysScreen() {
         onConfirm={remove}
       />
     </AppShell>
+  );
+}
+
+
+function HolidayRow({ holiday, onEdit, onRemove }) {
+  return (
+        <article
+                  className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-warning-soft text-warning-text">
+            <CalendarOff className="h-4 w-4" />
+          </span>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-[14px] font-semibold text-foreground">{holiday.name}</span>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+              <span className="tabular-nums">{dateRange(holiday)}</span>
+              <span>
+                {holiday.allSites
+                  ? 'Every site'
+                  : `${holiday.sites.length} ${holiday.sites.length === 1 ? 'site' : 'sites'}`}
+              </span>
+              {!holiday.allMeals && (
+                <span className="flex flex-wrap gap-1">
+                  {MEALS.filter((meal) => holiday[meal.key]).map((meal) => (
+                    <Badge key={meal.key} size="sm" variant="neutral">
+                      {meal.label}
+                    </Badge>
+                  ))}
+                </span>
+              )}
+            </span>
+            {!holiday.allSites && holiday.sites.length > 0 && (
+              <span className="truncate text-[12px] text-muted-foreground">
+                {holiday.sites.map(shortSiteName).join(', ')}
+              </span>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={() => onEdit(holiday)}>
+              <Pencil />
+              Edit
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Remove holiday" onClick={() => onRemove(holiday)}>
+              <Trash2 className="text-destructive" />
+            </Button>
+          </div>
+        </article>
   );
 }
 

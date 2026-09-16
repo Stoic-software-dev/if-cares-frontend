@@ -22,7 +22,7 @@ no overnight wait.
 | Change who a site's reminders go to, in the `Reminders` tab | **Users** → assign sites to the person |
 | Change the reminder window for a site | **Sites** → open the site |
 | Nothing — holidays were not in the system | **Holidays** → add a holiday, for one site or all |
-| Build a consolidated claim by hand | **Reports** → *Consolidated claims* |
+| Build a consolidated claim by hand | **Reports** → *Consolidated Reports* |
 | Keep the `Reports` tab as the log of what was claimed | **Reports** → every claim you ever built is listed and downloadable |
 | Read the request emails and answer them from your inbox | **Requests** → the inbox, with a reply that reaches the site |
 | Drag menus into the Drive folder | Unchanged. Keep dragging them into the same folder |
@@ -74,7 +74,7 @@ To change it, undo the approval first.
 
 ### Claims
 
-**Reports → Consolidated claims.** Pick the month and the state, leave out any site that
+**Reports → Consolidated Reports.** Pick the month and the state, leave out any site that
 should not be in it, and build. It takes a few seconds; the screen shows you where it is.
 
 The claim is saved. You can download it again months later, and if the file is ever missing

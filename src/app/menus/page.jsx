@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Download, Eye, FileText, RefreshCw, Trash2, Upload, UtensilsCrossed } from 'lucide-react';
+import { Download, Eye, FileText, Trash2, Upload, UtensilsCrossed } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
@@ -177,7 +177,6 @@ function MenusScreen() {
   const admin = isAdmin(user);
   const [publishing, setPublishing] = useState(false);
   const [removing, setRemoving] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
 
   // The listing is a Drive call, so it is cached for the session: coming back
@@ -189,23 +188,20 @@ function MenusScreen() {
     return Array.isArray(data) ? data : [];
   }, [data]);
 
-  // The server caches the Drive listing for ten minutes, so a menu removed
-  // straight from Drive keeps showing up here. Busting that first is what makes
-  // a refresh mean something.
-  const hardRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await apiGet(`${MENUS_PATH}?refresh=1`).catch(() => {});
-      await load();
-    } finally {
-      setRefreshing(false);
-    }
+  // The server caches the Drive listing for ten minutes, so the list right after
+  // a publish or a removal would be the one from before it. This drops that
+  // cache and re-reads, and it runs on its own after every change made here -
+  // there used to be a Refresh button asking the office to do it by hand, which
+  // is the app's own bookkeeping showing through as a control.
+  const reload = async () => {
+    await apiGet(`${MENUS_PATH}?refresh=1`).catch(() => {});
+    await load();
   };
 
   const remove = async () => {
     await apiDelete(`${MENUS_PATH}?fileId=${encodeURIComponent(fileId(removing))}`);
     toast.success(`${titleOf(removing)} removed`);
-    await load();
+    await reload();
   };
 
   const visible = useMemo(() => {
@@ -236,41 +232,12 @@ function MenusScreen() {
                 />
               )}
               {admin && (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={hardRefresh}
-                    loading={refreshing}
-                    className="shrink-0"
-                    title="Re-read the Drive folder now"
-                  >
-                    {!refreshing && <RefreshCw />}
-                    Refresh
-                  </Button>
-                  <Button onClick={() => setPublishing(true)} className="shrink-0">
-                    <Upload />
-                    Publish menu
-                  </Button>
-                </>
+                <Button onClick={() => setPublishing(true)} className="shrink-0">
+                  <Upload />
+                  Publish menu
+                </Button>
               )}
             </div>
-          }
-          // Publishing is the floating action below; re-reading Drive is a
-          // once-in-a-while repair and belongs behind the one control the title
-          // row has room for.
-          mobileActions={
-            admin && (
-              <ActionSheet title="Menus">
-                <SheetAction
-                  icon={RefreshCw}
-                  onSelect={hardRefresh}
-                  hint="Read the Drive folder again"
-                  disabled={refreshing}
-                >
-                  {refreshing ? 'Refreshing' : 'Refresh'}
-                </SheetAction>
-              </ActionSheet>
-            )
           }
         />
 
@@ -436,7 +403,11 @@ function MenusScreen() {
                     <h2 className="text-[14.5px] font-semibold leading-snug text-foreground">{titleOf(file)}</h2>
                     <p className="text-[12px] text-muted-foreground">{period ?? 'Program menu'}</p>
 
-                    <div className="mt-3 flex gap-2">
+                    {/* `mt-auto` and not `mt-3`: the card body stretches to the
+                        tallest card in the row, so without it a one-line title
+                        left its two buttons floating halfway up while its
+                        neighbours' sat at the bottom. */}
+                    <div className="mt-auto flex gap-2 pt-3">
                       <Button asChild variant="outline" size="sm" className="flex-1">
                         <a href={urlFor(file)} target="_blank" rel="noreferrer">
                           <Eye />
@@ -464,7 +435,7 @@ function MenusScreen() {
         </Fab>
       )}
 
-      <PublishDialog open={publishing} onClose={() => setPublishing(false)} onPublished={load} />
+      <PublishDialog open={publishing} onClose={() => setPublishing(false)} onPublished={reload} />
 
       <ConfirmDialog
         open={Boolean(removing)}

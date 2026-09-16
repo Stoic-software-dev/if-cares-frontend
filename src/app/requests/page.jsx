@@ -1,14 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Inbox } from 'lucide-react';
+import { Inbox, Plus } from 'lucide-react';
 import { assignedSiteNames, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import RequestForm from '@/components/requests/RequestForm';
 import StatusBadge from '@/components/requests/StatusBadge';
-import { ChipRow } from '@/components/ui/mobile';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ChipRow, Fab } from '@/components/ui/mobile';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
@@ -27,6 +35,7 @@ function RequestsScreen() {
   const [requests, setRequests] = useState(null);
   const [listError, setListError] = useState('');
   const [filter, setFilter] = useState('all');
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
     if (ownSites) return;
@@ -68,25 +77,24 @@ function RequestsScreen() {
   return (
     <AppShell>
       <div className="flex flex-col gap-5">
+        {/* What you come here for is what you already asked and what came back.
+            Filing a new one is an action, not half the screen: the form used to
+            sit permanently beside the list, so a screen about the answers was
+            mostly an empty form for a question nobody had yet. */}
         <PageHeader
           title="Requests"
-          subtitle="Ask the IF Cares team for supplies or changes at your site."
+          subtitle="What you have asked the IF Cares team, and what they answered."
+          actions={
+            <Button onClick={() => setComposing(true)} className="hidden md:inline-flex">
+              <Plus />
+              New request
+            </Button>
+          }
         />
 
-        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[380px_minmax(0,1fr)] lg:items-start lg:gap-8">
-          <RequestForm
-            sites={sites}
-            defaultSite={site}
-            onSent={loadRequests}
-            label="New request"
-            className="rounded-lg border border-border bg-card p-4 md:p-5 lg:sticky lg:top-[76px]"
-          />
-
+        <div className="flex flex-col gap-6">
           <section className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                My requests
-              </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {requests && requests.length > 0 && (
                 <Segmented
                   ariaLabel="Filter requests"
@@ -135,6 +143,14 @@ function RequestsScreen() {
                     requests.length === 0
                       ? 'Requests you send show up here with their status and the answer from the team.'
                       : 'Switch back to All to see the rest of your requests.'
+                  }
+                  action={
+                    requests.length === 0 ? (
+                      <Button size="sm" onClick={() => setComposing(true)}>
+                        <Plus />
+                        New request
+                      </Button>
+                    ) : undefined
                   }
                 />
               </div>
@@ -194,6 +210,29 @@ function RequestsScreen() {
           </section>
         </div>
       </div>
+
+      <Fab icon={Plus} onClick={() => setComposing(true)}>
+        New request
+      </Fab>
+
+      <Dialog open={composing} onOpenChange={setComposing}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New request</DialogTitle>
+            <DialogDescription>
+              Ask the IF Cares team for supplies or a change at your site.
+            </DialogDescription>
+          </DialogHeader>
+          <RequestForm
+            sites={sites}
+            defaultSite={site}
+            onSent={() => {
+              setComposing(false);
+              loadRequests();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

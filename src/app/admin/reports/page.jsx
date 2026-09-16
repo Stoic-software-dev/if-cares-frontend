@@ -126,8 +126,8 @@ function ReportsScreen() {
           subtitle="Daily meal count forms, the month summary for a site, and the consolidated claims."
           mobileActions={
             <ActionSheet title="Reports" description={site ? shortSiteName(site) : undefined}>
-              <SheetAction icon={Layers} href="/admin/reports/consolidated" hint="Every site in one claim">
-                Consolidated claims
+              <SheetAction icon={Layers} href="/admin/reports/consolidated" hint="Every site in one report">
+                Consolidated Reports
               </SheetAction>
               {site && (
                 <SheetAction
@@ -151,7 +151,7 @@ function ReportsScreen() {
               <Button variant="outline" asChild>
                 <Link href="/admin/reports/consolidated">
                   <Layers />
-                  Consolidated claims
+                  Consolidated Reports
                 </Link>
               </Button>
               {site && submitted.length > 0 && (

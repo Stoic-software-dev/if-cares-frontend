@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Fab } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -115,7 +116,7 @@ function ConsolidatedScreen() {
         if (res.data.status !== 'processing') {
           clearInterval(pollRef.current);
           if (res.data.status === 'completed') {
-            toast.success('Consolidated claim ready');
+            toast.success('Consolidated report ready');
             loadReports();
           } else {
             toast.error(res.data.error || 'The report failed.');
@@ -128,6 +129,11 @@ function ConsolidatedScreen() {
     }, 1500);
     return () => clearInterval(pollRef.current);
   }, [job, loadReports]);
+
+  // Building one is an action taken now and then; the screen is the list of
+  // what has been built. The form used to hold a third of the width at all
+  // times for a claim nobody was building.
+  const [builder, setBuilder] = useState(false);
 
   const start = async () => {
     if (included.length === 0) {
@@ -144,6 +150,8 @@ function ConsolidatedScreen() {
         excludeSites: excluded,
       });
       setJob({ id: res.jobId, status: 'processing', progress: 'Starting', elapsedMs: 0 });
+      // The waiting and the result both live in the job card behind this.
+      setBuilder(false);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -225,23 +233,178 @@ function ConsolidatedScreen() {
   return (
     <AppShell width="wide">
       <div className="flex flex-col gap-5">
+        {/* "Consolidated Reports" is what IF Cares calls these: it names the
+            Drive folder they are filed in and the log the old master kept. The
+            app had invented "Consolidated claims" for the same document. */}
         <PageHeader
-          title="Consolidated claims"
+          title="Consolidated Reports"
           subtitle="The monthly documentation of meals claimed, by site and by day."
           backHref="/admin/reports"
           backLabel="Back to reports"
+          actions={
+            <Button onClick={() => setBuilder(true)} className="hidden md:inline-flex">
+              <Layers />
+              Build a report
+            </Button>
+          }
         />
 
-        {/* `grid-cols-1` is the base every breakpoint-only grid needs. Without
-            it the implicit column is `auto`, which stretches to the widest thing
-            inside it: on a 320px phone this screen laid out at 514px and scrolled
-            sideways, with the month and state selects off the edge. */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-start">
-          <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 md:p-5">
+        <div className="flex flex-col gap-4">
+          {job && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center gap-2">
+                {job.status === 'processing' && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                {job.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-success" />}
+                <span className="text-[13px] font-semibold text-foreground">
+                  {job.status === 'processing'
+                    ? job.progress || 'Working'
+                    : job.status === 'completed'
+                      ? 'Claim ready'
+                      : job.error}
+                </span>
+                <span className="ml-auto text-[12px] tabular-nums text-muted-foreground">
+                  {elapsed(job.elapsedMs ?? 0)}
+                </span>
+                {job.status === 'processing' && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Cancel"
+                    onClick={cancel}
+                    loading={cancelling}
+                  >
+                    {!cancelling && <X />}
+                  </Button>
+                )}
+              </div>
+              {job.status === 'completed' && job.result && (
+                <span className="text-[12.5px] text-muted-foreground">
+                  {job.result.rows} rows, {job.result.totals?.att ?? 0} attendance and{' '}
+                  {(job.result.totals?.brk ?? 0) +
+                    (job.result.totals?.lun ?? 0) +
+                    (job.result.totals?.snk ?? 0) +
+                    (job.result.totals?.sup ?? 0)}{' '}
+                  meals claimed.
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Build a claim
+              Saved reports
             </span>
 
+            {error && <ErrorState title="Couldn't load the reports" message={error} onRetry={loadReports} />}
+
+            {!reports && !error && (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <Skeleton key={i} className="h-[72px] rounded-lg" />
+                ))}
+              </div>
+            )}
+
+            {reports && reports.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border-strong bg-card">
+                <EmptyState
+                  icon={Layers}
+                  title="No report has been built yet"
+                  description="Build one for a month and a state, and every one you build stays here."
+                />
+              </div>
+            )}
+
+            {reports?.map((report) => (
+              <article
+                key={report.id}
+                className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate text-[13.5px] font-semibold text-foreground">
+                    {report.fileName}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+                    <span>{MONTHS[report.month - 1]} {report.year}</span>
+                    <span>{KINDS.find((k) => k.value === report.kind)?.label ?? report.kind}</span>
+                    {report.signedAt ? (
+                      <Badge size="sm" variant="success">
+                        Signed by {report.signedBy}
+                      </Badge>
+                    ) : report.hasSignLink ? (
+                      <Badge size="sm" variant="warning">
+                        Waiting for a signature
+                      </Badge>
+                    ) : null}
+                  </span>
+                </div>
+
+                {/* Four small buttons are wider than a 375px phone; on one
+                    they wrap under the title instead of pushing the row
+                    past the edge of the screen. */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/api/reports/generated/${report.id}`}>
+                      <Download />
+                      Download
+                    </a>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSending(report);
+                      setMode(report.hasSignLink && !report.signedAt ? 'signature' : 'copy');
+                      setTo('');
+                      setNote('');
+                    }}
+                  >
+                    <Send />
+                    Send
+                  </Button>
+                  {!report.signedAt && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === report.id}
+                      onClick={() => makeSignLink(report)}
+                    >
+                      {busyId !== report.id && (report.hasSignLink ? <Copy /> : <FileSignature />)}
+                      {report.hasSignLink ? 'New link' : 'Signing link'}
+                    </Button>
+                  )}
+                  {report.hasSignLink && !report.signedAt && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === report.id}
+                      onClick={() => revokeSignLink(report)}
+                    >
+                      {busyId !== report.id && <Ban />}
+                      Revoke link
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Fab icon={Layers} onClick={() => setBuilder(true)}>
+        Build
+      </Fab>
+
+      <Dialog open={builder} onOpenChange={setBuilder}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Build a consolidated report</DialogTitle>
+            <DialogDescription>
+              One month, one state. It is saved to this screen when it is done.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
             <Segmented
               ariaLabel="Report"
               value={kind}
@@ -301,7 +464,7 @@ function ConsolidatedScreen() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Sites in this claim
+                  Sites in this report
                 </span>
                 <Button
                   variant="ghost"
@@ -348,167 +511,25 @@ function ConsolidatedScreen() {
 
             {/* The POST only queues the job; the building happens after it
                 returns. Ending the busy state there put the button back to rest
-                while the claim was still being built, which is the moment the
-                screen most has to say something is happening - the progress
-                panel that does is in the other column, below the fold on a
-                laptop. */}
+                while the report was still being built, which is the moment the
+                screen most has to say something is happening - and this dialog
+                closes, so what says it is the progress card behind it. */}
             <Button
               onClick={start}
               loading={building}
               disabled={included.length === 0}
             >
               {!building && <Layers />}
-              {building ? 'Building the claim' : 'Build the claim'}
+              {building ? 'Building the report' : 'Build the report'}
             </Button>
           </div>
-
-          <div className="flex flex-col gap-4">
-            {job && (
-              <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-                <div className="flex items-center gap-2">
-                  {job.status === 'processing' && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-                  {job.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-success" />}
-                  <span className="text-[13px] font-semibold text-foreground">
-                    {job.status === 'processing'
-                      ? job.progress || 'Working'
-                      : job.status === 'completed'
-                        ? 'Claim ready'
-                        : job.error}
-                  </span>
-                  <span className="ml-auto text-[12px] tabular-nums text-muted-foreground">
-                    {elapsed(job.elapsedMs ?? 0)}
-                  </span>
-                  {job.status === 'processing' && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Cancel"
-                      onClick={cancel}
-                      loading={cancelling}
-                    >
-                      {!cancelling && <X />}
-                    </Button>
-                  )}
-                </div>
-                {job.status === 'completed' && job.result && (
-                  <span className="text-[12.5px] text-muted-foreground">
-                    {job.result.rows} rows, {job.result.totals?.att ?? 0} attendance and{' '}
-                    {(job.result.totals?.brk ?? 0) +
-                      (job.result.totals?.lun ?? 0) +
-                      (job.result.totals?.snk ?? 0) +
-                      (job.result.totals?.sup ?? 0)}{' '}
-                    meals claimed.
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Saved claims
-              </span>
-
-              {error && <ErrorState title="Couldn't load the claims" message={error} onRetry={loadReports} />}
-
-              {!reports && !error && (
-                <div className="flex flex-col gap-2">
-                  {Array.from({ length: 3 }, (_, i) => (
-                    <Skeleton key={i} className="h-[72px] rounded-lg" />
-                  ))}
-                </div>
-              )}
-
-              {reports && reports.length === 0 && (
-                <div className="rounded-lg border border-dashed border-border-strong bg-card">
-                  <EmptyState
-                    icon={Layers}
-                    title="No claim has been built yet"
-                    description="Pick a month and a state on the left, then build the claim. Every one you build stays here."
-                  />
-                </div>
-              )}
-
-              {reports?.map((report) => (
-                <article
-                  key={report.id}
-                  className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:flex-row sm:items-center"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate text-[13.5px] font-semibold text-foreground">
-                      {report.fileName}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
-                      <span>{MONTHS[report.month - 1]} {report.year}</span>
-                      <span>{KINDS.find((k) => k.value === report.kind)?.label ?? report.kind}</span>
-                      {report.signedAt ? (
-                        <Badge size="sm" variant="success">
-                          Signed by {report.signedBy}
-                        </Badge>
-                      ) : report.hasSignLink ? (
-                        <Badge size="sm" variant="warning">
-                          Waiting for a signature
-                        </Badge>
-                      ) : null}
-                    </span>
-                  </div>
-
-                  {/* Four small buttons are wider than a 375px phone; on one
-                      they wrap under the title instead of pushing the row
-                      past the edge of the screen. */}
-                  <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/api/reports/generated/${report.id}`}>
-                        <Download />
-                        Download
-                      </a>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setSending(report);
-                        setMode(report.hasSignLink && !report.signedAt ? 'signature' : 'copy');
-                        setTo('');
-                        setNote('');
-                      }}
-                    >
-                      <Send />
-                      Send
-                    </Button>
-                    {!report.signedAt && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={busyId === report.id}
-                        onClick={() => makeSignLink(report)}
-                      >
-                        {busyId !== report.id && (report.hasSignLink ? <Copy /> : <FileSignature />)}
-                        {report.hasSignLink ? 'New link' : 'Signing link'}
-                      </Button>
-                    )}
-                    {report.hasSignLink && !report.signedAt && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        loading={busyId === report.id}
-                        onClick={() => revokeSignLink(report)}
-                      >
-                        {busyId !== report.id && <Ban />}
-                        Revoke link
-                      </Button>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(sending)} onOpenChange={(open) => !open && setSending(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Send this claim</DialogTitle>
+            <DialogTitle>Send this report</DialogTitle>
             <DialogDescription>{sending?.fileName}</DialogDescription>
           </DialogHeader>
 

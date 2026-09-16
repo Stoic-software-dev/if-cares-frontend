@@ -105,6 +105,7 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create', 
       >
         <Input
           id="site-name"
+          maxLength={200}
           value={value.name}
           onChange={(event) => set({ name: event.target.value })}
           placeholder="2025/2026 TX COD EXAMPLE REC CENTER"

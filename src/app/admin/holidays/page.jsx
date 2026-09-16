@@ -328,6 +328,7 @@ function HolidaysScreen() {
             >
               <Input
                 id="holiday-name"
+                maxLength={120}
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                 placeholder="Thanksgiving break"

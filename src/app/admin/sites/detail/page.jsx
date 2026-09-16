@@ -141,6 +141,7 @@ function StudentDialog({ open, mode, initial, site, onClose, onSaved }) {
         >
           <Input
             id="student-name"
+            maxLength={120}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Last, First"

@@ -79,10 +79,14 @@ export function dateLabel(ymd, options = { weekday: 'long', month: 'long', day: 
   // printed as its page heading. Nothing is a better heading than that.
   if (!ymd || !/^(19|20)\d{2}-\d{2}-\d{2}$/.test(ymd)) return '';
   const { year, month, day } = ymdParts(ymd);
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
-    ...options,
-    timeZone: 'UTC',
-  });
+  const date = new Date(Date.UTC(year, month - 1, day));
+  // The shape being right does not make the day real, and V8 rolls a day that
+  // does not exist in its month FORWARD rather than rejecting it. So
+  // /counts/2026-02-31 headed itself "Tuesday, March 3" - a date nobody asked
+  // for - over a body correctly saying the date is invalid. Same round trip the
+  // server uses to decide the same thing.
+  if (date.toISOString().slice(0, 10) !== ymd) return '';
+  return date.toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
 }
 
 // Every month between the site's earliest and latest known date (or just the

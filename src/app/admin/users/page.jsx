@@ -146,6 +146,7 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
             >
               <Input
                 id="user-name"
+                maxLength={80}
                 value={form.name}
                 onChange={(event) => set({ name: event.target.value })}
                 aria-invalid={attempted && !form.name.trim()}
@@ -158,6 +159,7 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
             >
               <Input
                 id="user-lastname"
+                maxLength={80}
                 value={form.lastname}
                 onChange={(event) => set({ lastname: event.target.value })}
                 aria-invalid={attempted && !form.lastname.trim()}

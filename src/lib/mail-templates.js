@@ -80,7 +80,7 @@ export function requestReceived({ site, type, value, note, requestedBy, when, li
       <p><u>Details of the request:</u><br>
       <strong>Type:</strong> ${esc(type)}<br>
       <strong>Value:</strong> ${esc(value) || '—'}</p>
-      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(note)}</blockquote>` : ''}
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px;word-break:break-word">${esc(note)}</blockquote>` : ''}
       ${link ? button(link, 'Open the request') : ''}
       <p style="font-size:13px;color:#475569">Sent by ${esc(requestedBy)}.</p>
     `),
@@ -93,7 +93,7 @@ export function requestAnswered({ name, type, detail, site, comment, resolvedBy 
     html: SHELL(`
       <p>Hello ${esc(name) || 'there'},</p>
       <p>Your request for <strong>${esc(type)}</strong>${detail ? ` (${esc(detail)})` : ''} at ${esc(site)} has been resolved.</p>
-      ${comment ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(comment)}</blockquote>` : ''}
+      ${comment ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px;word-break:break-word">${esc(comment)}</blockquote>` : ''}
       <p style="font-size:13px;color:#475569">Resolved by ${esc(resolvedBy)}.</p>
     `),
   };
@@ -154,7 +154,7 @@ export function claimSent({ period, state, fileName, note }) {
     subject: `Documentation of meals claimed, ${state ? `${state} ` : ''}${period}`,
     html: SHELL(`
       <p>Attached is <strong>${esc(fileName)}</strong>.</p>
-      ${note ? `<p>${esc(note)}</p>` : ''}
+      ${note ? `<p style="word-break:break-word">${esc(note)}</p>` : ''}
     `),
   };
 }
@@ -167,7 +167,7 @@ export function countSent({ site, period, fileName, note, senderName }) {
     subject: `Meal count: ${site}, ${period}`,
     html: SHELL(`
       <p>Attached is the meal count for <strong>${esc(site)}</strong>, ${esc(period)}.</p>
-      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px">${esc(note)}</blockquote>` : ''}
+      ${note ? `<blockquote style="margin:18px 0;padding:12px 16px;background:#f1f5f9;border-radius:8px;word-break:break-word">${esc(note)}</blockquote>` : ''}
       <p style="font-size:13px;color:#475569">${esc(fileName)}${senderName ? ` · sent by ${esc(senderName)}` : ''}</p>
     `),
   };

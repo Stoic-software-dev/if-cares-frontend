@@ -327,6 +327,67 @@ detalle y el aviso de "generate" — quedan sin verificar en navegador.** Si que
 pruebe, hace falta que dejes una sesión abierta en el Chrome del MCP o que me habilites
 `node` contra la base.
 
+### Séptima tanda (16-sep-2026, sobre `f50e4f8`) — testeo furioso, los dos roles
+
+Pedido: "toda la web, con todos los roles, todas las pantallas, todo. Submitea meals,
+editalos, borralos, menues, request, genera reportes, crea, edita, borra usuarios, sitios."
+
+**Cómo.** El usuario abrió sesión a mano (tipear contraseña es una acción vedada para el
+agente) primero como **admin** y después como **staff** (`zz.qa.…@example.org`, asignado
+solo a `Training Only`). `MAIL_REDIRECT_TO` se volvió a prender **solo en el `.env` local**
+para la corrida: Railway siguió mandando normal y nada de esta tanda salió a gente real.
+Escrituras contra la base de v2-mock, que tiene datos reales.
+
+**Cobertura.** 100 cargas de pantalla (15 pantallas de admin y 5 de staff × 5 anchos:
+320, 375, 768, 1024, 1440): **las 100 limpias**, cero desborde horizontal, cero pantalla
+vacía, cero error boundary. 72 llamadas anónimas (18 rutas × 4 métodos): **cero
+filtraciones**, todo 401/405 — salvo `POST /api/monitoring`, que es público a propósito y
+contesta 200 para que un crash en el login se pueda reportar. Como staff: **18 endpoints de
+admin en 403**, **9 intentos contra un sitio ajeno en 403**, y las **10 rutas de admin por
+URL redirigen al dashboard sin filtrar una línea de contenido**. 36 validaciones de API
+(submit, feriados, usuarios, requests, sitios, calendario). State machine completo del
+count: submit → duplicado 409 → corregir → aprobar → corregir bloqueado 409 → desaprobar →
+anular → reenviar → restaurar bloqueado 409. Firma pública: PNG inválido, nombre corto, un
+solo uso, link rechazado sobre firmado. Cierre y undo de días de servicio con los días ya
+reclamados intactos (4 conservados de 23). Import de roster con las seis clases de fila
+mala. PDFs diario, mensual y mensual vacío. Camino completo del staff por UI, firma con el
+mouse incluida.
+
+**Hallazgos y qué se hizo con cada uno.**
+
+| Sev. | Hallazgo | Estado |
+|---|---|---|
+| **Alto** | **Un claim sin ningún sitio adentro.** `POST /api/reports/consolidated` aceptaba una lista de exclusión que cubría todos los sitios y construía igual: cero filas, cero en todos los totales, guardado en la lista **con el mismo nombre que el claim real del mes** y archivado **sobre el mismo archivo de Drive**. Cuál quedaba en el Drive del cliente dependía de cuál se construyó último. El comentario del schema prometía una garantía que nunca se escribió. | **Arreglado**: 422 antes de arrancar el job, distinguiendo "todos excluidos" de "ese estado no tiene sitios". |
+| **Alto** | **Una respuesta larga sin espacios rompía el ancho de la página**: 2382 px de desborde con un texto sin cortes (una URL pegada, un número de orden). Se pintaba fuera de su caja sin ensancharla. | **Arreglado**: `break-words` en las dos pantallas de requests y en los otros cuatro lugares con la misma exposición — nombre de feriado, nota de corrección, autor de corrección, razón de anulación. |
+| Medio | **Resolver un request sin nota** lo dejaba RESOLVED sin responsable, sin fecha y **sin avisarle al sitio**: quién respondió estaba atado a si además escribió algo, mientras la pantalla dice que la nota es opcional. | **Arreglado**: se estampa siempre quién y cuándo, y el mail sale igual (el template ya leía bien sin comentario). Reabrir sigue limpiando todo. |
+| Medio | `unhandledrejection` reenviaba `event.reason` sin filtrar: una promesa rechazada con un Event — que es lo que hace una imagen o un script que falla — llegaba al log como `[object Event]`, sin mensaje ni stack. Había una fila así de `/login`. | **Arreglado**: los fallos de carga de recursos se descartan y el resto se describe. |
+| Bajo | Una hora ilegible por API contestaba "Time In is required", que es lo único que no era. | **Arreglado**: distingue "no es una hora" de "falta", en submit y en corrección. |
+| Bajo | El duplicado de alumno contesta `Full name must be unique`, que suena a regla de sistema al lado de la voz del resto de la app ("A user with this email already exists"). | Anotado, no tocado. |
+| Bajo | Borrar un menú con un id inexistente contesta 502 y el mensaje incluye la dirección de la service account. | Anotado, no tocado. Es admin-only y el texto es útil para diagnosticar un problema de permisos en Drive. |
+| Bajo | Quedan drafts de `localStorage` de días que después se enviaron desde otro lado. Almacenamiento muerto, invisible: la pantalla bloquea el día antes de leerlos. | Anotado, no tocado. |
+
+**Confirmado contra datos reales.** El arreglo del feriado parcial de la tanda anterior:
+día con las cuatro banderas en false + feriado que cierra solo el desayuno → quedan
+almuerzo, snack y cena. **17 sitios tienen días así.** Feriado de día completo y feriado
+que cierra las cuatro siguen cerrando el día.
+
+**Datos, para decidir con IF Cares (no es código).**
+
+- **Los 57 sitios ya tienen calendario de servicio.** El bloqueante del corte que venía
+  arrastrándose (53 de 56 sitios sin poder cargar un count) está resuelto.
+- **`requestNotify.enabled` sigue en `false`**: un request nuevo no le avisa a nadie.
+- Los sitios duplicados por ciclo siguen ahí: "BGC Cooke" y "BGC COOKE" conviven en la
+  lista de un claim.
+- Cuentas legacy basura activas, sin nombre ni apellido: `julio@julio.com`.
+- Se borró `ZZ QA test menu.pdf` del Drive del cliente, que venía pendiente de la tanda
+  anterior.
+
+**Rastro que quedó, todo prefijado `ZZ QA`.** Sitio `ZZ QA Furioso Site` (TX, 8 días de
+octubre) con 2 alumnos; usuario `zz.qa.1789568847624@example.org` (staff, Training Only);
+counts en `Training Only` del 14, 15 (uno anulado y otro activo con 2 correcciones) y 16 de
+septiembre; 3 feriados; varios requests; 3 filas de claim TX 2026-09, una firmada por
+"ZZ QA Signer"; y el PDF de ese claim en `Consolidated Reports/2026-09` en Drive.
+
 ## 1. Cómo se ejecutó
 
 | Agente | Área | Duración | Hallazgos |

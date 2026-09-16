@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { DialogFooter } from '@/components/ui/dialog';
 import { Field, NativeSelect } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,7 +18,7 @@ import { cn } from '@/lib/utils';
  * administrators reach it from the inbox, where the form used to be missing
  * entirely because their navigation goes straight to the inbox.
  */
-export default function RequestForm({ sites = [], defaultSite = '', onSent, className, label }) {
+export default function RequestForm({ sites = [], defaultSite = '', onSent, onCancel, className, label }) {
   const [site, setSite] = useState(defaultSite || sites[0] || '');
   const [type, setType] = useState('');
   const [amount, setAmount] = useState('');
@@ -168,10 +169,22 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, clas
         </Field>
       )}
 
-      <Button type="submit" loading={submitting} disabled={sites.length === 0} size="touch" className="mt-1">
-        {!submitting && <Send />}
-        {submitting ? 'Sending' : 'Send request'}
-      </Button>
+      {/* A bare button in a flex column stretches to the column: in a dialog
+          that is a primary button the full width of the panel, with no way out
+          beside it. `DialogFooter` is the row every other dialog here ends
+          with - full width and thumb height on a phone, content width and
+          right aligned on a desk. */}
+      <DialogFooter className="mt-1">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" loading={submitting} disabled={sites.length === 0}>
+          {!submitting && <Send />}
+          {submitting ? 'Sending' : 'Send request'}
+        </Button>
+      </DialogFooter>
     </form>
   );
 }

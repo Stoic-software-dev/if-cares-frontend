@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -195,11 +196,11 @@ export default function LoginPage() {
           </DialogHeader>
 
           {forgotSent ? (
-            <div className="flex justify-end">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>
                 Close
               </Button>
-            </div>
+            </DialogFooter>
           ) : (
             <form onSubmit={requestReset} className="flex flex-col gap-4">
               <Field label="Email" htmlFor="forgot-email">
@@ -213,12 +214,25 @@ export default function LoginPage() {
                   onChange={(event) => setForgotEmail(event.target.value)}
                 />
               </Field>
-              <Button type="submit" loading={forgotBusy} size="touch">
-                {forgotBusy ? 'Sending' : 'Send the link'}
-              </Button>
+              {/* Above the buttons, not below them: a sentence under the last
+                  control reads as a footnote to the dialog and this one is an
+                  alternative to pressing it. */}
               <p className="text-[12px] text-muted-foreground">
                 No inbox handy? An administrator can hand you a link from the Users screen.
               </p>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setForgotOpen(false)}
+                  disabled={forgotBusy}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" loading={forgotBusy}>
+                  {forgotBusy ? 'Sending' : 'Send the link'}
+                </Button>
+              </DialogFooter>
             </form>
           )}
         </DialogContent>

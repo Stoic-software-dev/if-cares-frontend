@@ -194,11 +194,22 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
               </NativeSelect>
             </Field>
 
+            {/* Not a label. A label hands every click anywhere on the row to
+                its control, and this row is a bordered block that does not read
+                as one - the same thing that was switching the reminder settings
+                on and off by reading them. Here it would silently hand a staff
+                account every site in the program. */}
             {form.role !== 'ADMIN' && (
-              <label className="flex h-11 items-center justify-between rounded-md border border-input px-3 md:h-10">
-                <span className="text-[13px] font-medium text-foreground">All sites</span>
-                <Switch checked={form.allSites} onCheckedChange={(value) => set({ allSites: value })} />
-              </label>
+              <div className="flex h-11 items-center justify-between rounded-md border border-input px-3 md:h-10">
+                <span id="user-all-sites-label" className="text-[13px] font-medium text-foreground">
+                  All sites
+                </span>
+                <Switch
+                  aria-labelledby="user-all-sites-label"
+                  checked={form.allSites}
+                  onCheckedChange={(value) => set({ allSites: value })}
+                />
+              </div>
             )}
           </div>
 
@@ -260,16 +271,22 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
             </div>
           )}
           {mode === 'create' && (
-            <label className="flex items-center justify-between gap-4 rounded-md border border-input px-3 py-2.5">
+            <div className="flex items-center justify-between gap-4 rounded-md border border-input px-3 py-2.5">
               <span className="flex flex-col gap-0.5">
-                <span className="text-[13px] font-medium text-foreground">Email the link to them</span>
+                <span id="user-send-email-label" className="text-[13px] font-medium text-foreground">
+                  Email the link to them
+                </span>
                 <span className="text-[12px] leading-relaxed text-muted-foreground">
                   A welcome message with the link to set their password. Turn it off to hand the link
                   over yourself.
                 </span>
               </span>
-              <Switch checked={form.sendEmail} onCheckedChange={(value) => set({ sendEmail: value })} />
-            </label>
+              <Switch
+                aria-labelledby="user-send-email-label"
+                checked={form.sendEmail}
+                onCheckedChange={(value) => set({ sendEmail: value })}
+              />
+            </div>
           )}
         </div>
 

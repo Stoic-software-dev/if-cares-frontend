@@ -224,6 +224,7 @@ function RequestsScreen() {
             </DialogDescription>
           </DialogHeader>
           <RequestForm
+            onCancel={() => setComposing(false)}
             sites={sites}
             defaultSite={site}
             onSent={() => {

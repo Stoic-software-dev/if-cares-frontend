@@ -74,25 +74,18 @@ function InboxScreen() {
 
   useEffect(load, []);
 
-  const counts = useMemo(() => {
-    const list = inbox ?? [];
-    return {
-      ALL: list.length,
-      NEW: list.filter((request) => request.status === 'NEW').length,
-      IN_PROGRESS: list.filter((request) => request.status === 'IN_PROGRESS').length,
-      RESOLVED: list.filter((request) => request.status === 'RESOLVED').length,
-    };
-  }, [inbox]);
-
   const siteOptions = useMemo(
     () => sortSiteNames([...new Set((inbox ?? []).map((request) => request.site))]),
     [inbox]
   );
 
-  const matching = useMemo(() => {
+  // Everything except the status, because the status tabs are what this feeds.
+  // A tab counting rows the other filters have already excluded is a number
+  // that contradicts the list under it: one site picked and a week chosen still
+  // read "All 143", and picking a tab with 12 on it showed two rows.
+  const inScope = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (inbox ?? []).filter((request) => {
-      if (status !== 'ALL' && request.status !== status) return false;
       if (siteFilter !== 'ALL' && request.site !== siteFilter) return false;
       // The date filter reads the request's own day in the program timezone,
       // not the browser's: a request filed at 11 PM in Buenos Aires belongs to
@@ -105,7 +98,33 @@ function InboxScreen() {
         .toLowerCase()
         .includes(q);
     });
-  }, [inbox, status, siteFilter, query, fromDate, toDate]);
+  }, [inbox, siteFilter, query, fromDate, toDate]);
+
+  // The header describes the whole inbox; the tabs describe what is in scope.
+  const totals = useMemo(() => {
+    const list = inbox ?? [];
+    return {
+      ALL: list.length,
+      NEW: list.filter((request) => request.status === 'NEW').length,
+      IN_PROGRESS: list.filter((request) => request.status === 'IN_PROGRESS').length,
+      RESOLVED: list.filter((request) => request.status === 'RESOLVED').length,
+    };
+  }, [inbox]);
+
+  const counts = useMemo(
+    () => ({
+      ALL: inScope.length,
+      NEW: inScope.filter((request) => request.status === 'NEW').length,
+      IN_PROGRESS: inScope.filter((request) => request.status === 'IN_PROGRESS').length,
+      RESOLVED: inScope.filter((request) => request.status === 'RESOLVED').length,
+    }),
+    [inScope]
+  );
+
+  const matching = useMemo(
+    () => (status === 'ALL' ? inScope : inScope.filter((request) => request.status === status)),
+    [inScope, status]
+  );
 
   // Ten requests fit on a screen; a school year of them does not. Any change to
   // what is being listed starts the listing over, so page 4 of a filter that now
@@ -185,7 +204,7 @@ function InboxScreen() {
           title="Requests"
           subtitle={
             inbox
-              ? `${counts.NEW} new, ${counts.IN_PROGRESS} in progress, ${counts.RESOLVED} resolved`
+              ? `${totals.NEW} new, ${totals.IN_PROGRESS} in progress, ${totals.RESOLVED} resolved`
               : 'Loading the inbox'
           }
           actions={
@@ -352,14 +371,14 @@ function InboxScreen() {
           <div className="rounded-lg border border-dashed border-border-strong bg-card">
             <EmptyState
               icon={Inbox}
-              title={counts.ALL === 0 ? 'No requests yet' : 'Nothing here'}
+              title={totals.ALL === 0 ? 'No requests yet' : 'Nothing here'}
               description={
-                counts.ALL === 0
+                totals.ALL === 0
                   ? 'Requests sent by site staff land here with their status.'
                   : 'No request matches the current filters.'
               }
               action={
-                counts.ALL > 0 ? (
+                totals.ALL > 0 ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -514,6 +533,7 @@ function InboxScreen() {
             </DialogDescription>
           </DialogHeader>
           <RequestForm
+            onCancel={() => setComposing(false)}
             sites={allSiteNames}
             onSent={() => {
               setComposing(false);

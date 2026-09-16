@@ -431,7 +431,7 @@ function InboxScreen() {
                       {requestDetail(request)}, {request.requestedBy}
                     </span>
                     {request.note && (
-                      <span className="mt-1 text-[12.5px] leading-relaxed text-foreground">{request.note}</span>
+                      <span className="mt-1 break-words text-[12.5px] leading-relaxed text-foreground">{request.note}</span>
                     )}
                   </div>
 
@@ -457,7 +457,7 @@ function InboxScreen() {
                       stands: the note first, then what to do about it. */}
                   {request.responseComment && (
                     <span className="col-span-full flex flex-col gap-1 rounded-sm bg-muted px-2.5 py-1.5 lg:order-last">
-                      <span className="text-[12px] leading-relaxed text-foreground">{request.responseComment}</span>
+                      <span className="break-words text-[12px] leading-relaxed text-foreground">{request.responseComment}</span>
                       {request.respondedBy && (
                         <span className="text-[11px] text-muted-foreground">
                           {request.respondedBy}

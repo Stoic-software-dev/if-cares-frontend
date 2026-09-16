@@ -185,12 +185,12 @@ function RequestsScreen() {
                         {sites.length > 1 && `, ${shortSiteName(request.site)}`}
                       </span>
                       {request.note && (
-                        <span className="text-[12.5px] leading-relaxed text-foreground">{request.note}</span>
+                        <span className="break-words text-[12.5px] leading-relaxed text-foreground">{request.note}</span>
                       )}
                       {/* An answer with no name on it reads like the app talking. */}
                       {request.responseComment && (
                         <span className="mt-1 flex flex-col gap-1 rounded-sm bg-muted px-2.5 py-1.5">
-                          <span className="text-[12px] leading-relaxed text-foreground">
+                          <span className="break-words text-[12px] leading-relaxed text-foreground">
                             {request.responseComment}
                           </span>
                           {request.respondedBy && (

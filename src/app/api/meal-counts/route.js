@@ -74,8 +74,10 @@ export const POST = handle(async (req) => {
 
   const timeIn = toCanonicalTime(values.timeIn);
   const timeOut = toCanonicalTime(values.timeOut);
-  if (!timeIn) throw new ApiError(422, 'Time In is required.');
-  if (!timeOut) throw new ApiError(422, 'Time Out is required.');
+  // Missing and unreadable are different mistakes, and telling somebody that a
+  // field they just filled in is required is the worse of the two answers.
+  if (!timeIn) throw new ApiError(422, values.timeIn ? 'Time In is not a time.' : 'Time In is required.');
+  if (!timeOut) throw new ApiError(422, values.timeOut ? 'Time Out is not a time.' : 'Time Out is required.');
   // Both are canonical "HH:MM:SS", so comparing them as strings is comparing the
   // clock. A count that ends before it starts printed exactly that way on the
   // form that goes to the state.

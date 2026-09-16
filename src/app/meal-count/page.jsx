@@ -471,7 +471,7 @@ function MealCountScreen() {
               <span className="text-[13px] font-semibold text-warning-text">
                 A count for this day was voided
               </span>
-              <span className="text-[12.5px] leading-relaxed text-warning-text/90">
+              <span className="break-words text-[12.5px] leading-relaxed text-warning-text/90">
                 {voided.by} voided it, {voidedStamp(voided.at)}
                 {voided.reason ? `, "${voided.reason}"` : ''}. It had {voided.students}{' '}
                 {voided.students === 1 ? 'student' : 'students'} on record.

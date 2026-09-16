@@ -70,7 +70,12 @@ export const POST = handle(async (req) => {
 
   const timeIn = toCanonicalTime(body.timeIn);
   const timeOut = toCanonicalTime(body.timeOut);
-  if (!timeIn || !timeOut) throw new ApiError(422, 'Time in and time out are required.');
+  if (!timeIn || !timeOut) {
+    // Same distinction the submit path makes: a value that was given and could
+    // not be read is not a value that is missing.
+    const given = (!timeIn && body.timeIn) || (!timeOut && body.timeOut);
+    throw new ApiError(422, given ? 'That is not a time.' : 'Time in and time out are required.');
+  }
   if (timeOut <= timeIn) throw new ApiError(422, 'Time out has to be after time in.');
 
   // The meals a correction may touch: what this day's calendar opens, plus what

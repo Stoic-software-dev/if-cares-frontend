@@ -547,13 +547,13 @@ function CountDetailScreen() {
                   {index < list.length - 1 && <span className="w-px flex-1 bg-border" />}
                 </div>
                 <div className={cn('flex min-w-0 flex-col gap-0.5', index < list.length - 1 && 'pb-5')}>
-                  <span className="text-[13px] font-semibold text-foreground">{correction.by}</span>
+                  <span className="break-words text-[13px] font-semibold text-foreground">{correction.by}</span>
                   <span className="text-[12px] tabular-nums text-muted-foreground">
                     {stamp(correction.at)}
                     {index === 0 && list.length > 1 && ', most recent'}
                   </span>
                   {correction.note && (
-                    <p className="mt-1 text-[13px] leading-relaxed text-foreground">{correction.note}</p>
+                    <p className="mt-1 break-words text-[13px] leading-relaxed text-foreground">{correction.note}</p>
                   )}
                   <ChangeList changes={correction.changes} />
                 </div>

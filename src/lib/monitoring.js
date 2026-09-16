@@ -32,12 +32,45 @@ function isNoise(error, message) {
 }
 
 /**
+ * What to call a thrown value that is not an Error.
+ *
+ * `String(anEvent)` is "[object Event]", and that is what the log filled up
+ * with: a promise rejected with an Event - which is what every wrapped image,
+ * script or media load does when it fails - arrived as a row with no message,
+ * no stack and nothing to act on. The window 'error' listener already skips
+ * those; the rejection handler passed them straight through.
+ */
+function describe(value) {
+  if (value?.message) return String(value.message);
+  if (typeof value === 'string') return value;
+  if (typeof Event !== 'undefined' && value instanceof Event) {
+    const target = value.target;
+    const src = target?.src || target?.href;
+    // A resource that failed to load is not an application crash.
+    if (src) return '';
+    return `Rejected with a ${value.type} event`;
+  }
+  if (value && typeof value === 'object') {
+    const asString = String(value);
+    if (asString === '[object Object]' || /^\[object \w+\]$/.test(asString)) {
+      try {
+        return `Rejected with ${JSON.stringify(value).slice(0, 200)}`;
+      } catch {
+        return 'Rejected with a value that is not an error';
+      }
+    }
+    return asString;
+  }
+  return value === undefined || value === null ? '' : String(value);
+}
+
+/**
  * @param {unknown} error the thrown value, which is not always an Error
  * @param {'boundary'|'window'|'promise'} source where it was caught
  */
 export function reportError(error, source = 'boundary') {
   try {
-    const message = String(error?.message ?? error ?? 'Unknown error').slice(0, 500);
+    const message = describe(error).slice(0, 500);
     if (!message) return;
     if (isNoise(error, message)) return;
 

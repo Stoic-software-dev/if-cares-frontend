@@ -509,7 +509,7 @@ function HolidayRow({ holiday, onEdit, onRemove }) {
           </span>
 
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-[14px] font-semibold text-foreground">{holiday.name}</span>
+            <span className="break-words text-[14px] font-semibold text-foreground">{holiday.name}</span>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
               <span className="tabular-nums">{dateRange(holiday)}</span>
               <span>

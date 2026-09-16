@@ -108,6 +108,20 @@ async function loadCounts({ year, month, siteIds }) {
 }
 
 /**
+ * How many sites a claim would actually cover, for the guard in front of the
+ * job. A claim with no site in it is not a claim: it renders as a form with a
+ * header, no rows and zero in every total, gets saved to the list under the
+ * same name as the real one for that month, and is filed to the same Drive file
+ * - so whether the month's claim in Drive is the real one or the blank one came
+ * down to which was built last.
+ */
+export async function claimSiteCount({ year, month, state, excludeSites = [] }) {
+  const sites = await claimSites({ year, month, state, select: { name: true } });
+  const excluded = new Set(excludeSites);
+  return sites.filter((site) => !excluded.has(site.name)).length;
+}
+
+/**
  * The foundation the claim is filed under. The legacy generator read it from
  * the master and refused to build a claim without it (`getFoundationIdByState`);
  * `import-master` brings it in as AppSetting `foundationId.TX` / `.OK`. Only

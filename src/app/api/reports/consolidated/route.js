@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
 import { consolidatedSchema } from '@/lib/validation';
-import { consolidatedBySite, consolidatedByDay, monthLabel } from '@/lib/report-data';
+import { claimSiteCount, consolidatedBySite, consolidatedByDay, monthLabel } from '@/lib/report-data';
 import { buildConsolidatedSitesPdf, buildConsolidatedDaysPdf } from '@/lib/report-pdf';
 import { archivePdf, safeName } from '@/lib/pdf-archive';
 import { startJob, getJob, listJobs, cancelJob } from '@/lib/report-jobs';
@@ -23,6 +23,25 @@ export const POST = handle(async (req) => {
   const body = consolidatedSchema.parse(await readJsonBody(req));
   const kind = KINDS[body.kind];
   if (!kind) throw new ApiError(422, 'Unknown report kind.');
+
+  // The screen refuses to build one with every site excluded; the API did not,
+  // and the comment on `excludeSites` had promised a guarantee that was never
+  // written. What came out was a claim with no rows, saved to the list beside
+  // the real one for that month under the same name and filed over it in Drive.
+  const covered = await claimSiteCount({
+    year: body.year,
+    month: body.month,
+    state: body.state || undefined,
+    excludeSites: body.excludeSites ?? [],
+  });
+  if (covered === 0) {
+    throw new ApiError(
+      422,
+      body.excludeSites?.length
+        ? 'A claim needs at least one site, and every site is excluded.'
+        : `No site files under ${body.state || 'that state'}, so there is nothing to claim.`
+    );
+  }
 
   const period = `${body.year}-${String(body.month).padStart(2, '0')}`;
   const fileName = `${safeName(body.state || 'All')} ${period} claim ${kind.label}.pdf`;

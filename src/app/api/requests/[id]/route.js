@@ -21,18 +21,22 @@ export const PATCH = handle(async (req, { params }) => {
   });
   if (!existing) throw new ApiError(404, 'Request not found.');
 
-  // The answer is recorded with whoever gave it. Reopening clears it: a stale
-  // resolution note on an open request reads as if it had been answered.
-  const answering = responseComment !== undefined && status === 'RESOLVED';
-  const reopening = status !== 'RESOLVED' && existing.status === 'RESOLVED';
+  // Who resolved it and when are facts about the resolution, not about whether
+  // they also wrote a note - and the screen says the note is optional. Tying
+  // both to the note left a request sitting in Resolved with nobody's name on
+  // it, no date, and a site that was never told. Reopening clears all of it: a
+  // stale answer on an open request reads as if it had been answered.
+  const resolving = status === 'RESOLVED';
+  const reopening = !resolving && existing.status === 'RESOLVED';
+  const newlyResolved = resolving && existing.status !== 'RESOLVED';
 
   await prisma.request.update({
     where: { id: params.id },
     data: {
       status,
-      ...(answering
+      ...(resolving
         ? {
-            responseComment: responseComment ?? '',
+            ...(responseComment !== undefined ? { responseComment } : {}),
             respondedById: session.user.id,
             respondedByEmail: session.user.email ?? '',
             respondedAt: new Date(),
@@ -44,15 +48,19 @@ export const PATCH = handle(async (req, { params }) => {
     },
   });
 
-  // Telling the site is the point of answering. It goes out alongside the
-  // response, so a mail failure never blocks the inbox.
-  if (answering && mailConfigured() && existing.requestedByEmail) {
+  // Telling the site is the point of answering, and it is the point whether or
+  // not a note came with it - the message reads perfectly well without one. It
+  // goes out when the request first reaches Resolved, or when an answer is
+  // added to one that is already there; re-saving the same state does not send
+  // it again.
+  const telling = newlyResolved || (resolving && responseComment !== undefined);
+  if (telling && mailConfigured() && existing.requestedByEmail) {
     const message = requestAnswered({
       name: existing.requestedBy?.name,
       type: existing.type,
       detail: requestDetailText(existing),
       site: existing.site.name,
-      comment: responseComment,
+      comment: responseComment ?? existing.responseComment ?? '',
       resolvedBy: session.user.email ?? '',
     });
     // Awaited, and its failure reported: an answer the site never receives looks
@@ -74,7 +82,7 @@ export const PATCH = handle(async (req, { params }) => {
     payload: {
       from: existing.status,
       to: status,
-      ...(answering ? { answered: true } : {}),
+      ...(resolving ? { answered: true } : {}),
     },
   });
   return legacySuccess();

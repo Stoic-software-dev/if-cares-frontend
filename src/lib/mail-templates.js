@@ -156,7 +156,7 @@ export function signatureRequest({ period, state, link }) {
   return {
     subject: `Signature needed: meals claimed, ${state ? `${state} ` : ''}${period}`,
     html: SHELL(`
-      <p>The consolidated claim for ${state ? `${state}, ` : ''}${period} is ready to sign.</p>
+      <p>The consolidated report for ${state ? `${state}, ` : ''}${period} is ready to sign.</p>
       <p>The link below opens the document and a place to sign it. No account is needed. It works once.</p>
       ${button(link, 'Read and sign the claim')}
     `),

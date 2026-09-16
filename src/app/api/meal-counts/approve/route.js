@@ -107,15 +107,21 @@ export const POST = handle(async (req) => {
 
   if (count.approvedAt) throw new ApiError(409, `Already approved by ${count.approvedByEmail}.`);
 
+  // Conditional, for the same reason correcting is: the check above is a read,
+  // and without carrying it into the write two people approving at once both
+  // passed it and the second one's name overwrote the first's.
   const approvedAt = new Date();
-  await prisma.mealCount.update({
-    where: { id: count.id },
+  const claimed = await prisma.mealCount.updateMany({
+    where: { id: count.id, approvedAt: null, voidedAt: null },
     data: {
       approvedAt,
       approvedById: session.user.id,
       approvedByEmail: session.user.email,
     },
   });
+  if (claimed.count === 0) {
+    throw new ApiError(409, 'Somebody approved or voided this count a moment ago. Reload and look again.');
+  }
 
   await logAudit({
     actor: session.user,

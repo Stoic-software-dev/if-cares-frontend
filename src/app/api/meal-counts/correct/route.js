@@ -114,6 +114,24 @@ export const POST = handle(async (req) => {
   const byName = new Map(roster.map((s) => [s.name.trim().toLowerCase(), s.id]));
 
   await prisma.$transaction(async (tx) => {
+    // The approval check above is a read, and the write is here. Between the
+    // two, somebody else's approval can land - and then this correction changes
+    // the numbers underneath a signature, which is the one thing the 409 exists
+    // to stop. Two administrators on the same count a second apart was enough:
+    // the correction was stored 2.6s AFTER the approval it was supposed to be
+    // refused by.
+    //
+    // So the precondition is re-asserted as part of the write. If the count was
+    // approved or voided in the meantime this matches no row, and the whole
+    // transaction is thrown away.
+    const claimed = await tx.mealCount.updateMany({
+      where: { id: count.id, approvedAt: null, voidedAt: null },
+      data: { timeIn, timeOut },
+    });
+    if (claimed.count === 0) {
+      throw new ApiError(409, 'Somebody approved or voided this count while you were correcting it. Reload and look again.');
+    }
+
     await tx.mealCountCorrection.create({
       data: {
         mealCountId: count.id,
@@ -136,7 +154,6 @@ export const POST = handle(async (req) => {
         },
       },
     });
-    await tx.mealCount.update({ where: { id: count.id }, data: { timeIn, timeOut } });
     await tx.mealCountEntry.deleteMany({ where: { mealCountId: count.id } });
     await tx.mealCountEntry.createMany({
       data: body.data.map(([number, name, age, attendance, breakfast, lunch, snack, supper]) => ({

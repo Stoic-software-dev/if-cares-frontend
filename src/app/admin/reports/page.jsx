@@ -123,7 +123,7 @@ function ReportsScreen() {
       <div className="flex flex-col gap-5">
         <PageHeader
           title="Reports"
-          subtitle="Daily meal count forms, the month summary for a site, and the consolidated claims."
+          subtitle="Daily meal count forms, the month summary for a site, and the consolidated reports."
           mobileActions={
             <ActionSheet title="Reports" description={site ? shortSiteName(site) : undefined}>
               <SheetAction icon={Layers} href="/admin/reports/consolidated" hint="Every site in one report">

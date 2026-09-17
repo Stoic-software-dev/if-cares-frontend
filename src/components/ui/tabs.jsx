@@ -7,11 +7,15 @@ import { cn } from '@/lib/utils';
 
 const Tabs = TabsPrimitive.Root;
 
+// `w-fit` as well as `inline-flex`, which is not the belt and braces it looks
+// like: the list sits inside a `flex flex-col`, and a flex item is stretched to
+// the cross axis whatever its own display says. The tinted bar behind two short
+// tabs ran the full width of the screen because of it.
 const TabsList = React.forwardRef(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-10 items-center gap-1 rounded-md bg-muted p-1 text-muted-foreground',
+      'inline-flex h-10 w-fit max-w-full items-center gap-1 rounded-md bg-muted p-1 text-muted-foreground',
       className
     )}
     {...props}

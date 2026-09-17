@@ -32,8 +32,14 @@ export default function RosterImportDialog({ open, site, onClose, onImported }) 
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef(null);
+  // Debounce for the typed path, so a list being written out by hand is read
+  // once at the end rather than on every keystroke.
+  const typingRef = useRef(null);
 
   const reset = () => {
+    // A dry run still queued from the typed box would otherwise land after the
+    // dialog closed and put a preview back on a screen nobody is looking at.
+    clearTimeout(typingRef.current);
     setRows(null);
     setFileName('');
     setPreview(null);
@@ -130,13 +136,29 @@ export default function RosterImportDialog({ open, site, onClose, onImported }) 
 
               <div className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-medium text-foreground">…or paste the rows</span>
+                {/* Pasting is the path this was built for, and for a while it
+                    was the only one that did anything: the box took typed text,
+                    showed it back, and left the button reading "Nothing to
+                    import" with no way to find out why. Typing a short list is
+                    a reasonable thing to do, and so is any paste that does not
+                    raise a paste event - dragging text in, or some mobile
+                    keyboards. Whatever ends up in the box is read now; it waits
+                    for a pause in the typing so a five line list is not five
+                    dry runs. */}
                 <textarea
                   rows={5}
                   placeholder={'Ana Perez, 9\nLuis Gomez, 10'}
+                  onChange={(event) => {
+                    const text = event.target.value;
+                    clearTimeout(typingRef.current);
+                    if (!text.trim()) return;
+                    typingRef.current = setTimeout(() => ingest(text, 'pasted rows'), 700);
+                  }}
                   onPaste={(event) => {
                     const text = event.clipboardData.getData('text');
                     if (text.trim()) {
                       event.preventDefault();
+                      clearTimeout(typingRef.current);
                       ingest(text, 'pasted rows');
                     }
                   }}

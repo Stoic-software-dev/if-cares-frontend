@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { ActionSheet, Fab, FilterSheet, SheetAction } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchInput } from '@/components/ui/search-input';
@@ -244,7 +244,7 @@ function AdminSitesScreen() {
           >
             {states.length > 1 && (
               <Field label="State" htmlFor="filter-state">
-                <NativeSelect
+                <SelectField
                   id="filter-state"
                   value={stateFilter}
                   onChange={(event) => setStateFilter(event.target.value)}
@@ -255,14 +255,14 @@ function AdminSitesScreen() {
                       {state}
                     </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
               </Field>
             )}
             <Field label="Order" htmlFor="filter-sort">
-              <NativeSelect id="filter-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
+              <SelectField id="filter-sort" value={sort} onChange={(event) => setSort(event.target.value)}>
                 <option value="name">Sort by name</option>
                 <option value="missing">Sort by missing counts</option>
-              </NativeSelect>
+              </SelectField>
             </Field>
           </FilterSheet>
         </div>
@@ -270,7 +270,7 @@ function AdminSitesScreen() {
         <div className="hidden flex-col gap-2.5 md:flex md:flex-row md:flex-wrap md:items-center">
           <SearchInput value={query} onChange={setQuery} placeholder="Search sites" className="md:min-w-[14rem] md:max-w-md md:flex-1" />
           {states.length > 1 && (
-            <NativeSelect
+            <SelectField
               aria-label="Filter by state"
               value={stateFilter}
               onChange={(event) => setStateFilter(event.target.value)}
@@ -282,9 +282,9 @@ function AdminSitesScreen() {
                   {state}
                 </option>
               ))}
-            </NativeSelect>
+            </SelectField>
           )}
-          <NativeSelect
+          <SelectField
             aria-label="Sort sites"
             value={sort}
             onChange={(event) => setSort(event.target.value)}
@@ -292,7 +292,7 @@ function AdminSitesScreen() {
           >
             <option value="name">Sort by name</option>
             <option value="missing">Sort by missing counts</option>
-          </NativeSelect>
+          </SelectField>
         </div>
 
         {error && <ErrorState title="Couldn't load the sites" message={error} onRetry={load} />}

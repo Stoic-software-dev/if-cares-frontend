@@ -5,7 +5,7 @@ import { Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DialogFooter } from '@/components/ui/dialog';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { apiPost } from '@/lib/api-client';
@@ -80,7 +80,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, onCa
 
       {sites.length > 1 && (
         <Field label="Site" htmlFor="request-site">
-          <NativeSelect
+          <SelectField
             id="request-site"
             value={site}
             onChange={(event) => setSite(event.target.value)}
@@ -91,7 +91,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, onCa
                 {shortSiteName(name)}
               </option>
             ))}
-          </NativeSelect>
+          </SelectField>
         </Field>
       )}
 
@@ -100,7 +100,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, onCa
         htmlFor="request-type"
         error={attempted && type === '' ? 'Pick what you need.' : undefined}
       >
-        <NativeSelect
+        <SelectField
           id="request-type"
           value={type}
           onChange={(event) => setType(event.target.value)}
@@ -113,7 +113,7 @@ export default function RequestForm({ sites = [], defaultSite = '', onSent, onCa
               {option}
             </option>
           ))}
-        </NativeSelect>
+        </SelectField>
       </Field>
 
       {needsAmount && (

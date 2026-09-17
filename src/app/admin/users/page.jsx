@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ChipRow, Fab, FilterSheet } from '@/components/ui/mobile';
 import { Pagination } from '@/components/ui/pagination';
@@ -186,14 +186,14 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
 
           <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
             <Field label="Role" htmlFor="user-role">
-              <NativeSelect
+              <SelectField
                 id="user-role"
                 value={form.role}
                 onChange={(event) => set({ role: event.target.value })}
               >
                 <option value="USER">Site staff</option>
                 <option value="ADMIN">Administrator</option>
-              </NativeSelect>
+              </SelectField>
             </Field>
 
             {/* Not a label. A label hands every click anywhere on the row to
@@ -505,7 +505,7 @@ function AdminUsersScreen() {
               }}
             >
               <Field label="Role" htmlFor="filter-role">
-                <NativeSelect
+                <SelectField
                   id="filter-role"
                   value={roleFilter}
                   onChange={(event) => {
@@ -516,10 +516,10 @@ function AdminUsersScreen() {
                   <option value="ALL">Every role</option>
                   <option value="ADMIN">Administrators</option>
                   <option value="USER">Site staff</option>
-                </NativeSelect>
+                </SelectField>
               </Field>
               <Field label="Site" htmlFor="filter-site">
-                <NativeSelect
+                <SelectField
                   id="filter-site"
                   value={siteFilter}
                   onChange={(event) => {
@@ -533,7 +533,7 @@ function AdminUsersScreen() {
                       {shortSiteName(name)}
                     </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
               </Field>
             </FilterSheet>
           </div>
@@ -579,7 +579,7 @@ function AdminUsersScreen() {
             className="md:w-auto"
           />
 
-          <NativeSelect
+          <SelectField
             aria-label="Filter by role"
             value={roleFilter}
             onChange={(event) => {
@@ -591,9 +591,9 @@ function AdminUsersScreen() {
             <option value="ALL">Every role</option>
             <option value="ADMIN">Administrators</option>
             <option value="USER">Site staff</option>
-          </NativeSelect>
+          </SelectField>
 
-          <NativeSelect
+          <SelectField
             aria-label="Filter by site"
             value={siteFilter}
             onChange={(event) => {
@@ -608,7 +608,7 @@ function AdminUsersScreen() {
                 {shortSiteName(name)}
               </option>
             ))}
-          </NativeSelect>
+          </SelectField>
         </div>
 
         {error && <ErrorState title="Couldn't load the users" message={error} onRetry={load} />}

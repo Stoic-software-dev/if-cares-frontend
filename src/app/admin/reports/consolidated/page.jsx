@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Fab } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
@@ -414,22 +414,22 @@ function ConsolidatedScreen() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Month" htmlFor="claim-month">
-                <NativeSelect id="claim-month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+                <SelectField id="claim-month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
                   {MONTHS.map((label, index) => (
                     <option key={label} value={index + 1}>
                       {label}
                     </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
               </Field>
               <Field label="Year" htmlFor="claim-year">
-                <NativeSelect id="claim-year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+                <SelectField id="claim-year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
                   {years.map((value) => (
                     <option key={value} value={value}>
                       {value}
                     </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
               </Field>
             </div>
 
@@ -444,7 +444,7 @@ function ConsolidatedScreen() {
                   : 'A claim is filed per state.'
               }
             >
-              <NativeSelect
+              <SelectField
                 id="claim-state"
                 value={state}
                 onChange={(event) => {
@@ -458,7 +458,7 @@ function ConsolidatedScreen() {
                     {value}
                   </option>
                 ))}
-              </NativeSelect>
+              </SelectField>
             </Field>
 
             <div className="flex flex-col gap-2">

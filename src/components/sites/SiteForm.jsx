@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { CalendarRange } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_KEYS } from '@/lib/site-calendar';
@@ -115,7 +115,7 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create', 
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="State" htmlFor="site-state" hint="Drives the consolidated reports." error={stateError}>
-          <NativeSelect
+          <SelectField
             id="site-state"
             value={value.state ?? ''}
             onChange={(event) => set({ state: event.target.value })}
@@ -130,7 +130,7 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create', 
                 {code}
               </option>
             ))}
-          </NativeSelect>
+          </SelectField>
         </Field>
         <Field label="Site number" htmlFor="site-number">
           <Input

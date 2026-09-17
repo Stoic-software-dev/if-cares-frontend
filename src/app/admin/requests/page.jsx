@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field, SelectField } from '@/components/ui/field';
 import { ChipRow, Fab, FilterSheet } from '@/components/ui/mobile';
 import { SearchInput } from '@/components/ui/search-input';
 import { Pagination } from '@/components/ui/pagination';
@@ -237,7 +237,7 @@ function InboxScreen() {
             >
               {siteOptions.length > 1 && (
                 <Field label="Site" htmlFor="inbox-site">
-                  <NativeSelect
+                  <SelectField
                     id="inbox-site"
                     value={siteFilter}
                     onChange={(event) => setSiteFilter(event.target.value)}
@@ -248,7 +248,7 @@ function InboxScreen() {
                         {shortSiteName(name)}
                       </option>
                     ))}
-                  </NativeSelect>
+                  </SelectField>
                 </Field>
               )}
               <Field label="Filed from" htmlFor="inbox-from">
@@ -305,7 +305,7 @@ function InboxScreen() {
             className="md:ml-auto md:min-w-[13rem] md:max-w-sm md:flex-1"
           />
           {siteOptions.length > 1 && (
-            <NativeSelect
+            <SelectField
               aria-label="Filter by site"
               value={siteFilter}
               onChange={(event) => setSiteFilter(event.target.value)}
@@ -317,7 +317,7 @@ function InboxScreen() {
                   {shortSiteName(name)}
                 </option>
               ))}
-            </NativeSelect>
+            </SelectField>
           )}
         </div>
 

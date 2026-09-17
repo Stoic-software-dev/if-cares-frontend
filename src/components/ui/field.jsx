@@ -1,8 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { AlertCircle, ChevronDown } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // One shape for every form control: label above, control, hint or error below.
@@ -29,28 +36,71 @@ export function Field({ label, hint, error, required, htmlFor, className, childr
   );
 }
 
-// Native select styled like the rest of the controls. Used where a Radix
-// Select would be overkill (short, fixed option lists on touch devices, where
-// the OS picker is faster than a custom listbox).
-export const NativeSelect = React.forwardRef(({ className, children, ...props }, ref) => (
-  <div className="relative">
-    <select
-      ref={ref}
-      className={cn(
-        'h-11 w-full appearance-none rounded-md border border-input bg-card px-3 pr-9 text-base font-medium text-foreground',
-        'transition-[border-color,box-shadow] duration-fast ease-out outline-none',
-        'focus:border-primary focus:shadow-focus-primary disabled:cursor-not-allowed disabled:opacity-60',
-        'md:h-10 md:text-[13px]',
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </select>
-    <ChevronDown
-      aria-hidden="true"
-      className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-    />
-  </div>
-));
-NativeSelect.displayName = 'NativeSelect';
+// Radix reserves the empty string to mean "nothing is chosen", so an option
+// that legitimately means "none" - Every state, No state, Select a type - needs
+// a value of its own. It is swapped back to '' before the caller ever sees it.
+const EMPTY_OPTION = '__empty__';
+const toItemValue = (value) => (value === '' ? EMPTY_OPTION : value);
+const fromItemValue = (value) => (value === EMPTY_OPTION ? '' : value);
+
+/** Every <option> in the tree, in order, flattened out of maps and fragments. */
+function collectOptions(children) {
+  const options = [];
+  const walk = (nodes) => {
+    React.Children.forEach(nodes, (child) => {
+      if (!React.isValidElement(child)) return;
+      if (child.type === 'option') {
+        options.push({ value: String(child.props.value ?? ''), label: child.props.children });
+        return;
+      }
+      if (child.props?.children) walk(child.props.children);
+    });
+  };
+  walk(children);
+  return options;
+}
+
+/**
+ * A select that looks like the rest of the app.
+ *
+ * This was a real <select>, on the grounds that the OS picker is faster on a
+ * touch device. What that also means is that the list is drawn by the operating
+ * system and nothing here can touch it: on the reminder screen it came up white
+ * over a dark interface, wider than the field it belonged to and overlapping the
+ * card behind it. That is every select in the app, not one of them - the state
+ * and sort filters on Sites, the role and site filters on Users, the inbox
+ * filters, the month, year and state of a claim, and the two on the request
+ * form.
+ *
+ * So it renders the app's own Select now, in one place rather than at sixteen
+ * call sites. It keeps taking plain <option> children, because that is the
+ * shape every screen already passes and the least surprising thing to read, and
+ * it keeps reporting changes as `{ target: { value } }` so callers that do
+ * `Number(event.target.value)` carry on working.
+ */
+export const SelectField = React.forwardRef(
+  ({ className, children, value, onChange, id, disabled, ...props }, ref) => {
+    const options = collectOptions(children);
+    const current = toItemValue(String(value ?? ''));
+
+    return (
+      <Select
+        value={current}
+        onValueChange={(next) => onChange?.({ target: { value: fromItemValue(next) } })}
+        disabled={disabled}
+      >
+        <SelectTrigger ref={ref} id={id} className={className} {...props}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={toItemValue(option.value)}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+);
+SelectField.displayName = 'SelectField';

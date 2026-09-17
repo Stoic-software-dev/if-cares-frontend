@@ -73,8 +73,15 @@ export default function EmailPdfDialog({ open, onClose, kind, site, date, year, 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Email this PDF</DialogTitle>
+          {/* "Sends X" rather than "X goes out", because the same sentence is
+              used for one count and for a month of forms, and only one of those
+              agrees with a singular verb: "The September forms for Training
+              Only goes out". This way round both read - and the label, written
+              to start a sentence, loses its capital now that it no longer
+              does. */}
           <DialogDescription>
-            {label} goes out as an attachment, exactly the document this screen shows.
+            Sends {label.startsWith('The ') ? `the ${label.slice(4)}` : label} as an attachment,
+            exactly the document this screen shows.
           </DialogDescription>
         </DialogHeader>
 

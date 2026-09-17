@@ -19,7 +19,19 @@ export const GET = handle(async (_req, { params }) => {
 
   const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(report.fileName)}`;
 
-  if (report.storageKey && driveConfigured()) {
+  // Claims filed before names were made distinct can share one Drive file, and
+  // a shared file is not this claim's: every row pointing at it downloaded
+  // whichever version had been written last, so a claim the list showed as
+  // signed came back unsigned and covering a different set of sites. When the
+  // file has more than one owner, nobody gets it - the rebuild below is made
+  // from this row and is always the right document.
+  const shared =
+    report.storageKey &&
+    (await prisma.generatedReport.count({
+      where: { storageKey: report.storageKey, id: { not: report.id } },
+    })) > 0;
+
+  if (report.storageKey && !shared && driveConfigured()) {
     try {
       const { body } = await downloadFile(report.storageKey);
       return new Response(body, {

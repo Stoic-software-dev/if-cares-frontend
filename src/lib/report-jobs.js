@@ -24,7 +24,13 @@ function sweep() {
 
 /**
  * Runs `work` in the background and returns the id to poll.
- * `work` receives a progress reporter so a long job can say where it is.
+ *
+ * `work(report, job)` receives a progress reporter so a long job can say where
+ * it is, and a handle carrying `job.id` plus `job.cancelled()`. Long work is
+ * expected to call `cancelled()` before anything that leaves a trace outside
+ * this process - a file written, a row inserted - and to stop when it is true.
+ * Without that, cancelling only hides the result: the document still lands in
+ * Drive and in the claims list, which is the opposite of what the button says.
  */
 export function startJob({ kind, label, work }) {
   sweep();
@@ -48,7 +54,7 @@ export function startJob({ kind, label, work }) {
 
   // Deliberately not awaited: the request that started it is already answering.
   Promise.resolve()
-    .then(() => work(report))
+    .then(() => work(report, { id, cancelled: () => job.status === 'cancelled' }))
     .then((result) => {
       // A cancelled job stays cancelled. `work()` cannot be interrupted, so it
       // may well finish after the cancel - but its result must not resurrect the
@@ -95,10 +101,11 @@ export function listJobs() {
 
 export function cancelJob(id) {
   const job = jobs.get(id);
-  // The work itself cannot be interrupted - it is a promise already in flight -
-  // so cancelling is a decision about its RESULT: `cancelled` is a terminal
-  // status that the completion handler refuses to overwrite. Whatever the job
-  // was building is abandoned rather than saved.
+  // `cancelled` is a terminal status the completion handler refuses to
+  // overwrite, and it is also the flag `work` polls through `job.cancelled()`.
+  // The promise in flight cannot be interrupted from here, so the work stops at
+  // its next checkpoint - which is what keeps the file and the row from being
+  // written after somebody pressed Cancel.
   if (job && job.status === 'processing') {
     job.status = 'cancelled';
     job.error = 'Cancelled.';
@@ -106,9 +113,4 @@ export function cancelJob(id) {
     return true;
   }
   return false;
-}
-
-/** Whether a job has been cancelled, so long work can bail out early. */
-export function isCancelled(id) {
-  return jobs.get(id)?.status === 'cancelled';
 }

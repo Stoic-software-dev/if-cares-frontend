@@ -49,7 +49,7 @@ export const POST = handle(async (req) => {
   const jobId = startJob({
     kind: body.kind,
     label: `${monthLabel(body.year, body.month)}, ${body.state || 'every state'}`,
-    work: async (report) => {
+    work: async (report, job) => {
       report('Reading the counts');
       const data = await kind.build({
         year: body.year,
@@ -65,11 +65,25 @@ export const POST = handle(async (req) => {
         title: body.title ?? '',
       });
 
+      // The last moment before this job leaves a mark anybody else can see. Up
+      // to here cancelling costs nothing; past here it would be a file in the
+      // office's Drive and a row in the claims list, for a document the screen
+      // already reported as cancelled.
+      if (job.cancelled()) return null;
+
       report('Filing it in Drive');
-      const file = await archivePdf({ name: fileName, bytes, period }).catch((error) => {
+      // `distinct`: a claim for a month that already has one is filed beside it,
+      // never over it, and the name that comes back is the name recorded.
+      const file = await archivePdf({ name: fileName, bytes, period, distinct: true }).catch((error) => {
         console.warn(`[pdf-archive] consolidated ${fileName}: ${error.message}`);
         return null;
       });
+
+      // Cancelling during the upload is the one window that can still leave a
+      // file behind - it is already in Drive by now. The row is what the claims
+      // list reads, so not writing it is what keeps the cancelled claim out of
+      // the app; the stray file is named "(2)" and overwrites nothing.
+      if (job.cancelled()) return null;
 
       // Recorded whether or not Drive accepted it, so the claim is always
       // recoverable from the app itself.
@@ -79,7 +93,9 @@ export const POST = handle(async (req) => {
           month: body.month,
           state: body.state || '',
           kind: body.kind,
-          fileName,
+          // The name Drive actually used, so signing this claim later replaces
+          // its own file instead of the neighbouring month's.
+          fileName: file?.name || fileName,
           // Everything the build depended on, so the claim can be produced again
           // exactly as it was filed. Without these two the rebuild - which is
           // what the signing page serves - was a different document.
@@ -93,7 +109,7 @@ export const POST = handle(async (req) => {
 
       return {
         reportId: record.id,
-        fileName,
+        fileName: record.fileName,
         driveId: file?.id ?? '',
         rows: data.rows.length,
         totals: data.totals,

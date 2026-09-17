@@ -87,6 +87,16 @@ function DashboardScreen() {
     setStoredSite(name);
     setCursor(null);
     setFilter('all');
+    // The address bar has to follow the switcher, because the effect above
+    // reads the URL before it reads what this browser remembers. Arriving from
+    // the sites list - which links with ?site= - and then switching left the
+    // old site in the URL, so a refresh silently put the old one back and the
+    // link you copied pointed somewhere other than what you were reading.
+    // `replace` rather than `push`: switching sites is not a step to go back
+    // through, and stacking one history entry per site makes Back useless.
+    const query = new URLSearchParams(searchParams.toString());
+    query.set('site', name);
+    router.replace(`/dashboard?${query.toString()}`, { scroll: false });
   };
 
   const error = meals.error || siteList.error;

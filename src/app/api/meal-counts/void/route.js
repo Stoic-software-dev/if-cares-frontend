@@ -62,10 +62,36 @@ export const POST = handle(async (req) => {
   const count = await prisma.mealCount.findFirst({
     where: { siteId: site.id, date, voidedAt: null },
   });
-  if (!count) throw new ApiError(404, 'No active meal count for this date.');
+  if (!count) {
+    // The conditional write below only catches the losing caller when the two
+    // reads overlap. When the race serializes instead - the other void already
+    // committed before this one looked - there is simply no active count left,
+    // and "no active meal count for this date" reads as if the day had never
+    // had one. Saying who threw it out is the difference between a dead end and
+    // a fact.
+    const alreadyVoided = await prisma.mealCount.findFirst({
+      where: { siteId: site.id, date, voidedAt: { not: null } },
+      orderBy: { voidedAt: 'desc' },
+      select: { voidedByEmail: true },
+    });
+    throw new ApiError(
+      alreadyVoided ? 409 : 404,
+      alreadyVoided
+        ? `This count was already voided by ${alreadyVoided.voidedByEmail || 'somebody else'}.`
+        : 'No active meal count for this date.'
+    );
+  }
 
-  await prisma.mealCount.update({
-    where: { id: count.id },
+  // The same conditional write approving and correcting carry, for the same
+  // reason. This read and the write below used to be two statements with an
+  // unguarded `update` between them, so two administrators voiding the same day
+  // at once BOTH got "success" and the second one's name and reason overwrote
+  // the first's - on the field whose entire purpose is to record why a count
+  // was thrown out. Reproduced three times out of three against the deployed
+  // app. The row is claimed here instead, so exactly one of them wins and the
+  // other is told so.
+  const voided = await prisma.mealCount.updateMany({
+    where: { id: count.id, voidedAt: null },
     data: {
       voidedAt: new Date(),
       voidedById: session.user.id,
@@ -73,6 +99,9 @@ export const POST = handle(async (req) => {
       voidReason: reason,
     },
   });
+  if (voided.count === 0) {
+    throw new ApiError(409, 'Somebody voided this count a moment ago. Reload and look again.');
+  }
 
   await logAudit({
     actor: session.user,
@@ -113,9 +142,13 @@ export const PUT = handle(async (req) => {
   // The service day has to exist again for the count to make sense on it. It is
   // recreated closed of meals: reopening a day is a calendar decision, and the
   // count itself carries what was actually served.
-  await prisma.$transaction([
-    prisma.mealCount.update({
-      where: { id: count.id },
+  // Conditional for the same reason voiding is: without it a restore could
+  // undo a void that landed in the gap between the read above and this write,
+  // putting the count back while the person who had just thrown it out was
+  // told it was gone.
+  const [restored] = await prisma.$transaction([
+    prisma.mealCount.updateMany({
+      where: { id: count.id, voidedAt: { not: null } },
       data: { voidedAt: null, voidedById: null, voidedByEmail: '', voidReason: '' },
     }),
     prisma.serviceDay.upsert({
@@ -124,6 +157,9 @@ export const PUT = handle(async (req) => {
       update: {},
     }),
   ]);
+  if (restored.count === 0) {
+    throw new ApiError(409, 'Somebody restored this count a moment ago. Reload and look again.');
+  }
 
   await logAudit({
     actor: session.user,

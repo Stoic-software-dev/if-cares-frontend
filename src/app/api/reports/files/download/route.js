@@ -72,7 +72,15 @@ export const GET = handle(async (req) => {
   try {
     return driveConfigured() ? await fromDrive(fileId, attachment) : await fromGas(fileId, attachment);
   } catch (error) {
-    if (error instanceof DriveError) throw new ApiError(502, error.message);
+    if (error instanceof DriveError) {
+      // Drive's diagnostics name the service account and explain how the
+      // sharing is meant to be set up. That is the right text for whoever
+      // configures the integration and the wrong one for this endpoint, which
+      // every signed in user at every site can reach with any id they like.
+      // The detail goes to the log, where the person who needs it looks.
+      console.warn(`[menus] download ${fileId}: ${error.message}`);
+      throw new ApiError(502, 'That menu could not be opened. Ask an administrator to check it.');
+    }
     throw error;
   }
 });

@@ -42,8 +42,14 @@ export const POST = handle(async (req) => {
 
   // A day that already carries a count is history and stays open: closing it
   // would strand the count on a day the calendar says never existed.
+  //
+  // A VOIDED count is not that. Voiding is how a count filed on the wrong day
+  // is taken back, and every other screen treats the day as open again from
+  // that moment - the dashboard offers it, the reminder chases it. Counting it
+  // as history here made those days the only ones a bulk close silently
+  // refused, with nothing on screen to say why.
   const counted = await prisma.mealCount.findMany({
-    where: { siteId: { in: siteIds }, date: range },
+    where: { siteId: { in: siteIds }, date: range, voidedAt: null },
     select: { siteId: true, date: true },
   });
   const locked = new Set(counted.map((count) => `${count.siteId}|${count.date.getTime()}`));

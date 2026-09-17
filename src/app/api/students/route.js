@@ -39,7 +39,7 @@ async function findByName(siteId, name, excludeId) {
 
 async function assertNameUnique(siteId, name, excludeId) {
   const clash = await findByName(siteId, name, excludeId);
-  if (clash) throw new ApiError(409, 'Full name must be unique');
+  if (clash) throw new ApiError(409, 'A student with this name is already on this roster.');
 }
 
 // Accepts both the legacy {actionType:'add', values:[name, age, site, birthdate]}
@@ -56,7 +56,7 @@ export const POST = handle(async (req) => {
   // the same name back is the same person returning - not a name collision to
   // refuse.
   const existing = await findByName(site.id, body.name);
-  if (existing?.active) throw new ApiError(409, 'Full name must be unique');
+  if (existing?.active) throw new ApiError(409, 'A student with this name is already on this roster.');
 
   const birthdate = body.birthdate ? ymdToUtcDate(body.birthdate) : null;
   const age = body.age ?? (birthdate ? ageFromBirthdate(birthdate) : null);
@@ -92,7 +92,7 @@ export const POST = handle(async (req) => {
     } catch (error) {
       // Retry once if a concurrent insert grabbed the same roster number
       if (error?.code === 'P2002' && attempt === 0) continue;
-      if (error?.code === 'P2002') throw new ApiError(409, 'Full name must be unique');
+      if (error?.code === 'P2002') throw new ApiError(409, 'A student with this name is already on this roster.');
       throw error;
     }
   }

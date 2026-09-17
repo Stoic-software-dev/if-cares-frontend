@@ -40,7 +40,7 @@ export const PATCH = handle(async (req, { params }) => {
     },
     select: { id: true },
   });
-  if (clash) throw new ApiError(409, 'Full name must be unique');
+  if (clash) throw new ApiError(409, 'A student with this name is already on this roster.');
 
   await prisma.$transaction(async (tx) => {
     const data = { name: body.name, age: body.age ?? null };

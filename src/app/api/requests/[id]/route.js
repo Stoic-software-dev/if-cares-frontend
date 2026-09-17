@@ -50,10 +50,16 @@ export const PATCH = handle(async (req, { params }) => {
 
   // Telling the site is the point of answering, and it is the point whether or
   // not a note came with it - the message reads perfectly well without one. It
-  // goes out when the request first reaches Resolved, or when an answer is
-  // added to one that is already there; re-saving the same state does not send
-  // it again.
-  const telling = newlyResolved || (resolving && responseComment !== undefined);
+  // goes out when the request first reaches Resolved, or when the answer on one
+  // that is already there actually CHANGES.
+  //
+  // "A note came with the save" was the wrong test: the screen sends the note
+  // on every save, so an administrator who reopened a resolved request to read
+  // it and pressed Mark resolved again mailed the site a second identical
+  // answer. Comparing against what is stored is what makes re-saving free.
+  const answerChanged =
+    responseComment !== undefined && responseComment !== (existing.responseComment ?? '');
+  const telling = newlyResolved || (resolving && answerChanged);
   if (telling && mailConfigured() && existing.requestedByEmail) {
     const message = requestAnswered({
       name: existing.requestedBy?.name,
@@ -72,6 +78,9 @@ export const PATCH = handle(async (req, { params }) => {
         context: { request: existing.id, to: existing.requestedByEmail, site: existing.site ?? '' },
       });
     });
+    // The reminder run says how many it sent; this one said nothing at all, so
+    // "was the site actually told, and how many times?" had no answer anywhere.
+    console.log(`[requests] answer emailed to ${existing.requestedByEmail} (${existing.id})`);
   }
 
   await logAudit({

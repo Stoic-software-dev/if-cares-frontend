@@ -57,6 +57,28 @@ function clearDraft(key) {
   }
 }
 
+// A draft is only ever useful until its day is filed. Days filed from another
+// device - the usual case, one phone takes the count and another opens the app
+// later - left their draft here forever: storage nobody can see, nobody can
+// reach, and that the screen refuses to read because it blocks the day first.
+// Anything older than this cannot belong to a day still worth filing.
+const DRAFT_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000;
+
+function pruneStaleDrafts() {
+  try {
+    const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith('ifc.draft.')) continue;
+      const savedAt = readDraft(key)?.savedAt;
+      // A draft with no timestamp predates the field and is older than anything
+      // still in use.
+      if (!savedAt || savedAt < cutoff) localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage blocked: there is nothing to clean up either.
+  }
+}
+
 // Legacy submit order: number, name, age, attendance, breakfast, lunch, snack, supper.
 const toRow = (student, marks) => [
   student.number,
@@ -106,6 +128,14 @@ function MealCountScreen() {
   const [dirty, setDirty] = useState(false);
 
   const getSignature = useRef(null);
+  // Where each unmet requirement lives on the page, so a refused submit can
+  // take the person to it. On a two hundred name roster the submit button is a
+  // long way from the time field it is complaining about, and a toast that
+  // names a field without going there is a instruction to go hunting.
+  const timeInRef = useRef(null);
+  const timeOutRef = useRef(null);
+  const rosterRef = useRef(null);
+  const signatureRef = useRef(null);
   const [signed, setSigned] = useState(false);
   // A day can look empty because a count for it was thrown out. Only an
   // administrator sees this, and only they can put it back.
@@ -123,6 +153,9 @@ function MealCountScreen() {
     setLoadError('');
     setBlocked(null);
     setRoster(null);
+    // Cheap, and this is the only screen that writes drafts, so it is also the
+    // only one that can be sure it is safe to throw the old ones away.
+    pruneStaleDrafts();
 
     if (correcting) {
       apiGet(`/api/meal-counts/detail?site=${encodeURIComponent(site)}&date=${iso}`)
@@ -189,6 +222,10 @@ function MealCountScreen() {
         const alreadySubmitted = (siteData?.excludedDates ?? []).includes(iso);
 
         if (alreadySubmitted) {
+          // The day is filed, so whatever this device was holding for it is
+          // finished. Left behind, it was storage that could never be read
+          // again: this branch returns before anything looks at a draft.
+          clearDraft(draftKey);
           setBlocked({
             kind: 'submitted',
             title: 'This count was already submitted',
@@ -283,6 +320,10 @@ function MealCountScreen() {
     return [ATTENDANCE, ...served];
   }, [dayMeals]);
 
+  // The meals a bulk action applies to. Attendance is not one of them: who was
+  // there is the one thing nobody can fill in for everybody at once.
+  const bulkMeals = useMemo(() => meals.filter((meal) => meal.key !== 'att'), [meals]);
+
   // Stable across renders so the memoized rows only re-render when their own
   // marks change.
   const toggle = useCallback((studentId, key) => {
@@ -364,15 +405,36 @@ function MealCountScreen() {
   const backwardsTimes = Boolean(timeIn) && Boolean(timeOut) && timeOut <= timeIn;
   const canSubmit = missing.length === 0 && !backwardsTimes && !submitting;
 
+  // Takes the screen to the first thing that is not filled in. A time input can
+  // be focused outright; a roster and a signature pad are places, so those are
+  // scrolled to instead.
+  const goToFirstMissing = (first) => {
+    const target =
+      first === 'time in'
+        ? timeInRef.current
+        : first === 'time out'
+          ? timeOutRef.current
+          : first === 'attendance'
+            ? rosterRef.current
+            : signatureRef.current;
+    if (!target) return;
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (typeof target.focus === 'function' && target.tagName === 'INPUT') {
+      target.focus({ preventScroll: true });
+    }
+  };
+
   const submit = async () => {
     if (missing.length > 0) {
       setAttempted(true);
       toast.error(`Still missing: ${missing.join(', ')}.`);
+      goToFirstMissing(missing[0]);
       return;
     }
     if (backwardsTimes) {
       setAttempted(true);
       toast.error('Time out has to be after time in.');
+      goToFirstMissing('time out');
       return;
     }
     setSubmitting(true);
@@ -554,6 +616,7 @@ function MealCountScreen() {
           <div className="grid grid-cols-2 gap-2.5 md:max-w-md">
             <TimeField
               label="In"
+              inputRef={timeInRef}
               value={timeIn}
               onChange={setTimeIn}
               invalid={attempted && !timeIn}
@@ -561,6 +624,7 @@ function MealCountScreen() {
             />
             <TimeField
               label="Out"
+              inputRef={timeOutRef}
               value={timeOut}
               onChange={setTimeOut}
               invalid={attempted && (!timeOut || backwardsTimes)}
@@ -569,7 +633,7 @@ function MealCountScreen() {
           </div>
         </section>
 
-        <section className="flex flex-col gap-2.5">
+        <section ref={rosterRef} className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionLabel icon={CircleCheck}>Roster</SectionLabel>
             {roster && (
@@ -661,6 +725,36 @@ function MealCountScreen() {
             </div>
           )}
 
+          {/* The bulk action, written out, for the screens that have no column
+              header to hide it in.
+
+              Giving a meal to everyone present is the difference between one
+              tap and two hundred, and it only ever existed on the header row -
+              which is `md:` and up. The sites work on phones and upright
+              tablets, so the one screen that needed it most was the one screen
+              that did not have it. It appears once somebody is marked present,
+              because "for everyone present" does nothing before that. */}
+          {roster && bulkMeals.length > 0 && markedCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2.5 md:hidden">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                All {markedCount} present
+              </span>
+              <div className="ml-auto flex gap-1.5">
+                {bulkMeals.map((meal) => (
+                  <Button
+                    key={meal.key}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleColumn(meal.key)}
+                  >
+                    {meal.short}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {roster && (
             <div className="overflow-hidden rounded-lg border border-border bg-card">
               {/* Column header doubles as a bulk action per meal. */}
@@ -680,6 +774,12 @@ function MealCountScreen() {
                       disabled={meal.key === 'att'}
                       onClick={() => toggleColumn(meal.key)}
                       title={meal.key === 'att' ? meal.label : `Toggle ${meal.label} for everyone present`}
+                      // A tooltip is not an affordance on a touch screen and is
+                      // not one for a screen reader either: without this the
+                      // control announced itself as the word "Snk".
+                      aria-label={
+                        meal.key === 'att' ? meal.label : `Toggle ${meal.label} for everyone present`
+                      }
                       className={cn(
                         'flex-1 rounded-sm py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground outline-none transition-colors',
                         meal.key !== 'att' && 'hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
@@ -724,8 +824,12 @@ function MealCountScreen() {
         </section>
 
         {!correcting && (
-          <section className="flex flex-col gap-2.5">
-            <SectionLabel>Certification</SectionLabel>
+          <section ref={signatureRef} className="flex flex-col gap-2.5">
+            {/* The section is the signature; the card beside the pad is the
+                certification text and says so itself. The word was printed
+                twice, once as the heading of a block whose only visible
+                content was the same word again. */}
+            <SectionLabel>Signature</SectionLabel>
             <SignatureField
               invalid={attempted && !signed}
               onChange={(getter) => {
@@ -782,18 +886,40 @@ function MealCountScreen() {
         </div>
       </div>
 
+      {/* What this warns about is different in the two modes, and saying the
+          wrong one is worse than not warning at all.
+
+          Taking a count, the marks are written to this device on every tap and
+          come back when the screen is reopened - the dialog used to say they
+          were lost, which is a sentence that makes a site redo a roster it
+          never lost, or refuse to leave a screen it was safe to leave. What
+          does not come back is the signature, because a signature is given at
+          the moment of submitting.
+
+          Correcting one, nothing is written anywhere until Save, so there the
+          original wording is the true one. */}
       <UnsavedGuard
         enabled={dirty && !submitting}
-        title="Leave without submitting this count?"
+        title={correcting ? 'Leave without saving this correction?' : 'Leave without submitting this count?'}
         description={
-          markedCount > 0
-            ? `${markedCount} ${markedCount === 1 ? 'student is' : 'students are'} marked and nothing has been sent yet.`
-            : 'Nothing on this screen has been sent yet.'
+          correcting
+            ? 'This correction has not been saved.'
+            : markedCount > 0
+              ? `${markedCount} ${markedCount === 1 ? 'student is' : 'students are'} marked and nothing has been sent yet.`
+              : 'Nothing on this screen has been sent yet.'
         }
-        consequences={[
-          'The marks on this screen are lost.',
-          'The day stays open, so the count can be taken again later.',
-        ]}
+        consequences={
+          correcting
+            ? [
+                'The changes on this screen are lost.',
+                'The count stays exactly as it was submitted.',
+              ]
+            : [
+                'The marks stay on this device and come back when you reopen the day.',
+                'The signature does not: it is given when the count is sent.',
+                'The day stays open, so the count can be taken again later.',
+              ]
+        }
       />
     </AppShell>
   );
@@ -808,7 +934,7 @@ function SectionLabel({ icon: Icon, children }) {
   );
 }
 
-function TimeField({ label, value, onChange, invalid, required }) {
+function TimeField({ label, value, onChange, invalid, required, inputRef }) {
   return (
     <label
       className={cn(
@@ -827,6 +953,7 @@ function TimeField({ label, value, onChange, invalid, required }) {
         {required && ', required'}
       </span>
       <input
+        ref={inputRef}
         type="time"
         value={value}
         onChange={(event) => onChange(event.target.value)}

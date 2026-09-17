@@ -7,8 +7,9 @@ import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Field, NativeSelect } from '@/components/ui/field';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ErrorState } from '@/components/ui/states';
@@ -131,18 +132,22 @@ function RemindersScreen() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Time of day" htmlFor="reminder-hour" hint="In the program's timezone.">
-                  <NativeSelect
-                    id="reminder-hour"
-                    value={settings.hour}
-                    onChange={(event) => save({ hour: Number(event.target.value) })}
+                  <Select
+                    value={String(settings.hour)}
+                    onValueChange={(value) => save({ hour: Number(value) })}
                     disabled={saving}
                   >
-                    {Array.from({ length: 24 }, (_, hour) => (
-                      <option key={hour} value={hour}>
-                        {hourLabel(hour)}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    <SelectTrigger id="reminder-hour" aria-label="Time of day">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 24 }, (_, hour) => (
+                        <SelectItem key={hour} value={String(hour)}>
+                          {hourLabel(hour)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
 
                 <Field
@@ -150,18 +155,22 @@ function RemindersScreen() {
                   htmlFor="reminder-days"
                   hint="How many days of missing counts to chase."
                 >
-                  <NativeSelect
-                    id="reminder-days"
-                    value={settings.lookBackDays}
-                    onChange={(event) => save({ lookBackDays: Number(event.target.value) })}
+                  <Select
+                    value={String(settings.lookBackDays)}
+                    onValueChange={(value) => save({ lookBackDays: Number(value) })}
                     disabled={saving}
                   >
-                    {[1, 2, 3, 5, 7, 14].map((days) => (
-                      <option key={days} value={days}>
-                        {days === 1 ? 'Yesterday only' : `${days} days`}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                    <SelectTrigger id="reminder-days" aria-label="Look back">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 5, 7, 14].map((days) => (
+                        <SelectItem key={days} value={String(days)}>
+                          {days === 1 ? 'Yesterday only' : `${days} days`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
               </div>
 

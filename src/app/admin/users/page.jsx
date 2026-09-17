@@ -54,6 +54,18 @@ import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 15;
+
+// What to call somebody on screen.
+//
+// The form has required a first and a last name since it existed, but the
+// accounts imported from the spreadsheets did not go through the form, and two
+// of them carry neither. Every place that printed `user.name` printed nothing
+// for those: a blank line above the email in the list, a row menu that
+// announced itself as "Actions for" and stopped, and a toast that said
+// " reactivated". The address is the one thing every account has.
+const displayName = (user) =>
+  `${user.name ?? ''} ${user.lastname ?? ''}`.trim() || user.email;
+
 const EMPTY_FORM = {
   name: '',
   lastname: '',
@@ -649,9 +661,7 @@ function AdminUsersScreen() {
                       <Avatar user={user} className={cn('shrink-0', !user.active && 'bg-muted text-muted-foreground')} />
                       <div className="flex min-w-0 flex-col">
                         <span className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold text-foreground">
-                          <span className="truncate">
-                            {user.name} {user.lastname}
-                          </span>
+                          <span className="truncate">{displayName(user)}</span>
                           {/* A phone shows the exception, not the rule: every
                               account was staff and active, and two badges
                               saying so on all sixty-five rows said nothing.
@@ -704,7 +714,7 @@ function AdminUsersScreen() {
                     <div className="flex shrink-0 md:justify-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${user.name}`}>
+                          <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${displayName(user)}`}>
                             <MoreVertical />
                           </Button>
                         </DropdownMenuTrigger>
@@ -743,10 +753,10 @@ function AdminUsersScreen() {
                               ) : (
                                 <DropdownMenuItem
                                   onClick={async () => {
-                                    const pending = toast.loading(`Reactivating ${user.name}`);
+                                    const pending = toast.loading(`Reactivating ${displayName(user)}`);
                                     try {
                                       await setActive(user, true);
-                                      toast.success(`${user.name} reactivated`, { id: pending });
+                                      toast.success(`${displayName(user)} reactivated`, { id: pending });
                                     } catch (err) {
                                       toast.error(err.message, { id: pending });
                                     }

@@ -81,9 +81,14 @@ function RequestsScreen() {
             Filing a new one is an action, not half the screen: the form used to
             sit permanently beside the list, so a screen about the answers was
             mostly an empty form for a question nobody had yet. */}
+        {/* "What you have asked" was not what the list holds: the API scopes
+            requests to the sites you can see, not to the account that filed
+            them, so a second person at the same site reads rows here under a
+            heading that calls them theirs. The list is right; the sentence was
+            the thing that had to change. */}
         <PageHeader
           title="Requests"
-          subtitle="What you have asked the IF Cares team, and what they answered."
+          subtitle="What your site has asked the IF Cares team, and what they answered."
           actions={
             <Button onClick={() => setComposing(true)} className="hidden md:inline-flex">
               <Plus />
@@ -180,8 +185,13 @@ function RequestsScreen() {
                           className="ml-auto shrink-0 sm:hidden"
                         />
                       </span>
+                      {/* Who asked, now that the heading no longer claims every
+                          row was filed by whoever is reading it. A site with
+                          two people on it had no way to tell one of their
+                          requests from the other's. */}
                       <span className="text-[12px] text-muted-foreground">
                         {requestDetail(request)}, {requestDate(request.createdAt)}
+                        {request.requestedBy && `, ${request.requestedBy}`}
                         {sites.length > 1 && `, ${shortSiteName(request.site)}`}
                       </span>
                       {request.note && (

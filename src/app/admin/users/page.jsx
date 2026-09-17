@@ -230,6 +230,17 @@ function UserDialog({ open, mode, initial, siteOptions, onClose, onSaved }) {
                 </span>
               </div>
 
+              {/* An account with no site is not a smaller account, it is one
+                  that signs in to nothing: no dashboard, no day to file, and
+                  the reminders skip it because nobody is assigned to the site
+                  it was meant to cover. Twelve of them exist, all made through
+                  this form, which said "No site yet" in grey and let it pass. */}
+              {form.sites.length === 0 && (
+                <p className="rounded-md bg-warning-soft px-3 py-2.5 text-[12.5px] leading-relaxed text-warning-text">
+                  Without a site this account signs in to an empty app. Pick the one it works at.
+                </p>
+              )}
+
               {form.sites.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {form.sites.map((name) => (

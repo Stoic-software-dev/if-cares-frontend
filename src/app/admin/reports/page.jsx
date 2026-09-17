@@ -18,6 +18,7 @@ import EmailPdfDialog from '@/components/reports/EmailPdfDialog';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
 import { dateLabel, monthLabel, todayYmd } from '@/lib/calendar';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
+import { cn } from '@/lib/utils';
 
 async function fetchPdf(site, date) {
   const res = await fetch(`/api/meal-counts/pdf?site=${encodeURIComponent(site)}&date=${date}`);
@@ -86,7 +87,24 @@ function ReportsScreen() {
   );
 
   const missing = open.filter((ymd) => ymd < today);
-  const total = submitted.length + open.length;
+  // Service days this month that have not arrived yet. They were folded into a
+  // "Service days" total beside Submitted and Missing, and the three did not
+  // reconcile on the page: 2 and 10 under a 22 that nothing explained. Counted
+  // on their own, the row adds up.
+  const upcoming = open.filter((ymd) => ymd >= today);
+
+  // One list, in the order the month happened. Submitted days were printed
+  // first and missing ones after, so the column headed "Day" ran 2, 3, 1, 4, 7
+  // - which reads as a sorting bug on a screen whose whole job is to show what
+  // is missing and when.
+  const days = useMemo(
+    () =>
+      [
+        ...submitted.map((date) => ({ date, submitted: true })),
+        ...missing.map((date) => ({ date, submitted: false })),
+      ].sort((a, b) => a.date.localeCompare(b.date)),
+    [submitted, missing]
+  );
 
   const step = (delta) => {
     setCursor((prev) => {
@@ -214,7 +232,7 @@ function ReportsScreen() {
             <div className="grid grid-cols-3 gap-3">
               <Summary label="Submitted" value={submitted.length} />
               <Summary label="Missing" value={missing.length} tone={missing.length ? 'danger' : 'neutral'} />
-              <Summary label="Service days" value={total} />
+              <Summary label="Still to come" value={upcoming.length} />
             </div>
 
             <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -230,56 +248,59 @@ function ReportsScreen() {
               </div>
 
               <div className="divide-y divide-border">
-                {submitted.map((date) => (
+                {days.map(({ date, submitted: isSubmitted }) => (
                   <div
                     key={date}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-accent/30 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4',
+                      isSubmitted && 'transition-colors hover:bg-accent/30'
+                    )}
                   >
                     {/* `sm:contents` dissolves this wrapper back into the grid:
                         a phone reads the day and its state as one block with the
                         actions beside it, a desk reads them as columns. */}
                     <span className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
-                      <span className="text-[13.5px] font-semibold text-foreground">{dateLabel(date)}</span>
-                      <Badge variant="success">Submitted</Badge>
-                    </span>
-                    <div className="flex shrink-0 gap-2 sm:justify-end">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/counts/${date}?site=${encodeURIComponent(site)}`}>View</Link>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        loading={busyDate === date}
-                        onClick={() => downloadOne(date)}
+                      <span
+                        className={cn(
+                          'text-[13.5px]',
+                          isSubmitted ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'
+                        )}
                       >
-                        {busyDate !== date && <Download />}
-                        PDF
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-
-                {missing.map((date) => (
-                  <div
-                    key={date}
-                    className="flex items-center gap-3 px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1fr)_120px_200px] sm:items-center sm:gap-4"
-                  >
-                    <span className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:contents">
-                      <span className="text-[13.5px] font-medium text-muted-foreground">{dateLabel(date)}</span>
-                      <Badge variant="danger">Missing</Badge>
+                        {dateLabel(date)}
+                      </span>
+                      <Badge variant={isSubmitted ? 'success' : 'danger'}>
+                        {isSubmitted ? 'Submitted' : 'Missing'}
+                      </Badge>
                     </span>
-                    <div className="flex shrink-0 sm:justify-end">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/meal-count?date=${date}&site=${encodeURIComponent(site)}`}>
-                          Submit the count
-                        </Link>
-                      </Button>
-                    </div>
+                    {isSubmitted ? (
+                      <div className="flex shrink-0 gap-2 sm:justify-end">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/counts/${date}?site=${encodeURIComponent(site)}`}>View</Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          loading={busyDate === date}
+                          onClick={() => downloadOne(date)}
+                        >
+                          {busyDate !== date && <Download />}
+                          PDF
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex shrink-0 sm:justify-end">
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/meal-count?date=${date}&site=${encodeURIComponent(site)}`}>
+                            Submit the count
+                          </Link>
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
 
-              {submitted.length === 0 && missing.length === 0 && (
+              {days.length === 0 && (
                 <EmptyState
                   icon={FileText}
                   title="Nothing filed this month"

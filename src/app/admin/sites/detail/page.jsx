@@ -410,24 +410,32 @@ function SiteDetailScreen() {
           }
           actions={
             <>
-              <Button variant="outline" asChild>
-                <Link href={`/admin/calendar?site=${encodeURIComponent(site)}`}>
-                  <CalendarRange />
-                  Calendar
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href={`/admin/reports?site=${encodeURIComponent(site)}`}>
-                  <FileText />
-                  Reports
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link href={`/dashboard?site=${encodeURIComponent(site)}`}>
-                  <ExternalLink />
-                  Open dashboard
-                </Link>
-              </Button>
+              {/* Every one of these opens another screen for THIS site, so when
+                  the site could not be loaded they lead nowhere - three live
+                  buttons above the words "Site not found", each one a trip to a
+                  second empty screen. */}
+              {!error && (
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href={`/admin/calendar?site=${encodeURIComponent(site)}`}>
+                      <CalendarRange />
+                      Calendar
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href={`/admin/reports?site=${encodeURIComponent(site)}`}>
+                      <FileText />
+                      Reports
+                    </Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href={`/dashboard?site=${encodeURIComponent(site)}`}>
+                      <ExternalLink />
+                      Open dashboard
+                    </Link>
+                  </Button>
+                </>
+              )}
               {record && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -510,6 +518,22 @@ function SiteDetailScreen() {
                     <Detail label="CE id" value={info.ceId} />
                     <Detail label="Site name on file" value={info.siteName} />
                     <Detail label="Site number" value={info.siteNumber} />
+                    {/* The four fields the site form writes and this panel did
+                        not read back. The state decides which claim the site
+                        appears in, the cycle is what generates the calendar,
+                        and the reminder window decides whether the site is
+                        chased at all - each of them invisible here, which is
+                        how a site ends up with an empty state column or a
+                        window that closed a year ago and nobody notices. */}
+                    <Detail label="Files under" value={record?.state} />
+                    <Detail
+                      label="Program cycle"
+                      value={rangeLabel(record?.programStart, record?.programEnd)}
+                    />
+                    <Detail
+                      label="Reminder window"
+                      value={rangeLabel(record?.reminderStart, record?.reminderEnd, 'Always on')}
+                    />
                     <Detail
                       label="Last service time"
                       value={
@@ -714,6 +738,14 @@ function Stat({ label, short, value, tone }) {
       </span>
     </div>
   );
+}
+
+// A from/to pair as one line. Half a range is still worth showing: a cycle with
+// a start and no end is exactly the state that stops the calendar generating.
+function rangeLabel(from, to, empty = '') {
+  if (!from && !to) return empty;
+  if (from && to) return `${from} to ${to}`;
+  return from ? `From ${from}` : `Until ${to}`;
 }
 
 function Detail({ label, value, wide }) {

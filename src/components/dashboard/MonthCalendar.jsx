@@ -36,9 +36,14 @@ const STATUS = {
   },
   // Days the site does not serve still belong to the grid, so they carry the
   // faintest surface instead of a hole in the layout.
+  //
+  // Faint, not unreadable: the date itself was at 2.1:1 against that surface,
+  // and the number in a calendar cell is the one thing in it that always has to
+  // be legible. The muted tone alone already reads as "not a serving day"
+  // beside the tinted cells around it.
   none: {
-    cell: 'border-transparent bg-surface-sunken/60 text-muted-foreground/50',
-    number: 'text-muted-foreground/50',
+    cell: 'border-transparent bg-surface-sunken/60 text-muted-foreground',
+    number: 'text-muted-foreground',
     label: '',
   },
 };

@@ -99,8 +99,13 @@ function MonitoringScreen() {
             ariaLabel="Filter"
             value={scope}
             onChange={setScope}
+            // "Still happening" was a claim about time that this filter does
+            // not make: it selects on nobody having pressed Handled, so a
+            // crash last seen a fortnight ago sat under a tab saying it was
+            // ongoing. Each row carries its own "last seen", which is where
+            // recency actually lives.
             options={[
-              { value: 'open', label: 'Still happening' },
+              { value: 'open', label: 'Not handled' },
               { value: 'all', label: 'Everything' },
             ]}
             className="md:w-auto"

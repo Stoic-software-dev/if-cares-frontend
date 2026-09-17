@@ -179,6 +179,21 @@ function CountDetailScreen() {
     );
   }, [count, query]);
 
+  // Which of the five columns the site actually served on this day. An imported
+  // count can have no service day behind it at all, and then nothing is known -
+  // so everything is shown as served, which is what the screen did before.
+  const servedColumns = useMemo(() => {
+    const day = count?.dayMeals;
+    if (!day) return { att: true, brk: true, lun: true, snk: true, sup: true };
+    return {
+      att: true,
+      brk: Boolean(day.brk),
+      lun: Boolean(day.lunch),
+      snk: Boolean(day.snk),
+      sup: Boolean(day.sup),
+    };
+  }, [count]);
+
   const title = dateLabel(date);
 
   return (
@@ -393,10 +408,15 @@ function CountDetailScreen() {
                   const value = count.totals[column.key];
                   return (
                     <div key={column.key} className="flex flex-col items-center gap-1 px-1 py-3.5 md:gap-0.5 md:px-2 md:py-4">
+                      {/* A zero is de-emphasised, not hidden. At 40% opacity it
+                          sat at 1.8:1 against the card - under the 3:1 that
+                          large text needs, and this is the row that says how
+                          many breakfasts are being claimed. Muted on its own is
+                          still visibly quieter than a real number. */}
                       <span
                         className={cn(
                           'text-[22px] font-bold leading-none tabular-nums tracking-tight md:text-[26px]',
-                          value === 0 ? 'text-muted-foreground/40' : 'text-foreground'
+                          value === 0 ? 'text-muted-foreground' : 'text-foreground'
                         )}
                       >
                         {value}
@@ -429,6 +449,10 @@ function CountDetailScreen() {
                   {COLUMNS.map((column) => (
                     <span
                       key={column.key}
+                      title={servedColumns[column.key] ? undefined : 'Not served on this day'}
+                      // Not dimmed further: the dashes down the column already
+                      // say the meal was not served, and fading the heading as
+                      // well only made the word itself hard to read.
                       className="text-center text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground"
                     >
                       {column.label}
@@ -463,7 +487,11 @@ function CountDetailScreen() {
                           <span className="truncate text-[13px] font-medium text-foreground">{entry.name}</span>
                         </span>
                         {COLUMNS.map((column) => (
-                          <Mark key={column.key} value={entry[column.entry]} />
+                          <Mark
+                            key={column.key}
+                            value={entry[column.entry]}
+                            served={servedColumns[column.key]}
+                          />
                         ))}
                       </div>
                     </div>
@@ -691,7 +719,21 @@ function MarkPills({ entry }) {
   );
 }
 
-function Mark({ value }) {
+function Mark({ value, served = true }) {
+  // A meal the site does not serve that day is not the same fact as a child who
+  // did not get it, and both were the same grey dot. On a day of snack and
+  // supper that made three of the five columns read as "nobody had breakfast"
+  // instead of "there was no breakfast".
+  if (!served) {
+    return (
+      <span className="flex justify-center">
+        <span className="sr-only">Not served this day</span>
+        <span aria-hidden="true" className="text-[12px] leading-none text-muted-foreground">
+          &ndash;
+        </span>
+      </span>
+    );
+  }
   // An empty cell reads faster than a filler glyph: the checks are what the eye
   // is scanning for.
   if (!value) {

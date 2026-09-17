@@ -16,18 +16,28 @@ export const GET = handle(async () => {
   const sites = await visibleSites(session);
   const siteIds = sites.map((s) => s.id);
 
-  const [serviceDays, counts, holidays] = await Promise.all([
+  const [serviceDays, counts, correctedIds, holidays] = await Promise.all([
     prisma.serviceDay.findMany({ where: { siteId: { in: siteIds } } }),
     // A voided count leaves its day open again, so it must not show as taken.
     prisma.mealCount.findMany({
       where: { siteId: { in: siteIds }, voidedAt: null },
-      // `_count.corrections` rather than the rows themselves: the dashboard only
-      // needs to know that a day was corrected, and pulling every stored
-      // previous value to answer yes or no would be a lot of JSON for a dot.
-      select: { siteId: true, date: true, approvedAt: true, _count: { select: { corrections: true } } },
+      select: { id: true, siteId: true, date: true, approvedAt: true },
+    }),
+    // Which counts carry a correction, as ONE query.
+    //
+    // This used to be `_count: { select: { corrections: true } }` on the query
+    // above, which reads well and asks the database for a correlated subquery
+    // per row - seven thousand of them on a request every screen makes. The
+    // dashboard only needs the yes or no, and the distinct ids answer that in a
+    // single index scan. The payload is unchanged.
+    prisma.mealCountCorrection.findMany({
+      select: { mealCountId: true },
+      distinct: ['mealCountId'],
     }),
     loadHolidays(),
   ]);
+
+  const correctedCountIds = new Set(correctedIds.map((row) => row.mealCountId));
 
   const countedBySite = new Map();
   const approvedBySite = new Map();
@@ -40,7 +50,7 @@ export const GET = handle(async () => {
       if (!approvedBySite.has(count.siteId)) approvedBySite.set(count.siteId, new Set());
       approvedBySite.get(count.siteId).add(ymd);
     }
-    if (count._count.corrections > 0) {
+    if (correctedCountIds.has(count.id)) {
       if (!correctedBySite.has(count.siteId)) correctedBySite.set(count.siteId, new Set());
       correctedBySite.get(count.siteId).add(ymd);
     }

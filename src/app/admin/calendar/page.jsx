@@ -176,6 +176,15 @@ function CalendarScreen() {
 
   const applyPattern = ({ from, to, weekdays, meals, replace }) => {
     setDirty(true);
+    // "Review the month and save" has to be about a month that is on screen.
+    // The range is usually not the month being looked at - a cycle is applied
+    // from here in one go - so the grid stayed on the old month showing nothing
+    // changed, and the only way to see what was about to be saved was to know
+    // to page forward. It follows the range now.
+    const [year, month] = from.split('-').map(Number);
+    setCursor((current) =>
+      current.year === year && current.month === month ? current : { year, month }
+    );
     setDays((prev) => {
       const next = new Map(prev);
       const start = new Date(`${from}T00:00:00Z`);

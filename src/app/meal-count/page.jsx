@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, CalendarOff, CircleCheck, Clock, FileCheck2, RotateCcw, Save, Undo2 } from 'lucide-react';
+import { AlertCircle, CalendarOff, CircleCheck, Clock, FileCheck2, RotateCcw, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -259,16 +259,6 @@ function MealCountScreen() {
         setDayMeals(mealsOrAll(open));
         setRoster(rows);
 
-        // A draft from this device wins over an empty roster: a reload, a
-        // crash or a browser killed in the background must not cost the marks
-        // already taken at the point of service.
-        //
-        // It used to be all or nothing, and matched on the roster being
-        // IDENTICAL - so one student added or removed while the phone was in a
-        // pocket threw away every mark already taken, silently. Now the marks
-        // that still have a student are kept and the difference is said out
-        // loud, because the alternative is somebody re-ticking two hundred
-        // names without ever learning why.
         // What a fresh form starts with: the hours an administrator set for the
         // site, else the hours of its last count, else the old default. Sites
         // had to type Time Out every single day.
@@ -279,10 +269,24 @@ function MealCountScreen() {
         };
         setStartTimes(initial);
 
+        // A draft from this device wins over an empty roster: a reload, a
+        // crash or a browser killed in the background must not cost the marks
+        // already taken at the point of service.
+        //
+        // It used to be all or nothing, and matched on the roster being
+        // IDENTICAL - so one student added or removed while the phone was in a
+        // pocket threw away every mark already taken, silently. Now the marks
+        // that still have a student are kept and the difference is said out
+        // loud, because the alternative is somebody re-ticking two hundred
+        // names without ever learning why.
         const draft = readDraft(draftKey);
         const saved = new Map(draft?.marks ?? []);
         const kept = rows.filter((student) => saved.has(student.id));
-        if (draft && kept.length) {
+        // Only a draft with something ticked is worth bringing back. One where
+        // the time was changed, or everything was unticked again, came back as
+        // "your saved marks are back" over a form with nothing marked.
+        const anyMarked = kept.some((student) => Object.values(saved.get(student.id) ?? {}).some(Boolean));
+        if (draft && anyMarked) {
           setMarks(new Map(rows.map((student) => [student.id, saved.get(student.id) ?? { ...EMPTY_MARKS }])));
           setTimeIn(draft.timeIn ?? initial.timeIn);
           setTimeOut(draft.timeOut ?? initial.timeOut);
@@ -440,22 +444,6 @@ function MealCountScreen() {
     if (typeof target.focus === 'function' && target.tagName === 'INPUT') {
       target.focus({ preventScroll: true });
     }
-  };
-
-  // Every tap is already written to the device; this is the part a site can
-  // see. The old app had the button and sites run a day in several services
-  // (supper now, snack later), so without it they read the form as "submit it
-  // all at once or lose it".
-  const saveForLater = () => {
-    if (markedCount === 0) {
-      toast.info('Nothing to save yet', { description: 'Mark at least one student first.' });
-      return;
-    }
-    writeDraft(draftKey, { marks: [...marks.entries()], timeIn, timeOut, savedAt: Date.now() });
-    toast.success('Saved for later', {
-      description: 'Come back from this same phone or computer to finish and submit it. Nothing was sent yet.',
-    });
-    router.push(`/dashboard?site=${encodeURIComponent(site)}`);
   };
 
   const submit = async () => {
@@ -909,36 +897,14 @@ function MealCountScreen() {
               Ready to submit
             </p>
           )}
-          <div className="flex items-center gap-2">
-            {!correcting && (
-              <Button
-                variant="outline"
-                size="touch"
-                onClick={saveForLater}
-                disabled={submitting}
-                className="w-auto shrink-0 px-4 md:w-44"
-              >
-                <Save />
-                Save for later
-              </Button>
-            )}
-            <Button
-              onClick={submit}
-              loading={submitting}
-              size="touch"
-              className={cn('min-w-0 flex-1 md:w-72 md:flex-none', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
-            >
-              {correcting ? (
-                'Save correction'
-              ) : (
-                <>
-                  {/* Beside Save for later a phone has room for one word. */}
-                  <span className="md:hidden">Submit</span>
-                  <span className="hidden md:inline">Submit meal count</span>
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            onClick={submit}
+            loading={submitting}
+            size="touch"
+            className={cn('md:w-72', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
+          >
+            {correcting ? 'Save correction' : 'Submit meal count'}
+          </Button>
         </div>
       </div>
 
@@ -956,7 +922,10 @@ function MealCountScreen() {
           original wording is the true one. */}
       <UnsavedGuard
         enabled={dirty && !submitting}
-        title={correcting ? 'Leave without saving this correction?' : 'Leave without submitting this count?'}
+        // Taking a count, leaving is how a site saves it for later - supper now,
+        // snack this evening - so it is not worded as losing something.
+        title={correcting ? 'Leave without saving this correction?' : 'Leave and finish this count later?'}
+        confirmLabel={correcting ? 'Leave anyway' : 'Leave for now'}
         description={
           correcting
             ? 'This correction has not been saved.'

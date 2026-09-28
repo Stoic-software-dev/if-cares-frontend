@@ -15,6 +15,7 @@ import { canSeeMonitoring } from '@/lib/monitoring-access';
 // bottom bar and on the desktop bar at every width; the rest live in More.
 const STAFF_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: CalendarDays, primary: true },
+  { key: 'roster', label: 'Roster', href: '/roster', icon: Users, primary: true },
   { key: 'menus', label: 'Menus', href: '/menus', icon: UtensilsCrossed, primary: true },
   { key: 'requests', label: 'Requests', href: '/requests', icon: Inbox, primary: true },
 ];
@@ -60,6 +61,7 @@ export function activeKeyForPath(pathname = '') {
   if (pathname.startsWith('/admin/settings')) return 'settings';
   if (pathname.startsWith('/admin/monitoring')) return 'monitoring';
   if (pathname.startsWith('/menus')) return 'menus';
+  if (pathname.startsWith('/roster')) return 'roster';
   if (pathname.startsWith('/requests')) return 'requests';
   if (pathname.startsWith('/counts') || pathname.startsWith('/meal-count') || pathname.startsWith('/dashboard')) {
     return 'dashboard';

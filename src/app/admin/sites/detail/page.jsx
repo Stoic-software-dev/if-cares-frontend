@@ -122,13 +122,16 @@ function SiteDetailScreen() {
       reminderStart: record.reminderStart ?? '',
       reminderEnd: record.reminderEnd ?? '',
       weeklyTemplate: record.weeklyTemplate ?? {},
+      usualTimeIn: record.usualTimeIn ?? '',
+      usualTimeOut: record.usualTimeOut ?? '',
     });
     setAttempted(false);
     setEditing(true);
   };
 
   const saveSite = async () => {
-    if (draft.name.trim().length < 3) {
+    const timesBackwards = draft.usualTimeIn && draft.usualTimeOut && draft.usualTimeOut <= draft.usualTimeIn;
+    if (draft.name.trim().length < 3 || timesBackwards) {
       setAttempted(true);
       return;
     }
@@ -401,6 +404,13 @@ function SiteDetailScreen() {
                     <Detail
                       label="Reminder window"
                       value={rangeLabel(record?.reminderStart, record?.reminderEnd, 'Always on')}
+                    />
+                    <Detail
+                      label="Usual service time"
+                      value={
+                        [timeLabel(info.usualTimeIn), timeLabel(info.usualTimeOut)].filter(Boolean).join(' to ') ||
+                        'Not set, the form uses the last count'
+                      }
                     />
                     <Detail
                       label="Last service time"

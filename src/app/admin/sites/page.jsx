@@ -151,7 +151,8 @@ function AdminSitesScreen() {
   );
 
   const createSite = async () => {
-    if (draft.name.trim().length < 3 || !draft.state.trim()) {
+    const timesBackwards = draft.usualTimeIn && draft.usualTimeOut && draft.usualTimeOut <= draft.usualTimeIn;
+    if (draft.name.trim().length < 3 || !draft.state.trim() || timesBackwards) {
       setAttempted(true);
       return;
     }

@@ -31,6 +31,8 @@ export const emptySite = {
   reminderStart: '',
   reminderEnd: '',
   weeklyTemplate: {},
+  usualTimeIn: '',
+  usualTimeOut: '',
 };
 
 // How many days the cycle would produce, shown live: an admin should know they
@@ -89,6 +91,10 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create', 
   const rangeError =
     attempted && value.programStart && value.programEnd && value.programStart > value.programEnd
       ? 'The program ends before it starts.'
+      : undefined;
+  const usualTimesError =
+    attempted && value.usualTimeIn && value.usualTimeOut && value.usualTimeOut <= value.usualTimeIn
+      ? 'Time out has to be after time in.'
       : undefined;
   const reminderRangeError =
     attempted && value.reminderStart && value.reminderEnd && value.reminderStart > value.reminderEnd
@@ -159,6 +165,34 @@ export default function SiteForm({ value, onChange, attempted, mode = 'create', 
             placeholder="Optional"
           />
         </Field>
+      </div>
+
+      {/* Out of the collapsed cycle on purpose: it is what the site feels every
+          day, not something set once a year. */}
+      <div className="flex flex-col gap-2">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Usual time in" htmlFor="site-time-in">
+            <Input
+              id="site-time-in"
+              type="time"
+              value={value.usualTimeIn ?? ''}
+              onChange={(event) => set({ usualTimeIn: event.target.value })}
+            />
+          </Field>
+          <Field label="Usual time out" htmlFor="site-time-out" error={usualTimesError}>
+            <Input
+              id="site-time-out"
+              type="time"
+              value={value.usualTimeOut ?? ''}
+              onChange={(event) => set({ usualTimeOut: event.target.value })}
+              aria-invalid={Boolean(usualTimesError)}
+            />
+          </Field>
+        </div>
+        <p className="text-[12px] leading-relaxed text-muted-foreground">
+          The meal count form starts with these times, and the site can change them on a day that was different.
+          Left empty, it starts with the times of the site&rsquo;s last count.
+        </p>
       </div>
 
       <div className="rounded-lg border border-border bg-surface-sunken p-4">

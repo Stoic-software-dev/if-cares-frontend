@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, CalendarOff, CircleCheck, Clock, FileCheck2, RotateCcw, Undo2 } from 'lucide-react';
+import { AlertCircle, CalendarOff, CircleCheck, Clock, FileCheck2, RotateCcw, Save, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -120,6 +120,9 @@ function MealCountScreen() {
   const [marks, setMarks] = useState(new Map());
   const [timeIn, setTimeIn] = useState('15:30');
   const [timeOut, setTimeOut] = useState('');
+  // The times a fresh form starts from, kept so discarding a draft goes back to
+  // them rather than to a blank Time Out.
+  const [startTimes, setStartTimes] = useState({ timeIn: '15:30', timeOut: '' });
   const [note, setNote] = useState('');
   const [query, setQuery] = useState('');
   const [rosterFilter, setRosterFilter] = useState('all');
@@ -215,8 +218,11 @@ function MealCountScreen() {
       // closed or already filed before they mark 250 students.
       cachedGet(ALL_MEALS_PATH, { maxAge: 15_000 }),
       apiGet(`/api/students/roster?site=${encodeURIComponent(site)}`),
+      // Only for the times the form starts with: if it fails, the form still
+      // opens and the site types them, as it always could.
+      apiGet(`/api/sites/data?site=${encodeURIComponent(site)}`).catch(() => null),
     ])
-      .then(([all, rows]) => {
+      .then(([all, rows, siteInfo]) => {
         const siteData = all?.[site];
         const open = siteData?.validDates?.[iso];
         const alreadySubmitted = (siteData?.excludedDates ?? []).includes(iso);
@@ -263,13 +269,23 @@ function MealCountScreen() {
         // that still have a student are kept and the difference is said out
         // loud, because the alternative is somebody re-ticking two hundred
         // names without ever learning why.
+        // What a fresh form starts with: the hours an administrator set for the
+        // site, else the hours of its last count, else the old default. Sites
+        // had to type Time Out every single day.
+        const usual = siteInfo?.usualTimeIn || siteInfo?.usualTimeOut;
+        const initial = {
+          timeIn: ((usual ? siteInfo.usualTimeIn : siteInfo?.lastTimeIn) || '15:30').slice(0, 5),
+          timeOut: ((usual ? siteInfo.usualTimeOut : siteInfo?.lastTimeOut) || '').slice(0, 5),
+        };
+        setStartTimes(initial);
+
         const draft = readDraft(draftKey);
         const saved = new Map(draft?.marks ?? []);
         const kept = rows.filter((student) => saved.has(student.id));
         if (draft && kept.length) {
           setMarks(new Map(rows.map((student) => [student.id, saved.get(student.id) ?? { ...EMPTY_MARKS }])));
-          setTimeIn(draft.timeIn ?? '15:30');
-          setTimeOut(draft.timeOut ?? '');
+          setTimeIn(draft.timeIn ?? initial.timeIn);
+          setTimeOut(draft.timeOut ?? initial.timeOut);
           setRestored(true);
           setDirty(true);
           setDraftDrift(
@@ -281,6 +297,8 @@ function MealCountScreen() {
           if (draft) clearDraft(draftKey);
           setDraftDrift(null);
           setMarks(new Map(rows.map((student) => [student.id, { ...EMPTY_MARKS }])));
+          setTimeIn(initial.timeIn);
+          setTimeOut(initial.timeOut);
         }
       })
       .catch((err) => setLoadError(err.message));
@@ -355,8 +373,8 @@ function MealCountScreen() {
   const discardDraft = () => {
     clearDraft(draftKey);
     setMarks(new Map((roster ?? []).map((student) => [student.id, { ...EMPTY_MARKS }])));
-    setTimeIn('15:30');
-    setTimeOut('');
+    setTimeIn(startTimes.timeIn);
+    setTimeOut(startTimes.timeOut);
     setRestored(false);
     setDraftDrift(null);
     setDirty(false);
@@ -422,6 +440,22 @@ function MealCountScreen() {
     if (typeof target.focus === 'function' && target.tagName === 'INPUT') {
       target.focus({ preventScroll: true });
     }
+  };
+
+  // Every tap is already written to the device; this is the part a site can
+  // see. The old app had the button and sites run a day in several services
+  // (supper now, snack later), so without it they read the form as "submit it
+  // all at once or lose it".
+  const saveForLater = () => {
+    if (markedCount === 0) {
+      toast.info('Nothing to save yet', { description: 'Mark at least one student first.' });
+      return;
+    }
+    writeDraft(draftKey, { marks: [...marks.entries()], timeIn, timeOut, savedAt: Date.now() });
+    toast.success('Saved for later', {
+      description: 'Come back from this same phone or computer to finish and submit it. Nothing was sent yet.',
+    });
+    router.push(`/dashboard?site=${encodeURIComponent(site)}`);
   };
 
   const submit = async () => {
@@ -584,7 +618,7 @@ function MealCountScreen() {
           <div className="flex flex-col gap-2 rounded-lg border border-info-border bg-info-soft px-3.5 py-3 text-[13px] leading-relaxed text-info-text sm:flex-row sm:items-center">
             <RotateCcw className="h-4 w-4 shrink-0" />
             <span className="flex-1">
-              Marks from this device were restored. Nothing was submitted yet.
+              Your saved marks are back. Nothing was submitted yet.
               {draftDrift && (
                 <>
                   {' '}
@@ -875,14 +909,36 @@ function MealCountScreen() {
               Ready to submit
             </p>
           )}
-          <Button
-            onClick={submit}
-            loading={submitting}
-            size="touch"
-            className={cn('md:w-72', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
-          >
-            {correcting ? 'Save correction' : 'Submit meal count'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {!correcting && (
+              <Button
+                variant="outline"
+                size="touch"
+                onClick={saveForLater}
+                disabled={submitting}
+                className="w-auto shrink-0 px-4 md:w-44"
+              >
+                <Save />
+                Save for later
+              </Button>
+            )}
+            <Button
+              onClick={submit}
+              loading={submitting}
+              size="touch"
+              className={cn('min-w-0 flex-1 md:w-72 md:flex-none', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
+            >
+              {correcting ? (
+                'Save correction'
+              ) : (
+                <>
+                  {/* Beside Save for later a phone has room for one word. */}
+                  <span className="md:hidden">Submit</span>
+                  <span className="hidden md:inline">Submit meal count</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -47,6 +47,11 @@ model Site {
   programStart        DateTime? @db.Date
   programEnd          DateTime? @db.Date
   weeklyTemplate      Json?
+  // The hours the site usually serves, canonical "HH:MM:SS" like a count's own
+  // times, empty when never set. The meal count form starts from them so a site
+  // does not type the same two times every day; it can still change them.
+  usualTimeIn         String    @default("")
+  usualTimeOut        String    @default("")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

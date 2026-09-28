@@ -2,7 +2,7 @@ import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireUser, requireAdmin, visibleSites } from '@/lib/auth';
 import { toLegacySiteListItem } from '@/lib/legacy';
-import { siteCreateSchema } from '@/lib/validation';
+import { canonicalTime, siteCreateSchema } from '@/lib/validation';
 import { checkedState } from '@/lib/site-states';
 import { generateServiceDays, normalizeTemplate } from '@/lib/site-calendar';
 import { ymdToUtcDate } from '@/lib/dates';
@@ -62,6 +62,8 @@ export const POST = handle(async (req) => {
         reminderStart: body.reminderStart ? ymdToUtcDate(body.reminderStart) : null,
         reminderEnd: body.reminderEnd ? ymdToUtcDate(body.reminderEnd) : null,
         weeklyTemplate,
+        usualTimeIn: canonicalTime(body.usualTimeIn),
+        usualTimeOut: canonicalTime(body.usualTimeOut),
       },
     });
 

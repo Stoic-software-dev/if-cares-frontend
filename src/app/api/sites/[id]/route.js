@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireAdmin } from '@/lib/auth';
-import { siteUpdateSchema } from '@/lib/validation';
+import { canonicalTime, siteUpdateSchema } from '@/lib/validation';
 import { checkedState } from '@/lib/site-states';
 import { generateServiceDays, normalizeTemplate } from '@/lib/site-calendar';
 import { ymdToUtcDate, dateToYmd } from '@/lib/dates';
@@ -56,6 +56,8 @@ export const PATCH = handle(async (req, { params }) => {
         ? { reminderEnd: body.reminderEnd ? ymdToUtcDate(body.reminderEnd) : null }
         : {}),
       ...(weeklyTemplate !== undefined ? { weeklyTemplate } : {}),
+      ...(body.usualTimeIn !== undefined ? { usualTimeIn: canonicalTime(body.usualTimeIn) } : {}),
+      ...(body.usualTimeOut !== undefined ? { usualTimeOut: canonicalTime(body.usualTimeOut) } : {}),
     },
   });
 

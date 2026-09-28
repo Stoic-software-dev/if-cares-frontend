@@ -17,6 +17,9 @@ export function toSiteRecord(site) {
     reminderStart: site.reminderStart ? dateToYmd(site.reminderStart) : '',
     reminderEnd: site.reminderEnd ? dateToYmd(site.reminderEnd) : '',
     weeklyTemplate: site.weeklyTemplate ?? {},
+    // "HH:MM", the shape a time input takes.
+    usualTimeIn: (site.usualTimeIn ?? '').slice(0, 5),
+    usualTimeOut: (site.usualTimeOut ?? '').slice(0, 5),
     students: site._count?.students ?? 0,
     serviceDays: site._count?.serviceDays ?? 0,
     mealCounts: site._count?.mealCounts ?? 0,

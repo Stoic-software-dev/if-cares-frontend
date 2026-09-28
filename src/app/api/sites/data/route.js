@@ -29,5 +29,8 @@ export const GET = handle(async (req) => {
     siteNumber: site.siteNumber,
     lastTimeIn: lastCount?.timeIn ?? '',
     lastTimeOut: lastCount?.timeOut ?? '',
+    // Additive to the legacy shape: the hours an administrator set for the site.
+    usualTimeIn: site.usualTimeIn,
+    usualTimeOut: site.usualTimeOut,
   });
 });

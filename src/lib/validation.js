@@ -215,6 +215,14 @@ const stateOptional = z
   .toUpperCase()
   .pipe(z.string().regex(/^([A-Z]{2})?$/, 'A site is in one state, or in no claim at all.'));
 
+// "HH:MM" from a time input, or the canonical "HH:MM:SS" the counts store.
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Use a time like 3:30 PM.');
+
+export function canonicalTime(value) {
+  if (!value) return '';
+  return value.length === 5 ? `${value}:00` : value;
+}
+
 const siteFields = {
   // The full legacy name with its school-year prefix: it is the identity every
   // screen shows and every URL carries.
@@ -233,7 +241,19 @@ const siteFields = {
   reminderStart: z.union([ymd, z.literal('')]).optional(),
   reminderEnd: z.union([ymd, z.literal('')]).optional(),
   weeklyTemplate: weeklyTemplateSchema.optional(),
+  // The hours the meal count form starts from. Either can be left empty.
+  usualTimeIn: z.union([clockTime, z.literal('')]).optional(),
+  usualTimeOut: z.union([clockTime, z.literal('')]).optional(),
 };
+
+// Time Out has to come after Time In, the same rule the count itself enforces:
+// a usual time that breaks it would put a count the site cannot submit in
+// front of them every day.
+const usualTimesInOrder = [
+  (value) =>
+    !value.usualTimeIn || !value.usualTimeOut || canonicalTime(value.usualTimeOut) > canonicalTime(value.usualTimeIn),
+  { message: 'Time out has to be after time in.', path: ['usualTimeOut'] },
+];
 
 export const siteCreateSchema = z
   .object({
@@ -253,7 +273,8 @@ export const siteCreateSchema = z
   .refine(
     (value) => !value.reminderStart || !value.reminderEnd || value.reminderStart <= value.reminderEnd,
     { message: 'The reminder window ends before it starts.', path: ['reminderEnd'] }
-  );
+  )
+  .refine(...usualTimesInOrder);
 
 export const siteUpdateSchema = z
   .object({ ...siteFields, name: siteFields.name.optional(), active: z.boolean().optional() })
@@ -264,7 +285,8 @@ export const siteUpdateSchema = z
   .refine(
     (value) => !value.reminderStart || !value.reminderEnd || value.reminderStart <= value.reminderEnd,
     { message: 'The reminder window ends before it starts.', path: ['reminderEnd'] }
-  );
+  )
+  .refine(...usualTimesInOrder);
 
 const holidayFields = {
   name: z.string().trim().min(2, 'Give the holiday a name.').max(120),

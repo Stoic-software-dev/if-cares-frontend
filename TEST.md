@@ -29,7 +29,7 @@ despeinarse**, porque la pantalla decía que todo estaba bien. §8 existe por el
 
 ### 1.1 Dónde correrlo
 
-Contra el **entorno de la 2.0** (`https://if-cares-frontend-production.up.railway.app`, que
+Contra el **entorno de la 2.0** (`https://after-school-program-test.up.railway.app`, que
 deploya desde `v2-mock`). Es el único con las integraciones de verdad conectadas: Drive,
 Gmail y la base de Supabase. Un bug de integración no aparece en local, y §8 es justamente eso.
 

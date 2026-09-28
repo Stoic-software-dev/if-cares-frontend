@@ -12,8 +12,9 @@ y generan los reportes consolidados mensuales que se presentan por estado (TX / 
 > Las Sheets siguen vivas y siguen siendo el registro real.
 >
 > Este README describe la **aplicación 2.0**, que vive en `v2-mock` y deploya a
-> `if-cares-frontend-production.up.railway.app`. Ese nombre dice "production" y **no lo es**:
-> es el entorno de la 2.0, contra su propia base de Supabase.
+> `after-school-program-test.up.railway.app` (hasta septiembre de 2026 fue
+> `if-cares-frontend-production.up.railway.app`, que ya no responde). Es el entorno de la 2.0,
+> contra su propia base de Supabase.
 >
 > Esa distinción no es burocracia. En septiembre se borró entera la base de Supabase porque
 > quien la tocaba había leído aquí que el cutover ya había ocurrido y la trató como el
@@ -114,7 +115,7 @@ entonces son la fuente de la que `scripts/import-*` reconstruye esta base.
 | UI | Tailwind CSS + shadcn/ui; librerías headless (react-hook-form + zod, TanStack Table, react-day-picker, Sonner, Vaul, lucide, motion). Estética por tokens (CSS vars) |
 | Archivos | Google Drive vía service account: menús y todos los PDFs generados (`docs/DRIVE-STORAGE.md`) |
 | Email | Gmail del Workspace de ifcares.org (reset de contraseña, requests, reminders, envío de reportes) |
-| Hosting | Railway — `v2-mock` deploya a `if-cares-frontend-production.up.railway.app`, que pese al nombre es el entorno de la 2.0 y no el sistema en uso (ver arriba) |
+| Hosting | Railway — `v2-mock` deploya a `after-school-program-test.up.railway.app`, el entorno de la 2.0 (ver arriba) |
 
 ## Desarrollo local
 

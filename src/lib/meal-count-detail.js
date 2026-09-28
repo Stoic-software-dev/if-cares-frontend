@@ -146,3 +146,24 @@ export async function loadMealCountDetail(session, siteName, ymd) {
     })),
   };
 }
+
+// Only counts filed in this app go through approval; see requirePdfReleased.
+export function awaitsApproval(count) {
+  return count.source !== 'GAS_IMPORT' && !count.approved;
+}
+
+// The printed form is what a site keeps as its record of the day, so it only
+// leaves once an administrator has reviewed the count. Before that the site can
+// still read the count on screen; it just cannot take a copy that looks final.
+// Administrators are never held back: they are the ones reviewing it.
+//
+// Counts imported from the previous system are released as they are. That
+// system had no approval step, so none of its seven thousand days was ever
+// approved, and holding them now would lock every site out of its own history.
+export function requirePdfReleased(session, count) {
+  if (session.user.role === 'ADMIN' || count.approved || !awaitsApproval(count)) return;
+  throw new ApiError(
+    403,
+    'This count is waiting for approval. The PDF will be available as soon as an administrator approves it.'
+  );
+}

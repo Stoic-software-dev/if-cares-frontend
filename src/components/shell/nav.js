@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   BellRing,
   Bug,
   Building2,
@@ -22,6 +23,7 @@ const STAFF_ITEMS = [
 
 const ADMIN_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: CalendarDays, primary: true },
+  { key: 'approvals', label: 'Approvals', href: '/admin/approvals', icon: BadgeCheck, primary: true },
   { key: 'sites', label: 'Sites', href: '/admin/sites', icon: Building2, primary: true },
   { key: 'calendar', label: 'Calendar', href: '/admin/calendar', icon: CalendarRange, primary: true },
   { key: 'reports', label: 'Reports', href: '/admin/reports', icon: FileText, primary: true },
@@ -54,6 +56,7 @@ export function accountItemsFor(admin, user) {
 export function activeKeyForPath(pathname = '') {
   // Holidays is a tab of Sites now, so it lights up the same entry.
   if (pathname.startsWith('/admin/sites') || pathname.startsWith('/admin/holidays')) return 'sites';
+  if (pathname.startsWith('/admin/approvals')) return 'approvals';
   if (pathname.startsWith('/admin/calendar')) return 'calendar';
   if (pathname.startsWith('/admin/reports')) return 'reports';
   if (pathname.startsWith('/admin/requests')) return 'inbox';

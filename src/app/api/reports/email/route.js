@@ -3,7 +3,7 @@ import { handle, readJsonBody, legacyJson, ApiError } from '@/lib/http';
 import { requireUser, requireSiteAccess } from '@/lib/auth';
 import { mailConfigured, sendMail, parseRecipients, MailError } from '@/lib/gmail';
 import { countSent } from '@/lib/mail-templates';
-import { loadMealCountDetail } from '@/lib/meal-count-detail';
+import { loadMealCountDetail, requirePdfReleased } from '@/lib/meal-count-detail';
 import { buildMealCountPdf } from '@/lib/meal-count-pdf';
 import { siteMonth, siteMonthCounts, monthLabel } from '@/lib/report-data';
 import { buildSiteMonthBundlePdf } from '@/lib/report-pdf';
@@ -78,6 +78,7 @@ export const POST = handle(async (req) => {
 
   if (body.kind === 'daily') {
     const count = await loadMealCountDetail(session, body.site, body.date);
+    requirePdfReleased(session, count);
     bytes = await buildMealCountPdf(count);
     fileName = `MealCount_${safeName(body.site)}_${body.date}.pdf`;
     period = dateLabel(body.date);

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Ban, BadgeCheck, Check, Download, History, MoreVertical, Pencil, RotateCcw, Send, ShieldAlert } from 'lucide-react';
+import { Ban, BadgeCheck, Check, Clock, Download, History, MoreVertical, Pencil, RotateCcw, Send, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -69,6 +69,7 @@ function CountDetailScreen() {
   const { user } = useAuth();
   const site = searchParams.get('site') ?? assignedSiteNames(user)?.[0] ?? '';
   const admin = isAdmin(user);
+  const fromApprovals = searchParams.get('from') === 'approvals';
 
   const [count, setCount] = useState(null);
   const [error, setError] = useState('');
@@ -132,6 +133,9 @@ function CountDetailScreen() {
       } else {
         toast.success('Approved. Nobody is assigned to this site, so no email was sent.');
       }
+      // Reviewing the queue is one count after another: back to the list for
+      // the next one, instead of a Back click after every approval.
+      if (fromApprovals) router.push('/admin/approvals');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -196,6 +200,14 @@ function CountDetailScreen() {
 
   const title = dateLabel(date);
 
+  // Filed here and not yet approved. Imported days never went through approval
+  // and are not waiting on anybody.
+  const pending = Boolean(count) && count.source !== 'GAS_IMPORT' && !count.approved;
+  // The site gets the printed form once the day is approved; the administrator
+  // reviewing it always can.
+  const pdfLocked = pending && !admin;
+  const lockedHint = 'Available once the count is approved';
+
   return (
     <AppShell>
       <div className="flex flex-col gap-5">
@@ -228,6 +240,11 @@ function CountDetailScreen() {
                     </span>
                   </>
                 )}
+                {pending && (
+                  <>
+                    , <span className="font-semibold text-warning-text">pending approval</span>
+                  </>
+                )}
                 {count.corrected && (
                   <>
                     ,{' '}
@@ -250,10 +267,20 @@ function CountDetailScreen() {
           mobileActions={
             count && (
               <ActionSheet title={title} description={shortSiteName(site)}>
-                <SheetAction icon={Download} onSelect={downloadPdf} hint="Save the signed form to this device">
+                <SheetAction
+                  icon={Download}
+                  onSelect={downloadPdf}
+                  disabled={pdfLocked}
+                  hint={pdfLocked ? lockedHint : 'Save the signed form to this device'}
+                >
                   Download PDF
                 </SheetAction>
-                <SheetAction icon={Send} onSelect={() => setEmailing(true)} hint="Send it to somebody">
+                <SheetAction
+                  icon={Send}
+                  onSelect={() => setEmailing(true)}
+                  disabled={pdfLocked}
+                  hint={pdfLocked ? lockedHint : 'Send it to somebody'}
+                >
                   Email PDF
                 </SheetAction>
                 {admin && !count.approved && (
@@ -291,16 +318,27 @@ function CountDetailScreen() {
               </ActionSheet>
             )
           }
-          backHref={`/dashboard?site=${encodeURIComponent(site)}`}
-          backLabel="Back to dashboard"
+          backHref={fromApprovals ? '/admin/approvals' : `/dashboard?site=${encodeURIComponent(site)}`}
+          backLabel={fromApprovals ? 'Back to approvals' : 'Back to dashboard'}
           actions={
             count && (
               <>
-                <Button variant="outline" onClick={downloadPdf} loading={downloading}>
+                <Button
+                  variant="outline"
+                  onClick={downloadPdf}
+                  loading={downloading}
+                  disabled={pdfLocked}
+                  title={pdfLocked ? lockedHint : undefined}
+                >
                   <Download />
                   {downloading ? 'Preparing' : 'Download PDF'}
                 </Button>
-                <Button variant="outline" onClick={() => setEmailing(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setEmailing(true)}
+                  disabled={pdfLocked}
+                  title={pdfLocked ? lockedHint : undefined}
+                >
                   <Send />
                   Email PDF
                 </Button>
@@ -371,6 +409,12 @@ function CountDetailScreen() {
                 Approved by {count.approved.by}
               </Badge>
             )}
+            {pending && (
+              <Badge variant="warning">
+                <Clock />
+                Pending approval
+              </Badge>
+            )}
             {count.corrected && (
               <button type="button" onClick={() => setHistoryOpen(true)} className="outline-none">
                 <Badge variant="warning">
@@ -386,6 +430,18 @@ function CountDetailScreen() {
                 <span className="truncate">By {count.submittedBy}</span>
               </Badge>
             )}
+          </div>
+        )}
+
+        {/* Said in words and not only by two greyed buttons: a site that
+            just submitted needs to know nothing is wrong, and what happens next. */}
+        {pdfLocked && (
+          <div className="flex items-start gap-3 rounded-lg border border-warning-border bg-warning-soft px-4 py-3">
+            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
+            <p className="text-[13px] leading-relaxed text-foreground">
+              <span className="font-semibold">Submitted, waiting for approval.</span> An administrator reviews every
+              meal count. Once it is approved you will get a copy by email, and the PDF can be downloaded here.
+            </p>
           </div>
         )}
 

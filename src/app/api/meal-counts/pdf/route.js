@@ -1,6 +1,6 @@
 import { handle } from '@/lib/http';
 import { requireUser } from '@/lib/auth';
-import { loadMealCountDetail } from '@/lib/meal-count-detail';
+import { loadMealCountDetail, requirePdfReleased } from '@/lib/meal-count-detail';
 import { buildMealCountPdf } from '@/lib/meal-count-pdf';
 import { archiveMealCountPdf } from '@/lib/pdf-archive';
 
@@ -15,6 +15,7 @@ export const GET = handle(async (req) => {
   const date = url.searchParams.get('date');
 
   const count = await loadMealCountDetail(session, site, date);
+  requirePdfReleased(session, count);
   const bytes = await buildMealCountPdf(count);
 
   // Drive keeps the copy of record. It runs alongside the response instead of

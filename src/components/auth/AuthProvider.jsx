@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, apiPost } from '@/lib/api-client';
+import { invalidate } from '@/lib/data-cache';
 
 const ADMIN_ROLE = 3202;
 
@@ -38,6 +39,10 @@ export function AuthProvider({ children }) {
     } catch {
       // The cookie is gone either way; leaving the session locally is enough.
     }
+    // The cached site list and calendar are this account's. Without this, the
+    // next person to sign in on the same tab saw them for up to a minute - an
+    // administrator landing on a dashboard with only the previous user's site.
+    invalidate();
     setUser(null);
     router.push('/login');
   }, [router]);

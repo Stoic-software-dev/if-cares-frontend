@@ -18,6 +18,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { apiPost } from '@/lib/api-client';
+import { invalidate } from '@/lib/data-cache';
 
 const HIGHLIGHTS = [
   { icon: CalendarCheck, text: 'Daily meal counts, one screen per service day' },
@@ -64,6 +65,9 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const res = await apiPost('/api/auth/login', { email: email.trim(), password });
+      // Also here, not only on Log out: a session that expired lands on this
+      // screen without passing through it, with the old account's data cached.
+      invalidate();
       setUser(res.data);
       router.push('/dashboard');
     } catch (err) {

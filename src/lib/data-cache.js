@@ -14,9 +14,16 @@ const store = new Map(); // path -> { value, at, promise }
 
 const DEFAULT_MAX_AGE = 60_000;
 
+// Bumped by a full clear. A read already on its way when the account changed
+// belongs to the previous account, and must not land in the new one's cache.
+let generation = 0;
+
 export function invalidate(path) {
   if (path) store.delete(path);
-  else store.clear();
+  else {
+    store.clear();
+    generation += 1;
+  }
 }
 
 export function peek(path) {
@@ -29,13 +36,14 @@ export async function cachedGet(path, { maxAge = DEFAULT_MAX_AGE, force = false 
   if (entry && fresh && !force) return entry.value;
   if (entry?.promise && !force) return entry.promise;
 
+  const started = generation;
   const promise = apiGet(path)
     .then((value) => {
-      store.set(path, { value, at: Date.now() });
+      if (started === generation) store.set(path, { value, at: Date.now() });
       return value;
     })
     .catch((error) => {
-      store.delete(path);
+      if (started === generation) store.delete(path);
       throw error;
     });
 

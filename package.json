@@ -20,7 +20,8 @@
     "db:calendar": "node scripts/calendar-audit.mjs",
     "smoke": "node scripts/smoke.mjs",
     "drive:selftest": "node scripts/drive-selftest.mjs",
-    "drive:doctor": "node scripts/drive-doctor.mjs"
+    "drive:doctor": "node scripts/drive-doctor.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.mjs"

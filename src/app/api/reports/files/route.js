@@ -1,5 +1,8 @@
+import { prisma } from '@/lib/db';
 import { handle, legacyJson, ApiError } from '@/lib/http';
 import { requireUser, requireAdmin } from '@/lib/auth';
+import { menuViewer, menuAudience } from '@/lib/menus';
+import { menusFor, findSameName } from '@/lib/menu-access.mjs';
 import {
   listMenus,
   driveConfigured,
@@ -48,26 +51,39 @@ async function listFromGas() {
   throw lastError;
 }
 
+// The whole folder, cached for everyone. Never filtered before it is cached:
+// the cache is shared by every account, and who sees what is decided per
+// request below.
+async function allMenus(forced) {
+  if (!forced && cache.files && Date.now() - cache.at < TTL_MS) return cache.files;
+  try {
+    const files = driveConfigured() ? await listMenus() : await listFromGas();
+    cache = { at: Date.now(), files };
+    return files;
+  } catch (error) {
+    // A stale list beats an error screen: the menus themselves are still read
+    // live, so the worst case is one published minutes ago showing up late.
+    if (cache.files) return cache.files;
+    if (error instanceof DriveError) throw new ApiError(502, error.message);
+    throw new ApiError(502, 'The menus service is unavailable.');
+  }
+}
+
 export const GET = handle(async (req) => {
-  await requireUser();
+  const session = await requireUser();
 
   // A menu removed straight from Drive is invisible to this cache, so the
   // listing keeps showing it for up to the whole TTL and looks broken.
   // `?refresh=1` is the way out for anyone who just changed the folder by hand.
   const forced = new URL(req.url).searchParams.get('refresh') === '1';
-  if (!forced && cache.files && Date.now() - cache.at < TTL_MS) return legacyJson(cache.files);
+  const files = (await allMenus(forced)).map((file) => ({ ...file, id: file.id ?? file.fileId }));
 
-  try {
-    const files = driveConfigured() ? await listMenus() : await listFromGas();
-    cache = { at: Date.now(), files };
-    return legacyJson(files);
-  } catch (error) {
-    // A stale list beats an error screen: the menus themselves are still read
-    // live, so the worst case is one published minutes ago showing up late.
-    if (cache.files) return legacyJson(cache.files);
-    if (error instanceof DriveError) throw new ApiError(502, error.message);
-    throw new ApiError(502, 'The menus service is unavailable.');
-  }
+  // Each site sees the menus for every site plus the ones published for it
+  // (STOIC-2691). The office sees them all, with who each one is for.
+  const audience = await menuAudience(files.map((file) => file.id).filter(Boolean));
+  const visible = menusFor(files, audience.bySite, menuViewer(session));
+  if (session.user.role !== 'ADMIN') return legacyJson(visible);
+  return legacyJson(visible.map((file) => ({ ...file, sites: audience.names.get(file.id) ?? null })));
 });
 
 // Publishing a menu used to mean opening Drive and dropping a file in the right
@@ -102,6 +118,38 @@ export const POST = handle(async (req) => {
   const typed = String(form.get('name') ?? '').trim().replace(/[\\/:*?"<>|]/g, '').replace(ALLOWED, '');
   const name = `${typed || original.replace(ALLOWED, '')}${extension}`;
 
+  // "all", or the names of the sites the menu is for. Asked every time: a menu
+  // that lands everywhere because nobody chose is the thing this replaced.
+  const chosen = String(form.get('sites') ?? '').trim();
+  let siteIds = [];
+  if (chosen !== 'all') {
+    let parsed;
+    try {
+      parsed = JSON.parse(chosen || '[]');
+    } catch {
+      parsed = null;
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new ApiError(422, 'Choose the sites this menu is for, or All sites.');
+    }
+    const names = [...new Set(parsed.map(String))];
+    const found = await prisma.site.findMany({ where: { name: { in: names }, active: true }, select: { id: true } });
+    if (found.length !== names.length) throw new ApiError(422, 'One of the chosen sites does not exist any more.');
+    siteIds = found.map((site) => site.id);
+  }
+
+  // Read fresh, not from the cache: a name taken a minute ago has to be seen.
+  const existing = findSameName(await listMenus(), name);
+  if (existing) {
+    const audience = await menuAudience([existing.id]);
+    const sites = audience.names.get(existing.id);
+    const forWhom = sites ? `for ${sites.length === 1 ? sites[0] : `${sites.length} sites`}` : 'for all sites';
+    throw new ApiError(
+      409,
+      `A menu called "${existing.name.replace(ALLOWED, '')}" is already published ${forWhom}. Use another name, or remove that one first.`
+    );
+  }
+
   let uploaded;
   try {
     uploaded = await uploadFile({
@@ -115,9 +163,30 @@ export const POST = handle(async (req) => {
     throw error;
   }
 
+  // Without its rows a menu is for every site, so a menu meant for two sites
+  // must not stay up if they could not be written: it comes down again.
+  try {
+    if (siteIds.length) {
+      await prisma.menuSite.createMany({ data: siteIds.map((siteId) => ({ fileId: uploaded.id, siteId })) });
+    }
+  } catch (error) {
+    await trashFile(uploaded.id, { folderId }).catch((trashError) => {
+      // Left up without its sites it is a menu for everyone: whoever reads the
+      // log has to take it down by hand.
+      console.error(`[menus] ${uploaded.name} (${uploaded.id}) is up for all sites and could not be removed: ${trashError.message}`);
+    });
+    throw error;
+  }
+
   // The menu is live the moment it lands, so a stale list would be a lie.
   cache = { at: 0, files: null };
-  await logAudit({ actor: session.user, action: 'menu.publish', entity: 'menu', entityId: uploaded.id });
+  await logAudit({
+    actor: session.user,
+    action: 'menu.publish',
+    entity: 'menu',
+    entityId: uploaded.id,
+    payload: { name: uploaded.name, sites: siteIds.length ? siteIds : 'all' },
+  });
 
   return legacyJson({
     result: 'success',
@@ -143,6 +212,7 @@ export const DELETE = handle(async (req) => {
     throw error;
   }
 
+  await prisma.menuSite.deleteMany({ where: { fileId } });
   cache = { at: 0, files: null };
   await logAudit({
     actor: session.user,

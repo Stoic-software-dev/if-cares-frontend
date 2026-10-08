@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, CheckCircle2, Copy, Download, FileSignature, Layers, Loader2, Send, X } from 'lucide-react';
+import { Ban, CheckCircle2, Copy, Download, Eye, FileSignature, Layers, Loader2, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import Protected from '@/components/auth/Protected';
 import AppShell from '@/components/shell/AppShell';
@@ -343,6 +343,12 @@ function ConsolidatedScreen() {
                     they wrap under the title instead of pushing the row
                     past the edge of the screen. */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/api/reports/generated/${report.id}?inline=1`} target="_blank" rel="noreferrer">
+                      <Eye />
+                      View
+                    </a>
+                  </Button>
                   <Button variant="outline" size="sm" asChild>
                     <a href={`/api/reports/generated/${report.id}`}>
                       <Download />

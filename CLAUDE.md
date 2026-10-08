@@ -13,6 +13,24 @@ Tablero: STOIC-8
 - Una columna nueva tiene que existir en la base **antes** de publicar el código
   que la usa: el cliente de Prisma la pide en cada lectura de esa tabla y, si no
   está, esa lectura falla.
+- El SQL de una migración se corre con `$executeRawUnsafe` desde un script de
+  Node: así toma el schema `regular_year` de la URL. Las tablas viven ahí, no
+  en `public`.
+- **Nada de `$executeRaw`/`$queryRaw` con tablas sin calificar en el código de
+  la app**: detrás del pooler de Supabase, una consulta a mano a veces cae en
+  una conexión sin `regular_year` en el search path y falla con "relation does
+  not exist", de forma intermitente. Las consultas de Prisma no tienen el
+  problema porque califican el schema.
+- Tests: `npm test` (node --test sobre `tests/*.test.mjs`). Lo que se testea
+  vive en módulos `.mjs` sin imports con `@/`, para que node los cargue solo.
+
+## Antes del go-live
+
+- Limpieza de datos de prueba (STOIC-2691), con copia de la base antes:
+  `node scripts/cleanup-test-data.mjs` arma la lista y el manifiesto,
+  `--rehearse <manifiesto>` hace todo y lo deshace, `--apply <manifiesto>`
+  borra exactamente lo listado. Correrlo el día del corte, no antes: las
+  pruebas que siguen ensucian la base de nuevo.
 
 ## Conteos importados
 

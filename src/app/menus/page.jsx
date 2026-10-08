@@ -8,6 +8,7 @@ import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import AppShell from '@/components/shell/AppShell';
 import PageHeader from '@/components/shell/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   Dialog,
@@ -20,11 +21,13 @@ import {
 import { Field } from '@/components/ui/field';
 import { ActionSheet, Fab, SheetAction } from '@/components/ui/mobile';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiDelete, apiGet, apiUpload } from '@/lib/api-client';
-import { MENUS_PATH, useCachedGet } from '@/lib/data-cache';
+import { MENUS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
+import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const fileName = (file) => file.name ?? file.fileName ?? 'Menu.pdf';
@@ -67,13 +70,37 @@ const urlFor = (file, { attachment } = {}) =>
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv';
 
+// Who a menu is for, as the office reads it. Only administrators get `sites`
+// from the listing; null means every site.
+function audienceOf(file) {
+  if (!file.sites) return 'All sites';
+  if (file.sites.length === 1) return shortSiteName(file.sites[0]);
+  return `${file.sites.length} sites`;
+}
+
+const audienceTitle = (file) => (file.sites ? file.sites.map(shortSiteName).join(', ') : undefined);
+
 // Publishing a menu is dropping a file into the office's Drive folder. Doing it
 // from here means nobody needs Drive access, or to know which folder it was.
 function PublishDialog({ open, onClose, onPublished }) {
   const [file, setFile] = useState(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [everySite, setEverySite] = useState(true);
+  const [sites, setSites] = useState([]);
+  const [siteQuery, setSiteQuery] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const inputRef = useRef(null);
+
+  const siteList = useCachedGet(SITES_PATH, { enabled: open });
+  const allSiteNames = useMemo(
+    () => (siteList.data ? sortSiteNames(siteList.data.map((entry) => entry.name)) : []),
+    [siteList.data]
+  );
+  const shownSites = useMemo(() => {
+    const q = siteQuery.trim().toLowerCase();
+    return q ? allSiteNames.filter((name) => name.toLowerCase().includes(q)) : allSiteNames;
+  }, [allSiteNames, siteQuery]);
 
   const pick = (chosen) => {
     setFile(chosen ?? null);
@@ -82,22 +109,35 @@ function PublishDialog({ open, onClose, onPublished }) {
     setName(chosen ? chosen.name.replace(/\.[a-z0-9]+$/i, '') : '');
   };
 
+  const reset = () => {
+    pick(null);
+    setEverySite(true);
+    setSites([]);
+    setSiteQuery('');
+    setAttempted(false);
+  };
+
   const close = () => {
     if (saving) return;
-    pick(null);
+    reset();
     onClose();
   };
 
   const publish = async () => {
     if (!file) return;
+    if (!everySite && sites.length === 0) {
+      setAttempted(true);
+      return;
+    }
     setSaving(true);
     try {
       const form = new FormData();
       form.append('file', file);
       form.append('name', name.trim());
+      form.append('sites', everySite ? 'all' : JSON.stringify(sites));
       const res = await apiUpload(MENUS_PATH, form);
       toast.success(`${res.data.name} published`);
-      pick(null);
+      reset();
       onPublished();
       onClose();
     } catch (err) {
@@ -113,8 +153,7 @@ function PublishDialog({ open, onClose, onPublished }) {
         <DialogHeader>
           <DialogTitle>Publish a menu</DialogTitle>
           <DialogDescription>
-            Everyone with an account sees it here as soon as it is published. A menu published under a
-            name that already exists replaces that one.
+            The sites you choose see it here as soon as it is published.
           </DialogDescription>
         </DialogHeader>
 
@@ -155,6 +194,66 @@ function PublishDialog({ open, onClose, onPublished }) {
                 placeholder="September 2026 Menu"
               />
             </Field>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              For
+            </span>
+            <RadioGroup
+              value={everySite ? 'all' : 'some'}
+              onValueChange={(value) => setEverySite(value === 'all')}
+              className="flex flex-col gap-2"
+            >
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 text-[13px]">
+                <RadioGroupItem value="all" id="menu-all-sites" />
+                <span className="text-foreground">All sites</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 text-[13px]">
+                <RadioGroupItem value="some" id="menu-some-sites" />
+                <span className="text-foreground">Only the sites I pick</span>
+              </label>
+            </RadioGroup>
+          </div>
+
+          {!everySite && (
+            <div className="flex flex-col gap-2">
+              <SearchInput value={siteQuery} onChange={setSiteQuery} placeholder="Find a site" className="h-10" />
+              <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                {shownSites.map((siteName) => {
+                  const checked = sites.includes(siteName);
+                  return (
+                    <label
+                      key={siteName}
+                      className="flex cursor-pointer items-center gap-2.5 border-b border-border px-3 py-2.5 text-[13px] last:border-b-0 hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() =>
+                          setSites(checked ? sites.filter((item) => item !== siteName) : [...sites, siteName])
+                        }
+                      />
+                      <span className="truncate text-foreground">{shortSiteName(siteName)}</span>
+                    </label>
+                  );
+                })}
+                {shownSites.length === 0 && (
+                  <p className="px-3 py-3 text-[12.5px] text-muted-foreground">
+                    {siteList.error ? "Couldn't load the sites." : siteQuery ? 'No site matches.' : 'Loading the sites'}
+                  </p>
+                )}
+              </div>
+              <span
+                className={cn(
+                  'text-[12px]',
+                  attempted && sites.length === 0 ? 'text-destructive-text' : 'text-muted-foreground'
+                )}
+              >
+                {attempted && sites.length === 0
+                  ? 'Pick at least one site, or choose All sites.'
+                  : `${sites.length} selected`}
+              </span>
+            </div>
           )}
         </div>
 
@@ -271,7 +370,7 @@ function MenusScreen() {
                 query
                   ? `Nothing here matches “${query.trim()}”.`
                   : admin
-                    ? 'Publish one and everyone with an account sees it here.'
+                    ? 'Publish one and the sites you choose see it here.'
                     : 'New menus show up here as soon as the office publishes them.'
               }
               action={
@@ -314,7 +413,7 @@ function MenusScreen() {
                         {titleOf(file)}
                       </span>
                       <span className="truncate text-[12px] text-muted-foreground">
-                        {period ?? 'Program menu'} &middot; {extensionOf(file)}
+                        {admin ? audienceOf(file) : period ?? 'Program menu'} &middot; {extensionOf(file)}
                       </span>
                     </span>
                   </a>
@@ -402,6 +501,11 @@ function MenusScreen() {
                   <div className="flex flex-1 flex-col gap-1 border-t border-border p-4">
                     <h2 className="text-[14.5px] font-semibold leading-snug text-foreground">{titleOf(file)}</h2>
                     <p className="text-[12px] text-muted-foreground">{period ?? 'Program menu'}</p>
+                    {admin && (
+                      <p className="truncate text-[12px] font-medium text-foreground" title={audienceTitle(file)}>
+                        For {audienceOf(file)}
+                      </p>
+                    )}
 
                     {/* `mt-auto` and not `mt-3`: the card body stretches to the
                         tallest card in the row, so without it a one-line title

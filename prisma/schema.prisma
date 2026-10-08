@@ -61,6 +61,8 @@ model Site {
   userSites   UserSite[]
   requests    Request[]
   holidays    HolidaySite[]
+  menus       MenuSite[]
+  drafts      MealCountDraft[]
 }
 
 model Student {
@@ -175,11 +177,11 @@ model User {
   updatedAt    DateTime @updatedAt
 
   sites            UserSite[]
-  mealCounts       MealCount[]          @relation("MealCountSubmitter")
-  voidedCounts     MealCount[]          @relation("MealCountVoider")
-  approvedCounts   MealCount[]          @relation("MealCountApprover")
-  requests         Request[]            @relation("RequestAuthor")
-  answeredRequests Request[]            @relation("RequestResponder")
+  mealCounts       MealCount[]           @relation("MealCountSubmitter")
+  voidedCounts     MealCount[]           @relation("MealCountVoider")
+  approvedCounts   MealCount[]           @relation("MealCountApprover")
+  requests         Request[]             @relation("RequestAuthor")
+  answeredRequests Request[]             @relation("RequestResponder")
   auditLogs        AuditLog[]
   resetTokens      PasswordResetToken[]
   corrections      MealCountCorrection[]
@@ -348,7 +350,7 @@ model MealCountCorrection {
 // Consolidated claim PDFs (STOIC-2204): stored on generation, recoverable
 // without regenerating. File bytes live in object storage under storageKey.
 model GeneratedReport {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   year           Int
   month          Int // 1-12
   state          String // "TX" | "OK"
@@ -360,25 +362,73 @@ model GeneratedReport {
   // document is a different document. These two did not, which meant a claim
   // filed for four sites came back carrying all forty one, and whoever signed it
   // signed that instead.
-  excludeSites   String[] @default([])
-  title          String   @default("")
-  storageKey     String   @default("")
-  signedBy       String   @default("")
-  signedTitle    String   @default("")
+  excludeSites   String[]  @default([])
+  title          String    @default("")
+  storageKey     String    @default("")
+  signedBy       String    @default("")
+  signedTitle    String    @default("")
   // The signature itself, as a PNG data URL. Without it the signed claim could
   // only ever be reproduced from the file store, and a claim has to be
   // reproducible from the database alone.
-  signature      String   @default("") @db.Text
+  signature      String    @default("") @db.Text
   signedAt       DateTime?
   // Opaque, single use and expiring: the link is sent to whoever signs, who has
   // no account. Never the id of the document itself.
-  signToken      String?  @unique
+  signToken      String?   @unique
   signTokenSetAt DateTime?
   createdById    String?
-  createdByEmail String   @default("")
-  createdAt      DateTime @default(now())
+  createdByEmail String    @default("")
+  createdAt      DateTime  @default(now())
 
   createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([year, month, state])
+}
+
+// Which sites a published menu is for (STOIC-2691). The menu itself is a file
+// in the Drive menus folder; a file with no rows here is for every site, which
+// is what every menu published before this existed is.
+model MenuSite {
+  fileId String
+  siteId String
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([fileId, siteId])
+  @@index([siteId])
+}
+
+// A meal count saved for later (STOIC-2691): one per site and day, so whoever
+// opens that day next, on any device, picks it up. Marks are one row per
+// student, so two phones splitting a roster add up instead of overwriting each
+// other. Deleted in the same transaction that files the count.
+model MealCountDraft {
+  id            String   @id @default(cuid())
+  siteId        String
+  date          DateTime @db.Date
+  timeIn        String   @default("") // "HH:MM" as typed, "" when untouched
+  timeOut       String   @default("")
+  updatedByName String   @default("")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  site    Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  entries MealCountDraftEntry[]
+
+  @@unique([siteId, date])
+}
+
+model MealCountDraftEntry {
+  draftId   String
+  studentId String
+  att       Boolean  @default(false)
+  brk       Boolean  @default(false)
+  lunch     Boolean  @default(false)
+  snk       Boolean  @default(false)
+  sup       Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  draft MealCountDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@id([draftId, studentId])
 }

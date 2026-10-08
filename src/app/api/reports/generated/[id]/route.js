@@ -12,12 +12,15 @@ export const dynamic = 'force-dynamic';
 // The saved document. It comes from Drive when it is there, and is rebuilt from
 // the counts when it is not, so a claim is never unreachable because the file
 // store was unavailable the day it was made.
-export const GET = handle(async (_req, { params }) => {
+export const GET = handle(async (req, { params }) => {
   await requireAdmin();
   const report = await prisma.generatedReport.findUnique({ where: { id: params.id } });
   if (!report) throw new ApiError(404, 'Report not found.');
 
-  const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(report.fileName)}`;
+  // View opens the same document in the browser's own PDF viewer; Download
+  // asks for it as a file. Same bytes either way.
+  const inline = new URL(req.url).searchParams.get('inline') === '1';
+  const disposition = `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(report.fileName)}`;
 
   // Claims filed before names were made distinct can share one Drive file, and
   // a shared file is not this claim's: every row pointing at it downloaded

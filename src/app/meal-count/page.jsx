@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, CalendarOff, CircleCheck, Clock, FileCheck2, RotateCcw, Undo2 } from 'lucide-react';
+import { AlertCircle, CalendarOff, CircleCheck, Clock, CloudOff, FileCheck2, RotateCcw, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { assignedSiteNames, isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import Protected from '@/components/auth/Protected';
@@ -12,6 +12,7 @@ import PageHeader from '@/components/shell/PageHeader';
 import { RosterRow } from '@/components/meal-count/RosterRow';
 import { SignatureField } from '@/components/meal-count/SignatureField';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -20,18 +21,23 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
-import { apiGet, apiPost, apiPut } from '@/lib/api-client';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api-client';
 import { ALL_MEALS_PATH, cachedGet, invalidate } from '@/lib/data-cache';
 import { MEAL_KEYS, dateLabel, mealsOrAll, todayYmd } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
+import { rebuildDraft } from '@/lib/count-drafts.mjs';
 import { cn } from '@/lib/utils';
 
 const ATTENDANCE = { key: 'att', label: 'Attendance', short: 'Att' };
 const EMPTY_MARKS = { att: false, brk: false, lunch: false, snk: false, sup: false };
 
-// Drafts live only in this browser and only until the count is submitted. They
-// exist because a phone can die, lose signal or be backgrounded halfway through
-// a 250 student roster.
+// A count in progress lives on the server (STOIC-2691), so whoever opens the day
+// next, on any device, picks it up. What this browser keeps is only what it has
+// not managed to send yet: a phone can die, lose signal or be backgrounded
+// halfway through a 250 student roster, and those taps must survive it.
+//   { marks: [[studentId, marks], ...], timeIn?, timeOut?, savedAt }
+// Drafts written before the server kept them have the same shape with every
+// student in them, so they are sent up the first time the day is opened.
 function readDraft(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -145,17 +151,151 @@ function MealCountScreen() {
   const [voided, setVoided] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [restored, setRestored] = useState(false);
-  // How far the roster moved under a restored draft, when it did.
+  // What a restored draft lost on the way back: marked students no longer on
+  // the roster, and meals the day no longer serves.
   const [draftDrift, setDraftDrift] = useState(null);
+  const [draftStripped, setDraftStripped] = useState([]);
+  // Who last saved this day on the server, and when.
+  const [savedInfo, setSavedInfo] = useState(null);
+  // 'idle' | 'saving' | 'saved' | 'unsent'
+  const [saveState, setSaveState] = useState('idle');
+  const saveStateRef = useRef('idle');
+  saveStateRef.current = saveState;
+  const [leaving, setLeaving] = useState(false);
+  const [confirmStartOver, setConfirmStartOver] = useState(false);
 
-  // One draft per site and day, on this device only.
+  // One draft per site and day. On this device it holds only the unsent part.
   const draftKey = `ifc.draft.${site}|${iso}`;
 
+  // Changes not on the server yet, for one site and day. A ref, not state: the
+  // save in flight compares against it to know which of them it carried. Each
+  // load starts a new one, and a save still out for the previous day finishes
+  // against its own, never against the day now on screen.
+  const newPending = () => ({ site, iso, key: draftKey, marks: new Map(), timeIn: undefined, timeOut: undefined });
+  const pendingRef = useRef(null);
+  if (!pendingRef.current) pendingRef.current = newPending();
+  const saveTimerRef = useRef(null);
+  const inFlightRef = useRef(null);
+  const blockedRef = useRef(false);
+  blockedRef.current = Boolean(blocked);
+
+  const hasPending = (pending = pendingRef.current) =>
+    pending.marks.size > 0 || pending.timeIn !== undefined || pending.timeOut !== undefined;
+
+  const persistPending = (pending = pendingRef.current) => {
+    if (!hasPending(pending)) {
+      clearDraft(pending.key);
+      return;
+    }
+    writeDraft(pending.key, {
+      marks: [...pending.marks.entries()],
+      timeIn: pending.timeIn,
+      timeOut: pending.timeOut,
+      savedAt: Date.now(),
+    });
+  };
+
+  const draftUrl = `/api/meal-count-drafts?site=${encodeURIComponent(site)}&date=${iso}`;
+
+  // Sends whatever is pending. One save at a time, so an older one can never
+  // land after a newer one; what changes while it is out goes in the next.
+  // Resolves true once nothing is left unsent.
+  const flush = async (pending = pendingRef.current) => {
+    if (correcting) return true;
+    const current = () => pending === pendingRef.current;
+    if (current()) clearTimeout(saveTimerRef.current);
+    if (inFlightRef.current) {
+      await inFlightRef.current;
+      return flush(pending);
+    }
+    if (!hasPending(pending)) return true;
+
+    const sent = { marks: new Map(pending.marks), timeIn: pending.timeIn, timeOut: pending.timeOut };
+    if (current()) setSaveState('saving');
+
+    const request = apiPatch('/api/meal-count-drafts', {
+      site: pending.site,
+      date: pending.iso,
+      marks: Object.fromEntries(sent.marks),
+      ...(sent.timeIn !== undefined ? { timeIn: sent.timeIn } : {}),
+      ...(sent.timeOut !== undefined ? { timeOut: sent.timeOut } : {}),
+    });
+    inFlightRef.current = request.catch(() => {});
+
+    try {
+      const res = await request;
+      inFlightRef.current = null;
+      for (const [id, value] of sent.marks) {
+        if (pending.marks.get(id) === value) pending.marks.delete(id);
+      }
+      if (pending.timeIn === sent.timeIn) pending.timeIn = undefined;
+      if (pending.timeOut === sent.timeOut) pending.timeOut = undefined;
+      persistPending(pending);
+      if (hasPending(pending)) return flush(pending);
+      if (current()) {
+        setSavedInfo({ by: res.data.updatedByName, at: res.data.updatedAt });
+        setSaveState('saved');
+      }
+      return true;
+    } catch (err) {
+      inFlightRef.current = null;
+      // A save for a day no longer on screen stays on this device and goes up
+      // the next time that day is opened.
+      if (!current()) return false;
+      if (err.status === 409) {
+        // Somebody filed this day while these marks were being taken.
+        pendingRef.current = newPending();
+        clearDraft(pending.key);
+        invalidate(ALL_MEALS_PATH);
+        setBlocked({
+          kind: 'submitted',
+          title: 'This count was already submitted',
+          message: 'Someone else sent it while you were marking. Submitted counts are locked.',
+        });
+        return false;
+      }
+      // Said once when saving stops working, not on every tap after that.
+      if (saveStateRef.current !== 'unsent') {
+        if (err.status === 401) {
+          toast.error('Your session ended', {
+            description: 'Sign in again to keep saving. Your marks are kept on this phone.',
+          });
+        } else if (err.status) {
+          toast.error('Not saved yet', {
+            description: `${err.message} Your marks are kept on this phone.`,
+          });
+        } else {
+          toast.warning('Not saved yet', {
+            description: 'Your marks are kept on this phone and are sent as soon as there is signal.',
+          });
+        }
+      }
+      setSaveState('unsent');
+      // Only a lost connection is worth retrying on a timer: the signal comes
+      // back by itself, a refusal from the server does not. Those wait for the
+      // next tap.
+      if (!err.status) saveTimerRef.current = setTimeout(() => flush(pending), 15_000);
+      return false;
+    }
+  };
+
+  const queueSave = () => {
+    persistPending();
+    setSaveState((current) => (current === 'unsent' ? current : 'saving'));
+    clearTimeout(saveTimerRef.current);
+    const pending = pendingRef.current;
+    saveTimerRef.current = setTimeout(() => flush(pending), 600);
+  };
 
   const load = () => {
     setLoadError('');
     setBlocked(null);
     setRoster(null);
+    clearTimeout(saveTimerRef.current);
+    pendingRef.current = newPending();
+    setSaveState('idle');
+    setSavedInfo(null);
+    setDraftStripped([]);
     // Cheap, and this is the only screen that writes drafts, so it is also the
     // only one that can be sure it is safe to throw the old ones away.
     pruneStaleDrafts();
@@ -221,11 +361,14 @@ function MealCountScreen() {
       // Only for the times the form starts with: if it fails, the form still
       // opens and the site types them, as it always could.
       apiGet(`/api/sites/data?site=${encodeURIComponent(site)}`).catch(() => null),
+      // What was saved for later on any device. Without signal the form still
+      // opens with what this device kept.
+      iso <= today ? apiGet(draftUrl).catch(() => null) : Promise.resolve(null),
     ])
-      .then(([all, rows, siteInfo]) => {
+      .then(([all, rows, siteInfo, saved]) => {
         const siteData = all?.[site];
         const open = siteData?.validDates?.[iso];
-        const alreadySubmitted = (siteData?.excludedDates ?? []).includes(iso);
+        const alreadySubmitted = (siteData?.excludedDates ?? []).includes(iso) || Boolean(saved?.submitted);
 
         if (alreadySubmitted) {
           // The day is filed, so whatever this device was holding for it is
@@ -269,40 +412,59 @@ function MealCountScreen() {
         };
         setStartTimes(initial);
 
-        // A draft from this device wins over an empty roster: a reload, a
-        // crash or a browser killed in the background must not cost the marks
-        // already taken at the point of service.
-        //
-        // It used to be all or nothing, and matched on the roster being
-        // IDENTICAL - so one student added or removed while the phone was in a
-        // pocket threw away every mark already taken, silently. Now the marks
-        // that still have a student are kept and the difference is said out
-        // loud, because the alternative is somebody re-ticking two hundred
-        // names without ever learning why.
-        const draft = readDraft(draftKey);
-        const saved = new Map(draft?.marks ?? []);
-        const kept = rows.filter((student) => saved.has(student.id));
+        // What was saved for later, on the server and on this device, wins over
+        // an empty roster: a reload, a crash, a browser killed in the
+        // background or a second phone must not cost the marks already taken.
+        // Marks for students still on the roster are kept and what was lost is
+        // said out loud, because the alternative is somebody re-ticking two
+        // hundred names without ever learning why.
+        const local = readDraft(draftKey);
+        const localMarks = Object.fromEntries(local?.marks ?? []);
+        const server = saved?.draft ?? null;
+        const rebuilt = rebuildDraft({ rows, server: server?.marks, local: localMarks, dayMeals: mealsOrAll(open) });
+
         // Only a draft with something ticked is worth bringing back. One where
         // the time was changed, or everything was unticked again, came back as
         // "your saved marks are back" over a form with nothing marked.
-        const anyMarked = kept.some((student) => Object.values(saved.get(student.id) ?? {}).some(Boolean));
-        if (draft && anyMarked) {
-          setMarks(new Map(rows.map((student) => [student.id, saved.get(student.id) ?? { ...EMPTY_MARKS }])));
-          setTimeIn(draft.timeIn ?? initial.timeIn);
-          setTimeOut(draft.timeOut ?? initial.timeOut);
+        if (rebuilt.anyMarked) {
+          setMarks(rebuilt.marks);
+          setTimeIn(local?.timeIn ?? (server?.timeIn || initial.timeIn));
+          setTimeOut(local?.timeOut ?? (server?.timeOut || initial.timeOut));
           setRestored(true);
-          setDirty(true);
-          setDraftDrift(
-            kept.length === saved.size && kept.length === rows.length
-              ? null
-              : { added: rows.length - kept.length, gone: saved.size - kept.length }
-          );
+          setDraftDrift(rebuilt.gone > 0 ? { gone: rebuilt.gone } : null);
+          setDraftStripped(rebuilt.stripped);
+          if (server) setSavedInfo({ by: server.updatedByName, at: server.updatedAt });
+
+          // What this device never managed to send goes up now, and so do the
+          // students whose closed meals were just taken off, so the server
+          // stops holding marks the submit would refuse.
+          const pending = pendingRef.current;
+          for (const id of Object.keys(localMarks)) {
+            if (rebuilt.marks.has(id)) pending.marks.set(id, rebuilt.marks.get(id));
+          }
+          if (rebuilt.stripped.length) {
+            for (const [id, raw] of Object.entries(server?.marks ?? {})) {
+              if (rebuilt.marks.has(id) && rebuilt.stripped.some((meal) => raw[meal])) {
+                pending.marks.set(id, rebuilt.marks.get(id));
+              }
+            }
+          }
+          if (local?.timeIn !== undefined) pending.timeIn = local.timeIn;
+          if (local?.timeOut !== undefined) pending.timeOut = local.timeOut;
+          if (hasPending()) queueSave();
+          else setSaveState('saved');
         } else {
-          if (draft) clearDraft(draftKey);
+          // Everything was unticked here while the server still holds marks:
+          // that unticking is a change too, and goes up.
+          const pending = pendingRef.current;
+          if (server) for (const id of Object.keys(localMarks)) pending.marks.set(id, rebuilt.marks.get(id) ?? localMarks[id]);
+          if (hasPending()) queueSave();
+          else if (local) clearDraft(draftKey);
+          setRestored(false);
           setDraftDrift(null);
           setMarks(new Map(rows.map((student) => [student.id, { ...EMPTY_MARKS }])));
-          setTimeIn(initial.timeIn);
-          setTimeOut(initial.timeOut);
+          setTimeIn(server?.timeIn || initial.timeIn);
+          setTimeOut(server?.timeOut || initial.timeOut);
         }
       })
       .catch((err) => setLoadError(err.message));
@@ -363,19 +525,118 @@ function MealCountScreen() {
       if (key === 'att') updated = value ? { ...current, att: true } : { ...EMPTY_MARKS };
       else updated = { ...current, [key]: value, att: value ? true : current.att };
       next.set(studentId, updated);
+      pendingRef.current.marks.set(studentId, updated);
       return next;
     });
+    queueSaveRef.current();
   }, []);
 
-  // Every change is written to the device, so recovery does not depend on
-  // remembering to press anything.
+  // Every tap goes to the server a moment later, so a count can be picked up on
+  // another device without anybody remembering to press anything. Until it
+  // lands it is written to this device, after the tap has been applied.
+  const queueSaveRef = useRef(() => {});
+  queueSaveRef.current = () => {
+    if (!correcting) queueSave();
+  };
   useEffect(() => {
-    if (correcting || !dirty || !roster) return;
-    writeDraft(draftKey, { marks: [...marks.entries()], timeIn, timeOut, savedAt: Date.now() });
-  }, [marks, timeIn, timeOut, dirty, correcting, roster, draftKey]);
+    if (!correcting && roster && hasPending()) persistPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, timeIn, timeOut, correcting, roster]);
 
-  const discardDraft = () => {
+  const changeTime = (which, value) => {
+    setDirty(true);
+    if (which === 'in') setTimeIn(value);
+    else setTimeOut(value);
+    if (correcting) return;
+    pendingRef.current[which === 'in' ? 'timeIn' : 'timeOut'] = value;
+    queueSave();
+  };
+
+  // What another phone saved shows up here when this screen is looked at again,
+  // the same moment the rest of the app re-reads its data. Marks still waiting
+  // to be sent from here stay as they are.
+  const pullSaved = async () => {
+    if (correcting || !roster || blockedRef.current) return;
+    if (!(await flush())) return;
+    let res;
+    try {
+      res = await apiGet(draftUrl);
+    } catch {
+      return;
+    }
+    if (res.submitted) {
+      clearDraft(draftKey);
+      invalidate(ALL_MEALS_PATH);
+      setBlocked({
+        kind: 'submitted',
+        title: 'This count was already submitted',
+        message: 'Someone else sent it. Submitted counts are locked.',
+      });
+      return;
+    }
+    const pending = pendingRef.current;
+    const rebuilt = rebuildDraft({
+      rows: roster,
+      server: res.draft?.marks,
+      local: Object.fromEntries(pending.marks),
+      dayMeals,
+    });
+    setMarks(rebuilt.marks);
+    if (res.draft) {
+      if (pending.timeIn === undefined && res.draft.timeIn) setTimeIn(res.draft.timeIn);
+      if (pending.timeOut === undefined && res.draft.timeOut) setTimeOut(res.draft.timeOut);
+      setSavedInfo({ by: res.draft.updatedByName, at: res.draft.updatedAt });
+    }
+  };
+  const pullSavedRef = useRef(pullSaved);
+  pullSavedRef.current = pullSaved;
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  useEffect(() => {
+    if (correcting) return undefined;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') pullSavedRef.current();
+    };
+    const onOnline = () => flushRef.current();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+      clearTimeout(saveTimerRef.current);
+    };
+  }, [correcting]);
+
+  // Saving is continuous, so the button is the way to say "done for now": it
+  // waits for the server to have everything, then goes back to the start.
+  const saveForLater = async () => {
+    setLeaving(true);
+    const ok = await flush();
+    setLeaving(false);
+    if (ok) {
+      toast.success('Saved for later', {
+        description: 'Anyone at this site can finish it from any phone or computer.',
+      });
+      router.push('/dashboard');
+    } else if (!blockedRef.current) {
+      toast.error('Not saved yet', {
+        description: 'There is no connection. Your marks stay on this phone and are sent when there is signal.',
+      });
+    }
+  };
+
+  // Start over clears the saved marks for everyone, not only on this device.
+  const discardDraft = async () => {
+    clearTimeout(saveTimerRef.current);
+    // A save still out would recreate what this is about to clear.
+    pendingRef.current = newPending();
+    if (inFlightRef.current) await inFlightRef.current;
+    await apiDelete(draftUrl);
     clearDraft(draftKey);
+    setSavedInfo(null);
+    setSaveState('idle');
+    setDraftStripped([]);
     setMarks(new Map((roster ?? []).map((student) => [student.id, { ...EMPTY_MARKS }])));
     setTimeIn(startTimes.timeIn);
     setTimeOut(startTimes.timeOut);
@@ -399,10 +660,13 @@ function MealCountScreen() {
       const allOn = present.length > 0 && present.every((student) => next.get(student.id)?.[key]);
       for (const student of present) {
         const current = next.get(student.id);
-        next.set(student.id, { ...current, [key]: !allOn });
+        const updated = { ...current, [key]: !allOn };
+        next.set(student.id, updated);
+        pendingRef.current.marks.set(student.id, updated);
       }
       return next;
     });
+    queueSaveRef.current();
   };
 
   const visibleRoster = useMemo(() => {
@@ -493,6 +757,8 @@ function MealCountScreen() {
       });
       // The day just moved from missing to submitted everywhere.
       invalidate(ALL_MEALS_PATH);
+      clearTimeout(saveTimerRef.current);
+      pendingRef.current = newPending();
       clearDraft(draftKey);
       setDirty(false);
       toast.success(`Meal count submitted for ${dateLabel(iso)}`);
@@ -606,18 +872,16 @@ function MealCountScreen() {
           <div className="flex flex-col gap-2 rounded-lg border border-info-border bg-info-soft px-3.5 py-3 text-[13px] leading-relaxed text-info-text sm:flex-row sm:items-center">
             <RotateCcw className="h-4 w-4 shrink-0" />
             <span className="flex-1">
-              Your saved marks are back. Nothing was submitted yet.
-              {draftDrift && (
-                <>
-                  {' '}
-                  The roster changed since then
-                  {draftDrift.added > 0 && `, ${draftDrift.added} name${draftDrift.added > 1 ? 's' : ''} added`}
-                  {draftDrift.gone > 0 && `, ${draftDrift.gone} removed`}
-                  {' '}— check the new rows before submitting.
-                </>
-              )}
+              {savedInfo
+                ? `Saved for later by ${savedInfo.by || 'someone at this site'}, ${savedStamp(savedInfo.at)}.`
+                : 'Your saved marks are back.'}{' '}
+              Nothing was submitted yet.
+              {draftDrift &&
+                ` ${draftDrift.gone} marked ${draftDrift.gone === 1 ? 'student is' : 'students are'} no longer on the roster.`}
+              {draftStripped.length > 0 &&
+                ` This day no longer serves ${listOf(draftStripped)}, so those marks were taken off.`}
             </span>
-            <Button variant="outline" size="sm" onClick={discardDraft} className="shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setConfirmStartOver(true)} className="shrink-0">
               Start over
             </Button>
           </div>
@@ -640,7 +904,7 @@ function MealCountScreen() {
               label="In"
               inputRef={timeInRef}
               value={timeIn}
-              onChange={setTimeIn}
+              onChange={(value) => changeTime('in', value)}
               invalid={attempted && !timeIn}
               required
             />
@@ -648,7 +912,7 @@ function MealCountScreen() {
               label="Out"
               inputRef={timeOutRef}
               value={timeOut}
-              onChange={setTimeOut}
+              onChange={(value) => changeTime('out', value)}
               invalid={attempted && (!timeOut || backwardsTimes)}
               required
             />
@@ -659,8 +923,11 @@ function MealCountScreen() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionLabel icon={CircleCheck}>Roster</SectionLabel>
             {roster && (
-              <span className="text-[12.5px] font-semibold tabular-nums text-foreground">
-                {markedCount} of {roster.length} present
+              <span className="flex items-center gap-3">
+                {!correcting && saveState !== 'idle' && <SaveStatus state={saveState} />}
+                <span className="text-[12.5px] font-semibold tabular-nums text-foreground">
+                  {markedCount} of {roster.length} present
+                </span>
               </span>
             )}
           </div>
@@ -897,41 +1164,45 @@ function MealCountScreen() {
               Ready to submit
             </p>
           )}
-          <Button
-            onClick={submit}
-            loading={submitting}
-            size="touch"
-            className={cn('md:w-72', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
-          >
-            {correcting ? 'Save correction' : 'Submit meal count'}
-          </Button>
+          <div className="flex gap-2">
+            {!correcting && (
+              <Button
+                variant="outline"
+                size="touch"
+                onClick={saveForLater}
+                loading={leaving}
+                disabled={submitting}
+                // `touch` is full width on its own; beside Submit it takes only
+                // what its words need, and Submit keeps the rest of the bar.
+                className="w-auto shrink-0 px-4"
+              >
+                Save for later
+              </Button>
+            )}
+            <Button
+              onClick={submit}
+              loading={submitting}
+              disabled={leaving}
+              size="touch"
+              className={cn('min-w-0 flex-1 md:w-72 md:flex-none', !canSubmit && 'bg-muted text-muted-foreground hover:bg-muted')}
+            >
+              {correcting ? 'Save correction' : 'Submit meal count'}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* What this warns about is different in the two modes, and saying the
-          wrong one is worse than not warning at all.
-
-          Taking a count, the marks are written to this device on every tap and
-          come back when the screen is reopened - the dialog used to say they
-          were lost, which is a sentence that makes a site redo a roster it
-          never lost, or refuse to leave a screen it was safe to leave. What
-          does not come back is the signature, because a signature is given at
-          the moment of submitting.
-
-          Correcting one, nothing is written anywhere until Save, so there the
-          original wording is the true one. */}
+      {/* Taking a count, every tap is saved on the server, so leaving only
+          needs a word when some of it has not got there yet. Correcting one,
+          nothing is written anywhere until Save. */}
       <UnsavedGuard
-        enabled={dirty && !submitting}
-        // Taking a count, leaving is how a site saves it for later - supper now,
-        // snack this evening - so it is not worded as losing something.
-        title={correcting ? 'Leave without saving this correction?' : 'Leave and finish this count later?'}
+        enabled={(correcting ? dirty : saveState === 'unsent' || saveState === 'saving') && !submitting && !leaving}
+        title={correcting ? 'Leave without saving this correction?' : 'Leave before your last marks are saved?'}
         confirmLabel={correcting ? 'Leave anyway' : 'Leave for now'}
         description={
           correcting
             ? 'This correction has not been saved.'
-            : markedCount > 0
-              ? `${markedCount} ${markedCount === 1 ? 'student is' : 'students are'} marked and nothing has been sent yet.`
-              : 'Nothing on this screen has been sent yet.'
+            : 'Some marks have not reached the server yet, so nobody else can see them.'
         }
         consequences={
           correcting
@@ -940,13 +1211,53 @@ function MealCountScreen() {
                 'The count stays exactly as it was submitted.',
               ]
             : [
-                'The marks stay on this device and come back when you reopen the day.',
-                'The signature does not: it is given when the count is sent.',
-                'The day stays open, so the count can be taken again later.',
+                'They stay on this phone and are sent the next time this day is opened here.',
+                'The day stays open, so the count can be finished later.',
               ]
         }
       />
+
+      <ConfirmDialog
+        open={confirmStartOver}
+        onOpenChange={setConfirmStartOver}
+        title="Clear the saved marks?"
+        description={`${markedCount} ${markedCount === 1 ? 'student is' : 'students are'} marked for this day.`}
+        consequences={['The marks are cleared for everyone at this site, on every device.']}
+        confirmLabel="Clear marks"
+        onConfirm={discardDraft}
+      />
     </AppShell>
+  );
+}
+
+const savedStamp = (iso) => {
+  const at = new Date(iso);
+  const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (at.toDateString() === new Date().toDateString()) return `today at ${time}`;
+  return `${at.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${time}`;
+};
+
+const MEAL_NAMES = Object.fromEntries(MEAL_KEYS.map((meal) => [meal.key, meal.label.toLowerCase()]));
+
+function listOf(keys) {
+  const names = keys.map((key) => MEAL_NAMES[key] ?? key);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0];
+}
+
+// Where the count stands with the server, beside the number of students marked.
+function SaveStatus({ state }) {
+  if (state === 'unsent') {
+    return (
+      <span className="flex items-center gap-1 text-[12px] font-semibold text-warning-text">
+        <CloudOff className="h-3.5 w-3.5" />
+        Not saved yet
+      </span>
+    );
+  }
+  return (
+    <span className="text-[12px] text-muted-foreground" aria-live="polite">
+      {state === 'saving' ? 'Saving…' : 'Saved'}
+    </span>
   );
 }
 

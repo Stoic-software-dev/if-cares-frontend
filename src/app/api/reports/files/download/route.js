@@ -1,5 +1,7 @@
 import { handle, ApiError } from '@/lib/http';
 import { requireUser } from '@/lib/auth';
+import { menuViewer, menuAudience } from '@/lib/menus';
+import { canSeeMenu } from '@/lib/menu-access.mjs';
 import { downloadMenu, driveConfigured, DriveError } from '@/lib/google-drive';
 
 export const runtime = 'nodejs';
@@ -61,11 +63,15 @@ async function fromGas(fileId, attachment) {
 }
 
 export const GET = handle(async (req) => {
-  await requireUser();
+  const session = await requireUser();
 
   const params = new URL(req.url).searchParams;
   const fileId = params.get('fileId');
   if (!fileId) throw new ApiError(400, 'Missing fileId parameter.');
+  // A menu for other sites answers as if it did not exist: the link works only
+  // for the sites it was published for (STOIC-2691).
+  const audience = await menuAudience([fileId]);
+  if (!canSeeMenu(fileId, audience.bySite, menuViewer(session))) throw new ApiError(404, 'Menu not found.');
   // The View button opens the file inline; Download asks for it as an attachment.
   const attachment = params.get('download') === '1';
 

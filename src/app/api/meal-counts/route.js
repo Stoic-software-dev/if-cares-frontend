@@ -125,6 +125,9 @@ export const POST = handle(async (req) => {
           supper,
         })),
       });
+      // Whatever was saved for later for this day is finished now. Same
+      // transaction, so a filed day never keeps a draft another phone reopens.
+      await tx.mealCountDraft.deleteMany({ where: { siteId: site.id, date } });
       return created;
     });
   } catch (error) {

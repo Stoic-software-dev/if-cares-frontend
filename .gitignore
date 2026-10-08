@@ -49,3 +49,4 @@ next-env.d.ts
 
 # Crash dumps from the shell, not the app
 *.stackdump
+cleanup-manifest.json

@@ -159,8 +159,10 @@ function MealCountScreen() {
   const [savedInfo, setSavedInfo] = useState(null);
   // 'idle' | 'saving' | 'saved' | 'unsent'
   const [saveState, setSaveState] = useState('idle');
-  const saveStateRef = useRef('idle');
-  saveStateRef.current = saveState;
+  // Whether the failing save was already announced. Every retry goes through
+  // 'saving' again, so the screen state cannot tell a new failure from the same
+  // one; only a save that lands clears it.
+  const warnedRef = useRef(false);
   const [leaving, setLeaving] = useState(false);
   const [confirmStartOver, setConfirmStartOver] = useState(false);
 
@@ -231,6 +233,7 @@ function MealCountScreen() {
       if (pending.timeIn === sent.timeIn) pending.timeIn = undefined;
       if (pending.timeOut === sent.timeOut) pending.timeOut = undefined;
       persistPending(pending);
+      if (current()) warnedRef.current = false;
       if (hasPending(pending)) return flush(pending);
       if (current()) {
         setSavedInfo({ by: res.data.updatedByName, at: res.data.updatedAt });
@@ -255,7 +258,8 @@ function MealCountScreen() {
         return false;
       }
       // Said once when saving stops working, not on every tap after that.
-      if (saveStateRef.current !== 'unsent') {
+      if (!warnedRef.current) {
+        warnedRef.current = true;
         if (err.status === 401) {
           toast.error('Your session ended', {
             description: 'Sign in again to keep saving. Your marks are kept on this phone.',
@@ -612,6 +616,9 @@ function MealCountScreen() {
   // waits for the server to have everything, then goes back to the start.
   const saveForLater = async () => {
     setLeaving(true);
+    // If this save fails, the message below says so; the generic one would be
+    // a second toast about the same thing.
+    warnedRef.current = true;
     const ok = await flush();
     setLeaving(false);
     if (ok) {

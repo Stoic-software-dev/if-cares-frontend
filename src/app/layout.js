@@ -1,6 +1,8 @@
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import ErrorReporter from '@/components/common/ErrorReporter';
+import { OfflineLayer } from '@/components/offline/OfflineLayer';
+import { ServiceWorker } from '@/components/offline/ServiceWorker';
 import { ThemeProvider } from '@/components/shell/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -14,6 +16,11 @@ const inter = Inter({
 export const metadata = {
   title: 'IF Cares Regular Year',
   description: 'Daily meal counts for the IF Cares Regular Year program',
+  // Installable on a phone's home screen, which is how a site user takes the
+  // count with no signal (STOIC-2771).
+  manifest: '/manifest.webmanifest',
+  icons: { apple: '/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: 'IF Cares', statusBarStyle: 'default' },
 };
 
 export const viewport = {
@@ -38,9 +45,13 @@ export default function RootLayout({ children }) {
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <OfflineLayer />
+          </AuthProvider>
           <Toaster />
           <ErrorReporter />
+          <ServiceWorker />
         </ThemeProvider>
       </body>
     </html>

@@ -9,9 +9,15 @@ import { isSigned } from '@/lib/signature';
 // The rule lives in @/lib/signature so the public claim-signing page enforces
 // exactly the same thing this screen does.
 
-export function SignatureField({ onChange, invalid, className }) {
+// `initialStrokes` puts back a signature made earlier on this phone, and
+// `onStrokes` hands out the strokes as they change (STOIC-2771): a count taken
+// without signal keeps its signature on the phone until it can be sent. The
+// strokes, not the picture, so a signature put back is checked by the same rule
+// as one drawn now.
+export function SignatureField({ onChange, onStrokes, initialStrokes, invalid, className }) {
   const padRef = useRef(null);
   const wrapRef = useRef(null);
+  const restoredRef = useRef(false);
   const [width, setWidth] = useState(0);
   const [signed, setSigned] = useState(false);
 
@@ -28,13 +34,26 @@ export function SignatureField({ onChange, invalid, className }) {
     const valid = isSigned(padRef.current);
     setSigned(valid);
     onChange(valid ? () => padRef.current.toDataURL('image/png') : null);
+    onStrokes?.(valid ? padRef.current.toData() : null);
   };
 
   const clear = () => {
     padRef.current?.clear();
     setSigned(false);
     onChange(null);
+    onStrokes?.(null);
   };
+
+  // Once, when the pad first exists.
+  useEffect(() => {
+    if (restoredRef.current || !width || !padRef.current) return;
+    restoredRef.current = true;
+    if (initialStrokes?.length) {
+      padRef.current.fromData(initialStrokes);
+      evaluate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
 
   return (
     <div

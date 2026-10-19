@@ -26,10 +26,12 @@ import { Input } from '@/components/ui/input';
 import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/states';
-import { apiPatch, apiPost } from '@/lib/api-client';
+import { NO_CONNECTION, apiPatch, apiPost } from '@/lib/api-client';
 
 async function apiDelete(path) {
-  const res = await fetch(path, { method: 'DELETE' });
+  const res = await fetch(path, { method: 'DELETE' }).catch(() => {
+    throw new Error(NO_CONNECTION);
+  });
   const body = await res.json().catch(() => null);
   if (!res.ok || body?.result === 'error') {
     throw new Error(body?.message || `Request failed (${res.status})`);

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { handle, readJsonBody, legacyJson, legacySuccess, ApiError } from '@/lib/http';
 import { requireUser, requireSiteAccess } from '@/lib/auth';
 import { dateToYmd, todayYmd, ymdToUtcDate } from '@/lib/dates';
-import { normalizeMarks } from '@/lib/count-drafts.mjs';
+import { acceptTap, normalizeMarks } from '@/lib/count-drafts.mjs';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +24,8 @@ const marksSchema = z.object({
   lunch: z.boolean().optional(),
   snk: z.boolean().optional(),
   sup: z.boolean().optional(),
+  // When it was tapped, in ms (STOIC-2771). Older versions of the app send none.
+  at: z.number().optional(),
 });
 const timeSchema = z.string().regex(/^(\d{2}:\d{2})?$/, 'That is not a time.');
 
@@ -45,7 +47,17 @@ async function resolveDay(session, siteName, ymd) {
   return { site, date };
 }
 
-const isFiled = (siteId, date) => prisma.mealCount.findFirst({ where: { siteId, date, voidedAt: null }, select: { id: true } });
+const isFiled = (siteId, date) =>
+  prisma.mealCount.findFirst({
+    where: { siteId, date, voidedAt: null },
+    select: { id: true, createdAt: true, submittedByEmail: true, submittedBy: { select: { name: true, lastname: true } } },
+  });
+
+// Who filed a day, for the phone that loaded it without signal (STOIC-2771).
+const filedBy = (count) =>
+  [count.submittedBy?.name, count.submittedBy?.lastname].filter(Boolean).join(' ').trim() ||
+  count.submittedByEmail ||
+  'someone at this site';
 
 function toPayload(draft) {
   if (!draft) return null;
@@ -57,7 +69,14 @@ function toPayload(draft) {
     marks: Object.fromEntries(
       draft.entries.map((entry) => [
         entry.studentId,
-        { att: entry.att, brk: entry.brk, lunch: entry.lunch, snk: entry.snk, sup: entry.sup },
+        {
+          att: entry.att,
+          brk: entry.brk,
+          lunch: entry.lunch,
+          snk: entry.snk,
+          sup: entry.sup,
+          at: entry.markedAt ? entry.markedAt.getTime() : null,
+        },
       ])
     ),
   };
@@ -73,9 +92,15 @@ export const GET = handle(async (req) => {
   await sweepOld();
 
   // A day already filed has nothing left to finish.
-  if (await isFiled(site.id, date)) {
+  const filed = await isFiled(site.id, date);
+  if (filed) {
     await prisma.mealCountDraft.deleteMany({ where: { siteId: site.id, date } });
-    return legacyJson({ draft: null, submitted: true });
+    return legacyJson({
+      draft: null,
+      submitted: true,
+      submittedBy: filedBy(filed),
+      submittedAt: filed.createdAt.toISOString(),
+    });
   }
 
   const draft = await prisma.mealCountDraft.findUnique({
@@ -87,7 +112,10 @@ export const GET = handle(async (req) => {
 
 // Merges what one device changed since its last save. Students are rows of
 // their own, so two phones each marking half the roster add up; the same
-// student touched on both keeps whichever arrived last.
+// student touched on both keeps the newer tap (STOIC-2771), so a phone coming
+// back after hours without signal does not undo what another phone did since.
+// The taps that lost come back in `kept`, with what the server holds instead,
+// so the phone shows that and not its own older mark.
 export const PATCH = handle(async (req) => {
   const session = await requireUser();
   const body = patchSchema.parse(await readJsonBody(req));
@@ -122,33 +150,66 @@ export const PATCH = handle(async (req) => {
         create: { siteId: site.id, date, updatedByName: byName, ...times },
         update: { updatedByName: byName, ...times },
       });
+      const candidates = ids.filter((id) => known.has(id));
+      const existing = candidates.length
+        ? await tx.mealCountDraftEntry.findMany({ where: { draftId: draft.id, studentId: { in: candidates } } })
+        : [];
+      const byStudent = new Map(existing.map((entry) => [entry.studentId, entry]));
+      const now = Date.now();
+      const winners = [];
+      const kept = {};
+      for (const id of candidates) {
+        const current = byStudent.get(id);
+        const { accept, at } = acceptTap({
+          incomingAt: body.marks[id].at,
+          existingAt: current?.markedAt ? current.markedAt.getTime() : null,
+          now,
+        });
+        if (accept) winners.push({ id, at });
+        else kept[id] = { att: current.att, brk: current.brk, lunch: current.lunch, snk: current.snk, sup: current.sup };
+      }
       // Replace the rows of the students in this save, two statements for the
       // whole batch: "everyone present gets snack" is two hundred students in a
       // single save, and a round trip each would outlast the transaction. Not
       // raw SQL: behind the Supabase pooler a raw statement does not always get
       // the app's schema on its search path, and fails as "does not exist".
-      const studentIds = ids.filter((id) => known.has(id));
-      if (studentIds.length) {
-        await tx.mealCountDraftEntry.deleteMany({ where: { draftId: draft.id, studentId: { in: studentIds } } });
+      if (winners.length) {
+        await tx.mealCountDraftEntry.deleteMany({
+          where: { draftId: draft.id, studentId: { in: winners.map((winner) => winner.id) } },
+        });
         await tx.mealCountDraftEntry.createMany({
-          data: studentIds.map((studentId) => ({ draftId: draft.id, studentId, ...normalizeMarks(body.marks[studentId]) })),
+          data: winners.map(({ id, at }) => ({
+            draftId: draft.id,
+            studentId: id,
+            markedAt: new Date(at),
+            ...normalizeMarks(body.marks[id]),
+          })),
         });
       }
-      return draft;
-    });
+      return { draft, kept };
+      // Serializable: two phones saving the same student at once would both
+      // read the old time and both win. One of them is refused (P2034) and
+      // writes again, after the other, against what the other left.
+    }, { isolationLevel: 'Serializable' });
 
-  let draft;
+  let result;
   try {
-    draft = await write();
+    result = await write();
   } catch (error) {
     // Two phones saving at the same moment can both try to create the day, or
     // the same student's row; the one that loses writes again, after the other.
-    if (error?.code !== 'P2002') throw error;
-    draft = await write();
+    if (error?.code !== 'P2002' && error?.code !== 'P2034') throw error;
+    result = await write();
   }
+  const { draft, kept } = result;
 
   return legacySuccess({
-    data: { updatedAt: draft.updatedAt.toISOString(), updatedByName: draft.updatedByName, date: dateToYmd(date) },
+    data: {
+      updatedAt: draft.updatedAt.toISOString(),
+      updatedByName: draft.updatedByName,
+      date: dateToYmd(date),
+      kept,
+    },
   });
 });
 

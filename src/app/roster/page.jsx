@@ -11,8 +11,7 @@ import { SiteSwitcher } from '@/components/shell/SiteSwitcher';
 import RosterManager from '@/components/sites/RosterManager';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
-import { apiGet } from '@/lib/api-client';
-import { SITES_PATH, useCachedGet } from '@/lib/data-cache';
+import { SITES_PATH, offlineGet, useCachedGet } from '@/lib/data-cache';
 import { useStoredState } from '@/lib/hooks';
 import { sortSiteNames } from '@/lib/sites';
 
@@ -59,7 +58,8 @@ function RosterScreen() {
   const loadRoster = useCallback(() => {
     if (!selectedSite) return Promise.resolve();
     setError('');
-    return apiGet(`/api/students/roster?site=${encodeURIComponent(selectedSite)}`)
+    // Without signal, the roster the phone kept (STOIC-2771).
+    return offlineGet(`/api/students/roster?site=${encodeURIComponent(selectedSite)}`)
       .then((list) => {
         // A slow answer for the site just left must not paint over this one.
         if (siteRef.current === selectedSite) setRoster(list);

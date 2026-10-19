@@ -7,6 +7,7 @@ import { LogOut, MoreHorizontal, Search } from 'lucide-react';
 import { isAdmin, useAuth } from '@/components/auth/AuthProvider';
 import BrandMark from '@/components/shell/BrandMark';
 import { CommandPalette } from '@/components/shell/CommandPalette';
+import { OfflineStrip } from '@/components/offline/OfflineLayer';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Avatar, UserMenu } from '@/components/shell/UserMenu';
 import { accountItemsFor, activeKeyForPath, navItemsFor } from '@/components/shell/nav';
@@ -168,6 +169,9 @@ export default function AppShell({ children, width = 'default', className, focus
           <Avatar user={user} />
         </button>
       </header>
+
+      {/* Says when there is no connection, and how old what is on screen is. */}
+      <OfflineStrip />
 
       {/* `pb-32` on a phone is the tab bar plus the floating action that sits
           above it: without the second allowance the last row of every list is

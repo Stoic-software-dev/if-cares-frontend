@@ -27,11 +27,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { apiDelete, apiGet, apiUpload } from '@/lib/api-client';
 import { MENUS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
+import { menuFileId, menuFileUrl } from '@/lib/menu-files';
 import { shortSiteName, sortSiteNames } from '@/lib/sites';
 import { cn } from '@/lib/utils';
 
 const fileName = (file) => file.name ?? file.fileName ?? 'Menu.pdf';
-const fileId = (file) => file.id ?? file.fileId ?? '';
+const fileId = menuFileId;
 
 // "September 2026 Menu.pdf" reads better as a title without its extension, and
 // the extension says more as a chip on the sheet.
@@ -65,8 +66,7 @@ function periodOf(file) {
   return null;
 }
 
-const urlFor = (file, { attachment } = {}) =>
-  `/api/reports/files/download?fileId=${encodeURIComponent(fileId(file))}${attachment ? '&download=1' : ''}`;
+const urlFor = menuFileUrl;
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv';
 

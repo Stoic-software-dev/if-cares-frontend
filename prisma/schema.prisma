@@ -426,6 +426,9 @@ model MealCountDraftEntry {
   lunch     Boolean  @default(false)
   snk       Boolean  @default(false)
   sup       Boolean  @default(false)
+  // When the tap was made, on the phone that made it (STOIC-2771). Null for
+  // rows from before the column; the newer tap wins, not the later arrival.
+  markedAt  DateTime?
   updatedAt DateTime @updatedAt
 
   draft MealCountDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)

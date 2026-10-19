@@ -37,3 +37,21 @@ Tablero: STOIC-8
 Los conteos con `source = GAS_IMPORT` vienen del sistema anterior, que no tenía
 aprobación: ninguno está aprobado y no pasan por la cola de Approvals ni tienen
 el PDF bloqueado.
+
+## Modo offline (STOIC-2771)
+
+- Solo para site users. Sus datos quedan en el celular (`src/lib/offline.js`,
+  bajo el id de la cuenta) y el service worker (`public/sw.js`, solo en el build
+  de producción) guarda las páginas y su código. Para probarlo en local hace
+  falta `next build` + `next start`, no `next dev`.
+- La sesión dura 14 días para site users y 8 horas para admins
+  (`src/lib/session-policy.mjs`). Un `403` de la API quiere decir cuenta dada de
+  baja: el celular borra lo que guardaba de esa cuenta.
+- **Un celular puede tener la versión anterior de la app durante días**: lo que
+  recibe un conteo o un guardado (`/api/meal-counts`, `/api/meal-count-drafts`)
+  tiene que seguir aceptando lo que manda la versión anterior. Un campo nuevo
+  es opcional.
+- Una pantalla nueva de site users que tenga que andar sin señal lee con
+  `offlineGet`/`cachedGet` y suma su lectura a `keptOffline` en
+  `src/lib/data-cache.js`, y su ruta a `OFFLINE_PAGES` en
+  `src/components/offline/OfflineLayer.jsx`.

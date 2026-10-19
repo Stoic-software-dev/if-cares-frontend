@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { prisma } from './db';
 import { ApiError } from './http';
+import { sessionMsFor } from './session-policy.mjs';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -10,9 +11,9 @@ export function cookieName() {
   return process.env.AUTH_COOKIE_NAME || 'ifc_session';
 }
 
-export function sessionTtlMs() {
-  const hours = Number(process.env.SESSION_TTL_HOURS || 8);
-  return (Number.isFinite(hours) && hours > 0 ? hours : 8) * 60 * 60 * 1000;
+// Per role: see session-policy.mjs.
+export function sessionTtlMs(role) {
+  return sessionMsFor(role, process.env.SESSION_TTL_HOURS);
 }
 
 function secretKey() {
@@ -38,7 +39,8 @@ export function dummyPasswordCompare(password) {
 }
 
 export async function issueSessionCookie(user) {
-  const expiresAt = Date.now() + sessionTtlMs();
+  const ttl = sessionTtlMs(user.role);
+  const expiresAt = Date.now() + ttl;
   const token = await new SignJWT({ email: user.email, role: user.role })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
@@ -51,7 +53,7 @@ export async function issueSessionCookie(user) {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: Math.floor(sessionTtlMs() / 1000),
+    maxAge: Math.floor(ttl / 1000),
   });
   return expiresAt;
 }
@@ -68,25 +70,40 @@ export function clearSessionCookie() {
 
 // Verifies the JWT then loads the user fresh from the DB (instant deactivation
 // and role changes; site assignments are never trusted from the token).
-export async function getSession() {
+// `accountGone` tells a valid session for an account that was deactivated or
+// removed apart from one that simply ended: a phone holding that account's
+// rosters for offline use (STOIC-2771) throws them away on the first.
+async function readSession() {
   const token = cookies().get(cookieName())?.value;
-  if (!token) return null;
+  if (!token) return { session: null };
   let payload;
   try {
     ({ payload } = await jwtVerify(token, secretKey()));
   } catch {
-    return null;
+    return { session: null };
   }
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
     include: { sites: { include: { site: true } } },
   });
-  if (!user || !user.active) return null;
-  return { user, expiresAtMs: (payload.exp || 0) * 1000 };
+  if (!user || !user.active) return { session: null, accountGone: true };
+  // How long a session lasts depends on the role (session-policy.mjs). A site
+  // user made an administrator would otherwise keep a 14 day session as an
+  // administrator: a change of role ends it.
+  if (payload.role && payload.role !== user.role) return { session: null };
+  return { session: { user, expiresAtMs: (payload.exp || 0) * 1000 } };
 }
 
-export async function requireUser() {
-  const session = await getSession();
+export async function getSession() {
+  return (await readSession()).session;
+}
+
+// `tellGone`: answer 403 instead of 401 when the account was deactivated. Only
+// /api/auth/me asks for it; every other screen reads 401 as "sign in again",
+// which is right for a deactivated account too.
+export async function requireUser({ tellGone = false } = {}) {
+  const { session, accountGone } = await readSession();
+  if (accountGone && tellGone) throw new ApiError(403, 'This account is no longer active.');
   if (!session) throw new ApiError(401, 'Not signed in.');
   return session;
 }

@@ -15,7 +15,10 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { availableMonths, buildMonth, dateLabel, mealsFor, monthMealPattern, todayYmd } from '@/lib/calendar';
+import { InstallHint } from '@/components/offline/InstallHint';
+import { NO_CONNECTION } from '@/lib/api-client';
 import { ALL_MEALS_PATH, SITES_PATH, useCachedGet } from '@/lib/data-cache';
+import { offlineEligible } from '@/lib/offline';
 import { useStoredState } from '@/lib/hooks';
 import { sortSiteNames } from '@/lib/sites';
 
@@ -105,11 +108,18 @@ function DashboardScreen() {
     router.push(`/meal-count?date=${today}&site=${encodeURIComponent(selectedSite)}`);
 
   if (error) {
+    // Without signal on a phone that never kept this account's sites
+    // (STOIC-2771): not an error, a first step.
+    const neverSaved = error === NO_CONNECTION;
     return (
       <AppShell width="wide">
         <ErrorState
-          title="Couldn't load the dashboard"
-          message={error}
+          title={neverSaved ? 'Your sites are not saved on this phone yet' : "Couldn't load the dashboard"}
+          message={
+            neverSaved
+              ? 'Open the app once with a connection so it can save your sites. After that it works without one.'
+              : error
+          }
           onRetry={() => {
             meals.refresh();
             siteList.refresh();
@@ -158,6 +168,8 @@ function DashboardScreen() {
   return (
     <AppShell width="wide">
       <div className="flex flex-col gap-4">
+        {offlineEligible(user) && <InstallHint />}
+
         {/* Phone: the three controls are three controls, not one crowded card.
             A site to file for, a month to look at, and what to show - each with
             a target a thumb can hit, in the order they are asked. */}

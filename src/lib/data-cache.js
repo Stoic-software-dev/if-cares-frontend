@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from '@/lib/api-client';
+import { apiGet, isConnectionError } from '@/lib/api-client';
+import { markOffline, markOnline, savedRead, saveRead } from '@/lib/offline';
 
 // Session-lived cache for the reads that are expensive on the server and
 // identical across screens: the site list, the whole meal-count calendar and
@@ -30,6 +31,44 @@ export function peek(path) {
   return store.get(path)?.value;
 }
 
+// The reads a site user's phone keeps for when there is no signal (STOIC-2771):
+// what the dashboard, the roster, the menus and the meal count need. Saved on
+// every successful read, answered from the phone when the server cannot be
+// reached. Nothing is kept for an administrator (see lib/offline).
+function keptOffline(path) {
+  return (
+    path === SITES_PATH ||
+    path === ALL_MEALS_PATH ||
+    path === MENUS_PATH ||
+    path.startsWith('/api/students/roster?') ||
+    path.startsWith('/api/sites/data?')
+  );
+}
+
+// { value, saved }: `saved` is true when it came from the phone, not the server.
+async function readThrough(path) {
+  try {
+    const value = await apiGet(path);
+    if (keptOffline(path)) saveRead(path, value);
+    markOnline();
+    return { value, saved: false };
+  } catch (error) {
+    const kept = isConnectionError(error) && keptOffline(path) ? savedRead(path) : null;
+    if (!kept) throw error;
+    markOffline(kept.at);
+    return { value: kept.value, saved: true };
+  }
+}
+
+// A plain read that falls back to what the phone kept. For the reads that are
+// not worth holding in memory between screens, like a site's roster.
+export async function offlineGet(path) {
+  return (await readThrough(path)).value;
+}
+
+// The same, saying whether the answer came from the phone.
+export const offlineRead = readThrough;
+
 export async function cachedGet(path, { maxAge = DEFAULT_MAX_AGE, force = false } = {}) {
   const entry = store.get(path);
   const fresh = entry && Date.now() - entry.at < maxAge;
@@ -37,9 +76,10 @@ export async function cachedGet(path, { maxAge = DEFAULT_MAX_AGE, force = false 
   if (entry?.promise && !force) return entry.promise;
 
   const started = generation;
-  const promise = apiGet(path)
-    .then((value) => {
-      if (started === generation) store.set(path, { value, at: Date.now() });
+  const promise = readThrough(path)
+    .then(({ value, saved }) => {
+      // An answer from the phone is never fresh: the next read asks the server.
+      if (started === generation) store.set(path, { value, at: saved ? 0 : Date.now() });
       return value;
     })
     .catch((error) => {

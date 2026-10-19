@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, CalendarCheck, ClipboardList, FileText } from 'lucide-react';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { takeLoginNotice, useAuth } from '@/components/auth/AuthProvider';
 import BrandMark from '@/components/shell/BrandMark';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { apiPost } from '@/lib/api-client';
+import { apiPost, isConnectionError } from '@/lib/api-client';
 import { invalidate } from '@/lib/data-cache';
 
 const HIGHLIGHTS = [
@@ -37,6 +37,13 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  // Why this screen opened when the person did not sign out: the session ended
+  // or the account was deactivated.
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    setNotice(takeLoginNotice());
+  }, []);
 
   const openForgot = () => {
     setForgotEmail(email);
@@ -71,7 +78,7 @@ export default function LoginPage() {
       setUser(res.data);
       router.push('/dashboard');
     } catch (err) {
-      setError(err.message);
+      setError(isConnectionError(err) ? 'You need a connection to sign in. Try again when you have signal.' : err.message);
       setSubmitting(false);
     }
   };
@@ -130,6 +137,12 @@ export default function LoginPage() {
             <h1 className="text-[26px] font-bold tracking-tight text-foreground">Sign in</h1>
             <p className="text-[13px] text-muted-foreground">Same email and password as always.</p>
           </div>
+
+          {notice && !error && (
+            <p role="status" className="rounded-md border border-info-border bg-info-soft px-3 py-2.5 text-[13px] font-medium leading-snug text-info-text">
+              {notice}
+            </p>
+          )}
 
           <form onSubmit={signIn} className="flex flex-col gap-4" noValidate>
             <Field label="Email" htmlFor="email">

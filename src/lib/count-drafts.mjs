@@ -19,9 +19,31 @@ export function normalizeMarks(marks) {
 
 const anyMark = (marks) => MARK_KEYS.some((key) => marks?.[key]);
 
+// Which of two marks for the same student is the one to keep (STOIC-2771). Each
+// carries `at`, when it was tapped, in ms. A phone that was offline for hours
+// sends its taps late, and the later tap is the one that stands, not the later
+// arrival. When either has no time (written before the field existed), the
+// device's wins, as it always did.
+export function newerMark(server, local) {
+  if (!server) return local;
+  if (!local) return server;
+  if (local.at == null || server.at == null) return local;
+  return server.at > local.at ? server : local;
+}
+
+// The server side of the same rule: whether a tap arriving now replaces the row
+// already there, and the time to store with it. A phone whose clock runs ahead
+// would otherwise win every argument for as long as it is ahead, so no tap is
+// taken as later than the moment it reached the server. A tap with no time
+// comes from a version of the app that did not send one, and is taken as now.
+export function acceptTap({ incomingAt, existingAt, now }) {
+  const at = typeof incomingAt === 'number' && Number.isFinite(incomingAt) ? Math.min(incomingAt, now) : now;
+  return { accept: existingAt == null || at >= existingAt, at };
+}
+
 // Rebuilds the form from what the server holds and what this device has not
-// sent yet. The device wins per student: those are taps made here after the
-// server copy was read. Then:
+// sent yet. Per student the newer tap wins (newerMark); a device mark with no
+// time wins, those being taps made here after the server copy was read. Then:
 //   - students no longer on the roster are dropped, and how many is reported;
 //   - meals the day no longer serves (closed after the save, or a holiday put
 //     on it) are taken off and named, instead of the submit failing at the end
@@ -30,7 +52,8 @@ const anyMark = (marks) => MARK_KEYS.some((key) => marks?.[key]);
 // rows: the roster, [{ id }]. server / local: { [studentId]: marks }.
 // dayMeals: { brk, lunch, snk, sup } as the calendar has the day now.
 export function rebuildDraft({ rows, server = {}, local = {}, dayMeals }) {
-  const saved = { ...server, ...local };
+  const saved = { ...server };
+  for (const [id, mark] of Object.entries(local)) saved[id] = newerMark(server[id], mark);
   const ids = new Set(rows.map((row) => row.id));
   const savedIds = Object.keys(saved).filter((id) => anyMark(saved[id]));
 

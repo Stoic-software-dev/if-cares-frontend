@@ -21,8 +21,10 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api-client';
-import { ALL_MEALS_PATH, cachedGet, invalidate } from '@/lib/data-cache';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut, isConnectionError } from '@/lib/api-client';
+import { ALL_MEALS_PATH, cachedGet, invalidate, offlineRead } from '@/lib/data-cache';
+import { offlineCount, putOfflineCount, removeOfflineCount } from '@/lib/offline';
+import { summarizeMarks } from '@/lib/offline-review.mjs';
 import { MEAL_KEYS, dateLabel, mealsOrAll, todayYmd } from '@/lib/calendar';
 import { shortSiteName } from '@/lib/sites';
 import { rebuildDraft } from '@/lib/count-drafts.mjs';
@@ -47,13 +49,26 @@ function readDraft(key) {
   }
 }
 
+// Returns whether it was written. Storage full or blocked: the screen still
+// works, but marks not on the server yet would not survive, which is said.
 function writeDraft(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // Storage full or blocked: the screen still works, it just cannot recover.
+    return false;
   }
 }
+
+const STORAGE_FAILED = {
+  title: 'This phone could not save your count',
+  description: 'Keep the app open until you have signal, or the marks not sent yet are lost.',
+};
+
+const NEEDS_CONNECTION = {
+  title: 'You need a connection to submit',
+  description: 'Your count is saved on this phone. Submit it when you have signal.',
+};
 
 function clearDraft(key) {
   try {
@@ -166,8 +181,26 @@ function MealCountScreen() {
   const [leaving, setLeaving] = useState(false);
   const [confirmStartOver, setConfirmStartOver] = useState(false);
 
-  // One draft per site and day. On this device it holds only the unsent part.
-  const draftKey = `ifc.draft.${site}|${iso}`;
+  // Taken without signal (STOIC-2771). `offlineLoadRef`: this screen opened
+  // with what the phone kept, not with the server. `trackedRef`: the count has
+  // a record on the phone (lib/offline), which keeps its signature and what it
+  // looked like when loaded, until it is sent. `startingRef` is that snapshot
+  // for a record not written yet.
+  const offlineLoadRef = useRef(false);
+  const trackedRef = useRef(false);
+  const startingRef = useRef(null);
+  const strokesRef = useRef(null);
+  const storageWarnedRef = useRef(false);
+  const [initialStrokes, setInitialStrokes] = useState(null);
+  const [signatureKey, setSignatureKey] = useState(0);
+
+  // One draft per account, site and day. On this device it holds only the
+  // unsent part, and only for whoever is signed in: another person on the same
+  // phone does not get it.
+  const draftKey = `ifc.draft.${user?.id ?? 'anon'}.${site}|${iso}`;
+  // Before STOIC-2771 the key had no account in it. Whoever opens that day first
+  // takes it over, as they always would have.
+  const legacyDraftKey = `ifc.draft.${site}|${iso}`;
 
   // Changes not on the server yet, for one site and day. A ref, not state: the
   // save in flight compares against it to know which of them it carried. Each
@@ -184,17 +217,51 @@ function MealCountScreen() {
   const hasPending = (pending = pendingRef.current) =>
     pending.marks.size > 0 || pending.timeIn !== undefined || pending.timeOut !== undefined;
 
+  const warnStorage = () => {
+    if (storageWarnedRef.current) return;
+    storageWarnedRef.current = true;
+    toast.error(STORAGE_FAILED.title, { description: STORAGE_FAILED.description });
+  };
+
   const persistPending = (pending = pendingRef.current) => {
     if (!hasPending(pending)) {
       clearDraft(pending.key);
       return;
     }
-    writeDraft(pending.key, {
+    const ok = writeDraft(pending.key, {
       marks: [...pending.marks.entries()],
       timeIn: pending.timeIn,
       timeOut: pending.timeOut,
       savedAt: Date.now(),
     });
+    if (!ok) warnStorage();
+  };
+
+  // Writes the count's record on the phone. Its snapshot (the roster and meals
+  // as loaded) is kept from the first write: that is what "what changed" is
+  // measured against when the signal comes back.
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
+  const writeRecord = () => {
+    if (correcting || !trackedRef.current) return;
+    const existing = offlineCount(site, iso);
+    const ok = putOfflineCount({
+      site,
+      date: iso,
+      startedAt: existing?.startedAt ?? Date.now(),
+      roster: existing?.roster ?? startingRef.current?.roster ?? [],
+      dayMeals: existing?.dayMeals ?? startingRef.current?.dayMeals ?? null,
+      signature: strokesRef.current,
+      ...summarizeMarks(marksRef.current),
+    });
+    if (!ok) warnStorage();
+  };
+
+  // From now on this count is kept on the phone until it is sent.
+  const track = () => {
+    if (correcting || trackedRef.current) return;
+    trackedRef.current = true;
+    writeRecord();
   };
 
   const draftUrl = `/api/meal-count-drafts?site=${encodeURIComponent(site)}&date=${iso}`;
@@ -234,6 +301,16 @@ function MealCountScreen() {
       if (pending.timeOut === sent.timeOut) pending.timeOut = undefined;
       persistPending(pending);
       if (current()) warnedRef.current = false;
+      // Students another phone marked later than this one did: the server kept
+      // theirs, and this screen shows it instead of its own older tap.
+      const kept = Object.entries(res.data?.kept ?? {}).filter(([id]) => !pending.marks.has(id));
+      if (current() && kept.length) {
+        setMarks((prev) => {
+          const next = new Map(prev);
+          for (const [id, value] of kept) if (next.has(id)) next.set(id, { ...EMPTY_MARKS, ...value });
+          return next;
+        });
+      }
       if (hasPending(pending)) return flush(pending);
       if (current()) {
         setSavedInfo({ by: res.data.updatedByName, at: res.data.updatedAt });
@@ -249,6 +326,8 @@ function MealCountScreen() {
         // Somebody filed this day while these marks were being taken.
         pendingRef.current = newPending();
         clearDraft(pending.key);
+        removeOfflineCount(site, iso);
+        trackedRef.current = false;
         invalidate(ALL_MEALS_PATH);
         setBlocked({
           kind: 'submitted',
@@ -257,7 +336,10 @@ function MealCountScreen() {
         });
         return false;
       }
-      // Said once when saving stops working, not on every tap after that.
+      // Said once when saving stops working, not on every tap after that. A
+      // screen opened without signal says nothing: the strip at the top
+      // already does, and every tap is kept on the phone.
+      if (!err.status && offlineLoadRef.current) warnedRef.current = true;
       if (!warnedRef.current) {
         warnedRef.current = true;
         if (err.status === 401) {
@@ -275,6 +357,10 @@ function MealCountScreen() {
         }
       }
       setSaveState('unsent');
+      // The signal went halfway through the count: from here it is kept on the
+      // phone like one taken offline, so its signature survives the app being
+      // closed.
+      if (!err.status) track();
       // Only a lost connection is worth retrying on a timer: the signal comes
       // back by itself, a refusal from the server does not. Those wait for the
       // next tap.
@@ -300,9 +386,15 @@ function MealCountScreen() {
     setSaveState('idle');
     setSavedInfo(null);
     setDraftStripped([]);
+    offlineLoadRef.current = false;
+    trackedRef.current = false;
+    startingRef.current = null;
     // Cheap, and this is the only screen that writes drafts, so it is also the
     // only one that can be sure it is safe to throw the old ones away.
     pruneStaleDrafts();
+    if (!readDraft(draftKey) && readDraft(legacyDraftKey)) {
+      if (writeDraft(draftKey, readDraft(legacyDraftKey))) clearDraft(legacyDraftKey);
+    }
 
     if (correcting) {
       apiGet(`/api/meal-counts/detail?site=${encodeURIComponent(site)}&date=${iso}`)
@@ -360,16 +452,22 @@ function MealCountScreen() {
     Promise.all([
       // Short window: this read is the guard that tells the user the day is
       // closed or already filed before they mark 250 students.
+      // Without signal, these three answer with what the phone kept the last
+      // time it had one (STOIC-2771).
       cachedGet(ALL_MEALS_PATH, { maxAge: 15_000 }),
-      apiGet(`/api/students/roster?site=${encodeURIComponent(site)}`),
+      offlineRead(`/api/students/roster?site=${encodeURIComponent(site)}`),
       // Only for the times the form starts with: if it fails, the form still
       // opens and the site types them, as it always could.
-      apiGet(`/api/sites/data?site=${encodeURIComponent(site)}`).catch(() => null),
+      offlineRead(`/api/sites/data?site=${encodeURIComponent(site)}`)
+        .then((res) => res.value)
+        .catch(() => null),
       // What was saved for later on any device. Without signal the form still
       // opens with what this device kept.
       iso <= today ? apiGet(draftUrl).catch(() => null) : Promise.resolve(null),
     ])
-      .then(([all, rows, siteInfo, saved]) => {
+      .then(([all, rosterRead, siteInfo, saved]) => {
+        const rows = rosterRead.value;
+        offlineLoadRef.current = rosterRead.saved;
         const siteData = all?.[site];
         const open = siteData?.validDates?.[iso];
         const alreadySubmitted = (siteData?.excludedDates ?? []).includes(iso) || Boolean(saved?.submitted);
@@ -379,6 +477,7 @@ function MealCountScreen() {
           // finished. Left behind, it was storage that could never be read
           // again: this branch returns before anything looks at a draft.
           clearDraft(draftKey);
+          removeOfflineCount(site, iso);
           setBlocked({
             kind: 'submitted',
             title: 'This count was already submitted',
@@ -405,6 +504,12 @@ function MealCountScreen() {
 
         setDayMeals(mealsOrAll(open));
         setRoster(rows);
+
+        // A count loaded without signal is kept on the phone from its first
+        // mark (STOIC-2771), and so is one already kept from before.
+        const record = offlineCount(site, iso);
+        trackedRef.current = Boolean(record);
+        startingRef.current = { roster: rows.map((row) => ({ id: row.id, name: row.name })), dayMeals: open };
 
         // What a fresh form starts with: the hours an administrator set for the
         // site, else the hours of its last count, else the old default. Sites
@@ -455,6 +560,10 @@ function MealCountScreen() {
           }
           if (local?.timeIn !== undefined) pending.timeIn = local.timeIn;
           if (local?.timeOut !== undefined) pending.timeOut = local.timeOut;
+          // Keep each unsent tap's time: it decides against another phone.
+          for (const [id, value] of pending.marks) {
+            if (localMarks[id]?.at != null) pending.marks.set(id, { ...value, at: localMarks[id].at });
+          }
           if (hasPending()) queueSave();
           else setSaveState('saved');
         } else {
@@ -470,9 +579,31 @@ function MealCountScreen() {
           setTimeIn(server?.timeIn || initial.timeIn);
           setTimeOut(server?.timeOut || initial.timeOut);
         }
+
+        // The signature it was signed with comes back, unless marks were taken
+        // off on the way: then it is a different count, signed again.
+        let strokes = record?.signature ?? null;
+        if (strokes && (rebuilt.gone > 0 || rebuilt.stripped.length > 0)) {
+          strokes = null;
+          putOfflineCount({ ...record, signature: null });
+          toast.warning('Sign the count again', {
+            description: 'Some marks were taken off since you signed it.',
+          });
+        }
+        strokesRef.current = strokes;
+        setInitialStrokes(strokes);
+        setSignatureKey((key) => key + 1);
       })
-      .catch((err) => setLoadError(err.message));
+      .catch((err) =>
+        setLoadError(
+          isConnectionError(err)
+            ? 'This site is not saved on this phone yet. Open it once with a connection and it will work without one.'
+            : err.message
+        )
+      );
   };
+  const loadRef = useRef(load);
+  loadRef.current = load;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [site, iso, correcting, today, draftKey]);
@@ -529,7 +660,9 @@ function MealCountScreen() {
       if (key === 'att') updated = value ? { ...current, att: true } : { ...EMPTY_MARKS };
       else updated = { ...current, [key]: value, att: value ? true : current.att };
       next.set(studentId, updated);
-      pendingRef.current.marks.set(studentId, updated);
+      // With the time of the tap: when two phones marked the same student, the
+      // later tap is the one that stands (STOIC-2771).
+      pendingRef.current.marks.set(studentId, { ...updated, at: Date.now() });
       return next;
     });
     queueSaveRef.current();
@@ -540,10 +673,14 @@ function MealCountScreen() {
   // lands it is written to this device, after the tap has been applied.
   const queueSaveRef = useRef(() => {});
   queueSaveRef.current = () => {
-    if (!correcting) queueSave();
+    if (correcting) return;
+    // A count opened without signal is kept on the phone from its first mark.
+    if (offlineLoadRef.current) track();
+    queueSave();
   };
   useEffect(() => {
     if (!correcting && roster && hasPending()) persistPending();
+    if (!correcting && roster) writeRecord();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marks, timeIn, timeOut, correcting, roster]);
 
@@ -553,7 +690,7 @@ function MealCountScreen() {
     else setTimeOut(value);
     if (correcting) return;
     pendingRef.current[which === 'in' ? 'timeIn' : 'timeOut'] = value;
-    queueSave();
+    queueSaveRef.current();
   };
 
   // What another phone saved shows up here when this screen is looked at again,
@@ -570,6 +707,8 @@ function MealCountScreen() {
     }
     if (res.submitted) {
       clearDraft(draftKey);
+      removeOfflineCount(site, iso);
+      trackedRef.current = false;
       invalidate(ALL_MEALS_PATH);
       setBlocked({
         kind: 'submitted',
@@ -602,7 +741,12 @@ function MealCountScreen() {
     const onVisible = () => {
       if (document.visibilityState === 'visible') pullSavedRef.current();
     };
-    const onOnline = () => flushRef.current();
+    // The signal is back. A screen that opened with what the phone kept loads
+    // again once its marks are up, so what changed meanwhile shows here.
+    const onOnline = async () => {
+      const sent = await flushRef.current();
+      if (sent && offlineLoadRef.current) loadRef.current();
+    };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     return () => {
@@ -641,6 +785,8 @@ function MealCountScreen() {
     if (inFlightRef.current) await inFlightRef.current;
     await apiDelete(draftUrl);
     clearDraft(draftKey);
+    removeOfflineCount(site, iso);
+    trackedRef.current = false;
     setSavedInfo(null);
     setSaveState('idle');
     setDraftStripped([]);
@@ -669,7 +815,7 @@ function MealCountScreen() {
         const current = next.get(student.id);
         const updated = { ...current, [key]: !allOn };
         next.set(student.id, updated);
-        pendingRef.current.marks.set(student.id, updated);
+        pendingRef.current.marks.set(student.id, { ...updated, at: Date.now() });
       }
       return next;
     });
@@ -730,6 +876,14 @@ function MealCountScreen() {
       goToFirstMissing('time out');
       return;
     }
+    // Without signal the count is kept, signature and all, and nothing is sent
+    // (STOIC-2771). Sending only ever happens with the data up to date.
+    if (!correcting && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      track();
+      writeRecord();
+      toast.error(NEEDS_CONNECTION.title, { description: NEEDS_CONNECTION.description });
+      return;
+    }
     setSubmitting(true);
     const rows = roster.map((student) => toRow(student, marks.get(student.id)));
 
@@ -767,15 +921,23 @@ function MealCountScreen() {
       clearTimeout(saveTimerRef.current);
       pendingRef.current = newPending();
       clearDraft(draftKey);
+      trackedRef.current = false;
+      removeOfflineCount(site, iso);
       setDirty(false);
       toast.success(`Meal count submitted for ${dateLabel(iso)}`);
       router.push(`/counts/${iso}?site=${encodeURIComponent(site)}`);
     } catch (err) {
-      // A site on a weak connection needs to know the marks are still here.
-      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      toast.error(offline ? 'No connection' : err.message, {
-        description: 'Everything you marked is saved on this device. Try again when you have signal.',
-      });
+      // The signal went on the way: the count is kept like one taken offline,
+      // so its signature survives the app being closed.
+      if (!correcting && isConnectionError(err)) {
+        track();
+        writeRecord();
+        toast.error(NEEDS_CONNECTION.title, { description: NEEDS_CONNECTION.description });
+      } else {
+        toast.error(err.message, {
+          description: 'Everything you marked is saved on this device. Try again when you have signal.',
+        });
+      }
       setSubmitting(false);
     }
   };
@@ -1127,11 +1289,18 @@ function MealCountScreen() {
                 content was the same word again. */}
             <SectionLabel>Signature</SectionLabel>
             <SignatureField
+              key={signatureKey}
+              initialStrokes={initialStrokes}
               invalid={attempted && !signed}
               onChange={(getter) => {
                 getSignature.current = getter;
                 setSigned(Boolean(getter));
                 if (getter) setDirty(true);
+              }}
+              onStrokes={(strokes) => {
+                strokesRef.current = strokes;
+                if (strokes && (offlineLoadRef.current || navigator.onLine === false)) track();
+                writeRecord();
               }}
             />
           </section>

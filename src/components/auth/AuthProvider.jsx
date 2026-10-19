@@ -136,7 +136,7 @@ export function AuthProvider({ children }) {
         description={`${unsentOnLogOut === 1 ? 'It was' : 'They were'} taken without a connection.`}
         consequences={[
           `${unsentOnLogOut === 1 ? 'It stays' : 'They stay'} on this phone for 7 days and ${unsentOnLogOut === 1 ? 'comes' : 'come'} back when you sign in again.`,
-          'Nobody else who signs in on this phone sees them.',
+          `Nobody else who signs in on this phone sees ${unsentOnLogOut === 1 ? 'it' : 'them'}.`,
         ]}
         confirmLabel="Log out"
         tone="warning"

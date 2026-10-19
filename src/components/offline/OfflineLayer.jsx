@@ -131,8 +131,8 @@ function OfflineStrip() {
 // --- The sheet when the signal comes back -------------------------------------
 
 // Cleared when the connection drops, so a count taken in the next stretch
-// without signal is shown when it comes back. "Later" holds it until then, or
-// until the app is opened again.
+// without signal is shown when it comes back, and when the account signs out.
+// "Later" holds it until one of those, or until the app is opened again.
 let reviewedThisLoad = false;
 
 const MEAL_WORDS = { brk: 'breakfast', lunch: 'lunch', snk: 'snack', sup: 'supper' };
@@ -265,7 +265,12 @@ function ReturnSheet() {
       reviewedThisLoad = false;
     };
     window.addEventListener('offline', reset);
-    return () => window.removeEventListener('offline', reset);
+    return () => {
+      window.removeEventListener('offline', reset);
+      // The sheet goes when the account signs out. Whoever signs in next, the
+      // same person included, is shown what they left pending.
+      reset();
+    };
   }, []);
 
   useEffect(() => {

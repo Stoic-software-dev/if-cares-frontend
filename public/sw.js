@@ -126,8 +126,8 @@ async function warmPages(pages) {
   let complete = true;
 
   for (const page of pages) {
-    const response = await fetch(page, { credentials: 'same-origin', cache: 'no-store' });
-    if (!response.ok || response.redirected) {
+    const response = await fetch(page, { credentials: 'same-origin', cache: 'no-store' }).catch(() => null);
+    if (!response || !response.ok || response.redirected) {
       complete = false;
       continue;
     }
@@ -139,8 +139,8 @@ async function warmPages(pages) {
   for (const asset of [...wanted]) {
     let response = await staticCache.match(asset);
     if (!response) {
-      response = await fetch(asset);
-      if (!response.ok) {
+      response = await fetch(asset).catch(() => null);
+      if (!response || !response.ok) {
         complete = false;
         continue;
       }
@@ -151,8 +151,9 @@ async function warmPages(pages) {
       for (const font of assetsIn(await response.clone().text())) {
         wanted.add(font);
         if (!(await staticCache.match(font))) {
-          const fontResponse = await fetch(font);
-          if (fontResponse.ok) await staticCache.put(font, fontResponse);
+          const fontResponse = await fetch(font).catch(() => null);
+          if (fontResponse?.ok) await staticCache.put(font, fontResponse);
+          else complete = false;
         }
       }
     }
@@ -169,10 +170,11 @@ async function warmPages(pages) {
 async function warmMenus(files) {
   const cache = await caches.open(MENUS);
   const wanted = new Set(files.map((file) => new URL(file, self.location.origin).href));
+  // One file that fails does not stop the others.
   for (const file of wanted) {
     if (await cache.match(file)) continue;
-    const response = await fetch(file, { credentials: 'same-origin' });
-    if (response.ok) await cache.put(file, response);
+    const response = await fetch(file, { credentials: 'same-origin' }).catch(() => null);
+    if (response?.ok) await cache.put(file, response).catch(() => {});
   }
   for (const request of await cache.keys()) {
     if (!wanted.has(request.url)) await cache.delete(request);
@@ -182,11 +184,10 @@ async function warmMenus(files) {
 self.addEventListener('message', (event) => {
   const message = event.data || {};
   if (message.type === 'warm') {
-    event.waitUntil(
-      Promise.all([warmPages(message.pages || []), warmMenus(message.files || [])]).catch(() => {
-        // Half warmed: the next open with signal finishes it.
-      })
-    );
+    // allSettled: the browser may stop the worker as soon as this settles, so
+    // the menus failing must not end it while the pages are still being kept.
+    // Half warmed is fine: the next open with signal finishes it.
+    event.waitUntil(Promise.allSettled([warmPages(message.pages || []), warmMenus(message.files || [])]));
   } else if (message.type === 'clear-menus') {
     event.waitUntil(caches.delete(MENUS));
   }

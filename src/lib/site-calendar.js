@@ -1,4 +1,6 @@
-import { ymdToUtcDate, dateToYmd } from '@/lib/dates';
+// Relative, not `@/`: scripts/calendar-audit.mjs fills calendars with this same
+// generator, and node outside Next cannot resolve the alias.
+import { ymdToUtcDate, dateToYmd } from './dates.js';
 
 // Monday first, matching the calendar screen and the weekly template keys.
 export const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];

@@ -1,5 +1,8 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { patternFromServed, MIN_DAYS as DEFAULT_MIN_DAYS } from '../src/lib/served-pattern.mjs';
+import { generateServiceDays } from '../src/lib/site-calendar.js';
+import { ymdToUtcDate } from '../src/lib/dates.js';
 
 // Can every site file a count tomorrow?
 //
@@ -10,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 // the API answers "This date is not available for meal counts" - so a site with
 // an empty calendar cannot work at all the morning after the Sheets are frozen.
 //
-// Nothing here writes. It reports which sites are empty ahead and proposes the
+// Without --fill nothing here writes. It reports which sites are empty ahead and proposes the
 // weekly pattern each one actually served, so filling the calendar in is a
 // review rather than a guess. Exits 1 when a site would be unable to file, so it
 // can gate the cutover the way db:reconcile does.
@@ -19,10 +22,42 @@ import { PrismaClient } from '@prisma/client';
 // imported days carry all four meals as false, because the flags did not survive
 // the export. What each site really served is in the 369,000 student rows that
 // did.
+//
+// --fill writes what it proposes, for the sites that have no day ahead and do
+// have a pattern:
+//
+//   node scripts/calendar-audit.mjs --since=2026-08-01 --min-days=2 --fill --from=2026-10-27 --to=2026-12-18
+//
+// --since reads the pattern from that date on instead of the last year, so a
+// site that changed its days this cycle is described by this cycle. The site
+// keeps a template it already has, and its program cycle is set only where it
+// is empty or ends sooner, so the calendar screen's "Generate missing days"
+// keeps working from there. Days are only added, never removed or rewritten:
+// running it twice adds nothing the second time.
 
 const prisma = new PrismaClient();
 
-const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const args = process.argv.slice(2);
+const argValue = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) || null;
+const FILL = args.includes('--fill');
+const SINCE = argValue('since');
+const FROM = argValue('from');
+const TO = argValue('to');
+// How many times a weekday has to show up to count as a habit. Three fits a
+// year of history; with a month or two, a site that opens every Monday may show
+// only two, and a missing day blocks filing while an extra one only shows as
+// pending. So a short --since wants a lower bar.
+const MIN_DAYS = argValue('min-days') === null ? DEFAULT_MIN_DAYS : Number(argValue('min-days'));
+if (!Number.isInteger(MIN_DAYS) || MIN_DAYS < 1) {
+  console.error('--min-days takes a whole number, 1 or more.');
+  process.exit(1);
+}
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+if ([SINCE, FROM, TO].some((v) => v && !YMD.test(v)) || (FILL && (!FROM || !TO || FROM > TO))) {
+  console.error('Dates go as YYYY-MM-DD, and --fill needs --from and --to, in that order.');
+  process.exit(1);
+}
+
 const LABEL = { sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat' };
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const MEALS = ['brk', 'lunch', 'snk', 'sup'];
@@ -31,8 +66,6 @@ const SHORT = { brk: 'B', lunch: 'L', snk: 'S', sup: 'P' };
 // A full school year back, so a site that only runs a term is still described by
 // the term it ran.
 const LOOKBACK_DAYS = 400;
-// A weekday seen fewer times than this in a year is an exception, not a habit.
-const MIN_DAYS = 3;
 
 const pad = (value, width) => String(value).padEnd(width);
 
@@ -46,10 +79,65 @@ function describe(template) {
   return parts.join(', ');
 }
 
+// Only sites that cannot file and have a pattern to fill from: a site that
+// already has days ahead was set up by someone, and one without history is a
+// question for IF Cares, not a guess.
+async function fill(sites, ahead, patterns) {
+  const from = ymdToUtcDate(FROM);
+  const to = ymdToUtcDate(TO);
+  console.log(`Llenando el calendario del ${FROM} al ${TO}:`);
+  let filledSites = 0;
+  let addedDays = 0;
+
+  for (const site of sites) {
+    if ((ahead.get(site.id) ?? 0) > 0) continue;
+    const configured = Object.keys(site.weeklyTemplate ?? {}).length > 0;
+    const template = configured ? site.weeklyTemplate : patterns.get(site.id);
+    if (!template) continue;
+
+    // A site whose cycle starts later than --from opens when its cycle says.
+    const start = site.programStart && site.programStart > from ? site.programStart : from;
+    const wanted = generateServiceDays({ programStart: start, programEnd: to, weeklyTemplate: template });
+    const existing = await prisma.serviceDay.findMany({
+      where: { siteId: site.id, date: { gte: start, lte: to } },
+      select: { date: true },
+    });
+    const have = new Set(existing.map((day) => day.date.toISOString().slice(0, 10)));
+    const missing = wanted.filter((day) => !have.has(day.date));
+
+    await prisma.$transaction([
+      prisma.site.update({
+        where: { id: site.id },
+        data: {
+          ...(configured ? {} : { weeklyTemplate: template }),
+          ...(site.programStart ? {} : { programStart: from }),
+          ...(site.programEnd && site.programEnd >= to ? {} : { programEnd: to }),
+        },
+      }),
+      prisma.serviceDay.createMany({
+        data: missing.map((day) => ({
+          siteId: site.id,
+          date: ymdToUtcDate(day.date),
+          brk: day.brk,
+          lunch: day.lunch,
+          snk: day.snk,
+          sup: day.sup,
+        })),
+        skipDuplicates: true,
+      }),
+    ]);
+    filledSites++;
+    addedDays += missing.length;
+    console.log(`  ${site.name.slice(0, 45).padEnd(46)}+${missing.length} días  ${describe(template)}`);
+  }
+  console.log(`${filledSites} sitios, ${addedDays} días agregados.\n`);
+}
+
 async function main() {
   const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
-  const since = new Date(today);
+  let since = new Date(today);
   since.setUTCDate(since.getUTCDate() - LOOKBACK_DAYS);
+  if (SINCE) since = ymdToUtcDate(SINCE);
 
   const sites = await prisma.site.findMany({
     where: { active: true },
@@ -83,21 +171,27 @@ async function main() {
      group by 1, 2
   `;
 
-  const patterns = new Map();
+  const rowsBySite = new Map();
   for (const row of served) {
-    const key = WEEKDAYS[row.dow];
-    if (row.days < MIN_DAYS) continue;
-    const meals = {};
-    let serves = false;
-    for (const meal of MEALS) {
-      // Served on more than half the days this site opened on this weekday.
-      meals[meal] = row[meal] > row.days / 2;
-      if (meals[meal]) serves = true;
+    if (!rowsBySite.has(row.site_id)) rowsBySite.set(row.site_id, []);
+    rowsBySite.get(row.site_id).push(row);
+  }
+  const patterns = new Map();
+  for (const [siteId, rows] of rowsBySite) {
+    const template = patternFromServed(rows, { minDays: MIN_DAYS });
+    if (Object.keys(template).length) patterns.set(siteId, template);
+  }
+
+  if (FILL) {
+    await fill(sites, ahead, patterns);
+    ahead.clear();
+    for (const row of await prisma.serviceDay.groupBy({
+      by: ['siteId'],
+      where: { date: { gte: today } },
+      _count: { _all: true },
+    })) {
+      ahead.set(row.siteId, row._count._all);
     }
-    if (!serves) continue;
-    const template = patterns.get(row.site_id) ?? {};
-    template[key] = meals;
-    patterns.set(row.site_id, template);
   }
 
   const report = sites.map((site) => ({
@@ -129,6 +223,7 @@ async function main() {
     );
   }
 
+  if (SINCE) console.log(`\nPatrón leído de los counts desde ${SINCE}.`);
   console.log('\nB desayuno, L almuerzo, S merienda, P cena. Leído de los counts reales de');
   console.log(`cada sitio en los últimos ${LOOKBACK_DAYS} días: una comida entra cuando se sirvió`);
   console.log('en más de la mitad de los días que el sitio abrió ese día de la semana.');

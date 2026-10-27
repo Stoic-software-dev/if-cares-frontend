@@ -8,6 +8,14 @@
 //   node scripts/import-history.mjs --site="2025/2026 TX BGC COOKE"
 //   node scripts/import-history.mjs --from-snapshots        # offline, from saved JSON
 //   node scripts/import-history.mjs --resume                # snapshot if saved, else fetch
+//   node scripts/import-history.mjs --since=2026-10-01      # only the days from that date on
+//
+// --since fetches only the months that reach that date and imports only its
+// days, so the final runs before the switch take minutes instead of hours. Its
+// snapshots go to their own folder, one per day it runs: the full ones in
+// migration-data/history are
+// what db:reconcile compares against, and a partial file there would hide the
+// older months from it.
 //
 // Rules:
 // - Tab names (M/D/YYYY) are the authoritative dates — never timezone math.
@@ -18,6 +26,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { toCanonicalTime } from '../src/lib/dates.js';
+import { tabNameToYmd, monthsToFetch, datesSince } from '../src/lib/migration-window.mjs';
 
 try {
   process.loadEnvFile();
@@ -33,7 +42,17 @@ const ONLY_SITE = args.find((a) => a.startsWith('--site='))?.slice('--site='.len
 
 const GAS = process.env.GAS_BASE_URL;
 const KEY = process.env.GAS_EXPORT_KEY;
-const SNAP_DIR = 'migration-data/history';
+const SINCE = args.find((a) => a.startsWith('--since='))?.slice('--since='.length) || null;
+if (SINCE && !/^\d{4}-\d{2}-\d{2}$/.test(SINCE)) {
+  console.error('--since takes a date as YYYY-MM-DD.');
+  process.exit(1);
+}
+// A --since run is repeated on purpose, days apart, to bring what the sites
+// loaded in between. Its folder carries the day it ran, so --resume only picks
+// up an interrupted run of the same day and never serves Monday last week's
+// copy of a site.
+const RUN_DAY = new Date().toISOString().slice(0, 10);
+const SNAP_DIR = SINCE ? `migration-data/history-since-${SINCE}-run-${RUN_DAY}` : 'migration-data/history';
 
 const warnings = [];
 const warn = (msg) => {
@@ -43,15 +62,6 @@ const warn = (msg) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const sanitize = (name) => name.replace(/[\\/:*?"<>|]/g, '_');
-
-function tabNameToYmd(tabName) {
-  const name = tabName.trim();
-  const slashed = name.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (slashed) return `${slashed[3]}-${slashed[1].padStart(2, '0')}-${slashed[2].padStart(2, '0')}`;
-  const compact = name.match(/^(\d{2})(\d{2})(\d{4})$/); // MMDDYYYY
-  if (compact) return `${compact[3]}-${compact[1]}-${compact[2]}`;
-  return null;
-}
 
 async function gasExportGet(params) {
   const url = `${GAS}?${new URLSearchParams({ type: 'exportHistory', key: KEY, ...params })}`;
@@ -76,11 +86,6 @@ async function gasExportGet(params) {
   return null;
 }
 
-function tabMonthKey(tabName) {
-  const ymd = tabNameToYmd(tabName);
-  return ymd ? `${Number(ymd.slice(5, 7))}/${ymd.slice(0, 4)}` : null;
-}
-
 // GAS caps one execution at ~6 minutes and a full-year site exceeds it, so:
 // list the dated tabs first, then pull the data one month at a time.
 async function fetchSiteHistory(siteName) {
@@ -90,7 +95,7 @@ async function fetchSiteHistory(siteName) {
   } catch (error) {
     throw new Error(`exportHistory listing failed for "${siteName}": ${error.message}`);
   }
-  const months = [...new Set((listing.tabs || []).map(tabMonthKey).filter(Boolean))];
+  const months = monthsToFetch(listing.tabs, SINCE);
 
   const merged = {
     result: 'success',
@@ -159,6 +164,7 @@ async function importSite(prisma, site, data) {
   let createdCounts = 0;
   let completedStubs = 0;
   let skippedApp = 0;
+  let skippedWorked = 0;
   let entryRows = 0;
 
   for (const [tabName, day] of Object.entries(data.dates || {})) {
@@ -195,12 +201,31 @@ async function importSite(prisma, site, data) {
       // new one, which is the point of voiding.
       const existing = await tx.mealCount.findFirst({
         where: { siteId: site.id, date, voidedAt: null },
-        select: { id: true, source: true },
+        select: { id: true, source: true, approvedAt: true, _count: { select: { corrections: true } } },
       });
 
       if (existing && existing.source === 'APP') {
         skippedApp++;
         return; // post-cutover data always wins
+      }
+
+      // The import runs again right before the switch. What an admin already did
+      // in the app to an imported count is not undone by that second run: a
+      // correction or an approval stays, and a count they voided does not come
+      // back as a new one.
+      if (existing && (existing.approvedAt || existing._count.corrections > 0)) {
+        skippedWorked++;
+        return;
+      }
+      if (!existing) {
+        const voided = await tx.mealCount.findFirst({
+          where: { siteId: site.id, date, source: 'GAS_IMPORT', voidedAt: { not: null } },
+          select: { id: true },
+        });
+        if (voided) {
+          skippedWorked++;
+          return;
+        }
       }
 
       let countId;
@@ -236,7 +261,7 @@ async function importSite(prisma, site, data) {
     });
   }
 
-  return { createdCounts, completedStubs, skippedApp, entryRows };
+  return { createdCounts, completedStubs, skippedApp, skippedWorked, entryRows };
 }
 
 async function main() {
@@ -274,7 +299,8 @@ async function main() {
     }
   }
 
-  const grandTotal = { sites: 0, dates: 0, entries: 0, created: 0, completed: 0, skipped: 0 };
+  const grandTotal = { sites: 0, dates: 0, entries: 0, created: 0, completed: 0, skipped: 0, worked: 0 };
+  const failedSites = [];
 
   for (const item of siteList) {
     let data;
@@ -285,9 +311,20 @@ async function main() {
       data = JSON.parse(await readFile(`${SNAP_DIR}/${sanitize(item.name)}.json`, 'utf8'));
     } else {
       console.log(`▸ ${item.name} — fetching…`);
-      data = await fetchSiteHistory(item.name);
+      try {
+        data = await fetchSiteHistory(item.name);
+      } catch (error) {
+        // A site the 2.0 has and the Sheets do not (one created in the app) has
+        // nothing to import, and must not stop the sites after it.
+        warn(error.message);
+        failedSites.push(item.name);
+        continue;
+      }
       await writeFile(`${SNAP_DIR}/${sanitize(item.name)}.json`, JSON.stringify(data), 'utf8');
     }
+
+    // A month fetched for --since still brings the days before it.
+    data.dates = datesSince(data.dates, SINCE);
 
     const summary = summarizeSite(data);
     console.log(`  ${data.site}: ${summary.dates} dated tabs, ${summary.entries} student rows, ${summary.mismatches} totals mismatches`);
@@ -299,23 +336,30 @@ async function main() {
       const site = await prisma.site.findUnique({ where: { name: data.site } });
       if (!site) {
         warn(`site "${data.site}" not in DB — import skipped`);
+        failedSites.push(data.site);
         continue;
       }
       const res = await importSite(prisma, site, data);
-      console.log(`    → counts created: ${res.createdCounts}, stubs completed: ${res.completedStubs}, APP skipped: ${res.skippedApp}, entries: ${res.entryRows}`);
+      console.log(`    → counts created: ${res.createdCounts}, stubs completed: ${res.completedStubs}, APP skipped: ${res.skippedApp}, worked in the app skipped: ${res.skippedWorked}, entries: ${res.entryRows}`);
       grandTotal.created += res.createdCounts;
       grandTotal.completed += res.completedStubs;
       grandTotal.skipped += res.skippedApp;
+      grandTotal.worked += res.skippedWorked;
     }
   }
 
   if (prisma) await prisma.$disconnect();
 
   console.log(`\nTOTAL: ${grandTotal.sites} sites, ${grandTotal.dates} dates, ${grandTotal.entries} student rows` +
-    (PARSE_ONLY ? ' (parse only)' : `, ${grandTotal.created} counts created, ${grandTotal.completed} stubs completed, ${grandTotal.skipped} APP skipped`));
+    (PARSE_ONLY ? ' (parse only)' : `, ${grandTotal.created} counts created, ${grandTotal.completed} stubs completed, ${grandTotal.skipped} APP skipped, ${grandTotal.worked} worked in the app skipped`));
   console.log(`${warnings.length} warning(s).`);
   for (const w of warnings.slice(0, 40)) console.log(`  - ${w}`);
   if (warnings.length > 40) console.log(`  … and ${warnings.length - 40} more`);
+  // Skipped, not imported: a run that missed a site is not a clean run.
+  if (failedSites.length) {
+    console.log(`\n${failedSites.length} site(s) could not be imported:${failedSites.join(', ')}`);
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

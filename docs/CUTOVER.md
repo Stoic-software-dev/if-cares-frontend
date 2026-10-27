@@ -113,6 +113,38 @@ npm run db:reconcile         # sitio x mes, Sheets contra base
 npm run db:calendar          # que todo sitio pueda cargar mañana
 ```
 
+Para el lanzamiento de noviembre de 2026 (STOIC-2826) se corrió así, y así se repite
+la mañana del corte para traer lo que los sitios cargaron en las Sheets mientras tanto:
+
+```
+node scripts/cleanup-test-data.mjs ...                       # primero: STOIC-2691, ver CLAUDE.md
+node scripts/import-from-gas.mjs --only=students             # rosters (~50 min)
+node scripts/import-history.mjs --since=2026-10-01           # counts desde esa fecha (~1 h)
+node scripts/calendar-audit.mjs --since=2026-08-01 --min-days=2 \
+  --fill --from=<mañana> --to=2026-12-18                      # días de servicio por delante
+```
+
+La limpieza va **antes** del import: un count de prueba cargado desde la app en una
+fecha que también está en las Sheets le gana al de las Sheets, y el import lo saltea.
+Borrado el de prueba, el import trae el real.
+
+`--since` trae solo los meses que llegan a esa fecha y guarda sus snapshots en
+`migration-data/history-since-<fecha>-run-<día de la corrida>/`, aparte de los completos
+de `migration-data/history/`, que son contra los que mide `db:reconcile`. Como la
+carpeta lleva el día, `--resume` solo retoma una corrida cortada ese mismo día: el
+lunes vuelve a pedir todo a las Sheets.
+
+Repetirlo no duplica nada: un día que ya se importó se reemplaza por lo que diga la
+Sheet. Salvo lo que un admin ya trabajó en la app sobre un count importado: si lo
+corrigió o lo aprobó, queda como está, y si lo anuló, no vuelve. La corrida lo cuenta
+como "worked in the app skipped". Un sitio que no se pudo leer o no existe en la base
+se avisa al final y la corrida sale con código 1.
+
+`--fill` llena solo los sitios sin un día por delante y con patrón: el que se lee de sus
+propios counts desde `--since`, o la plantilla semanal que ya tenga. Carga el ciclo del
+sitio (si estaba vacío o terminaba antes) y la plantilla, así "Generate missing days" de
+la ficha del sitio sigue desde ahí. No carga feriados: esos los marca IF Cares.
+
 `db:reconcile` compara días, filas y totales por comida, sitio por sitio y mes por mes,
 separando lo cargado por la app de lo anulado. **Sale con código 1 si hay una sola
 diferencia.** No se sigue con diferencias sin explicar.

@@ -72,8 +72,16 @@ va a un servicio nuevo con su propia base de Supabase:
   (id 3a8aab2c-2b63-4be0-9ed4-43d822bc6992), con healthcheck `/api/health` y las
   variables por referencia a `if-cares-frontend` (mails desviados incluidos). Faltan, las
   pone el dev en el panel: `DATABASE_URL` y `DIRECT_URL` (las de `.env.prod.local`),
-  `AUTH_SECRET` y `REMINDERS_SECRET` nuevos. Después, el dev sube v2-mock a `main` y se
-  conecta la fuente a `main`.
+  `AUTH_SECRET` y `REMINDERS_SECRET` nuevos (cargadas el 28-oct). Publicado en
+  `ifcares-v2-prod-production.up.railway.app`, **fijado al commit 21afb11** de v2-mock:
+  el dev pidió que la app vieja quede intacta hasta el lunes, y `main` todavía es la
+  vieja (el servicio `ifcares` la sigue, así que subir la 2.0 a `main` antes del lunes
+  la reemplaza sin configuración). Health 200 con base. Sin cuentas de prueba en
+  producción: lo verifica el dev con su admin real.
+- **Lunes, después de los imports**: el dev sube v2-mock a `main` (main tiene 3 commits de
+  STOIC-2470 que v2-mock no), se conecta `ifcares-v2-prod` a la rama `main` sin commit
+  fijo, se le pasa el dominio `ifcares-regularyear-prod.up.railway.app` y se apaga
+  `ifcares` sin borrarlo.
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.
 

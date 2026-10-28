@@ -42,7 +42,8 @@ sin nadie que cargue) y no traía una contraseña cambiada en las Sheets despué
 
 Rastro, todo para la limpieza del lunes: sitio `ZZ QA R8 Site` (desactivado), usuarios
 `zz.qa.r8.*` (desactivados), alumnos `ZZ QA R8 *` en Training Only, requests `ZZ QA R8`,
-counts de Training Only del 27 (uno anulado y otro activo) y del 28, dos claims TX 2026-06
+counts de Training Only del 27 (uno anulado y otro activo) y del 28 (el de la ronda anulado con
+motivo `ZZ QA R9`, y uno nuevo aprobado, cargado en la publicada a 360 px), dos claims TX 2026-06
 (uno firmado por "ZZ QA R8 Signer") con sus PDFs en Drive, `Consolidated Reports/2026-06`.
 
 ## Falta

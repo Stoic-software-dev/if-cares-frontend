@@ -116,8 +116,13 @@ npm run db:calendar          # que todo sitio pueda cargar mañana
 Para el lanzamiento de noviembre de 2026 (STOIC-2826) se corrió así, y así se repite
 la mañana del corte para traer lo que los sitios cargaron en las Sheets mientras tanto:
 
+Producción es el schema `regular_year_prod` (ver CLAUDE.md): cada comando corre después
+de `set -a && . ./.env.prod.local && set +a`, en la misma terminal. Sin eso va a la de
+prueba. La limpieza ya se corrió el 28-oct sobre producción; se repite solo si alguien
+probó ahí después.
+
 ```
-node scripts/cleanup-test-data.mjs ...                       # primero: STOIC-2691, ver CLAUDE.md
+node scripts/cleanup-test-data.mjs ...                       # solo si se probó en producción
 node scripts/import-master.mjs --dry-run                     # con master.xlsx bajado ese día
 node scripts/import-master.mjs                               # usuarios, sus sitios y contraseñas
 node scripts/import-from-gas.mjs --only=students             # rosters (~50 min)

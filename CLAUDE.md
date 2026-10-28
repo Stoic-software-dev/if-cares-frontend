@@ -21,6 +21,14 @@ Tablero: STOIC-8
   una conexión sin `regular_year` en el search path y falla con "relation does
   not exist", de forma intermitente. Las consultas de Prisma no tienen el
   problema porque califican el schema.
+- **Producción de la 2.0 vive en la misma base, en el schema `regular_year_prod`**
+  (desde el 28-oct-2026; el plan gratis de Supabase no deja crear otro proyecto).
+  `regular_year` es la de prueba. Las direcciones de producción están en
+  `.env.prod.local` (no se commitea): un script corre contra producción con
+  `set -a && . ./.env.prod.local && set +a && node scripts/...`, y sin eso va a la de
+  prueba. Una consulta a mano en un script toma el schema de la URL
+  (`src/lib/db-schema.mjs`), nunca lo escribe. `regular_year_prod` sí lleva el
+  registro de migraciones: ahí una migración nueva va con `prisma migrate deploy`.
 - Tests: `npm test` (node --test sobre `tests/*.test.mjs`). Lo que se testea
   vive en módulos `.mjs` sin imports con `@/`, para que node los cargue solo.
 

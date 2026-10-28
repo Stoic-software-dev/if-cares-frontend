@@ -46,6 +46,33 @@ counts de Training Only del 27 (uno anulado y otro activo) y del 28 (el de la ro
 motivo `ZZ QA R9`, y uno nuevo aprobado, cargado en la publicada a 360 px), dos claims TX 2026-06
 (uno firmado por "ZZ QA R8 Signer") con sus PDFs en Drive, `Consolidated Reports/2026-06`.
 
+## Producción aparte (decidido por el dev el 28-oct)
+
+La producción de hoy (servicio `ifcares` de Railway, rama `main`,
+`ifcares-regularyear-prod.up.railway.app`) es la app vieja y los sitios la usan. La 2.0
+va a un servicio nuevo con su propia base de Supabase:
+
+- Base: el plan gratis de Supabase no dejó crear otro proyecto, y el dev decidió un
+  schema aparte en el mismo, `regular_year_prod` (ver CLAUDE.md). Hecho el 28-oct:
+  migraciones con `migrate deploy` (estructura igual a la de prueba), copia de los datos
+  de `regular_year` (las 19 tablas con las mismas filas) y la limpieza de STOIC-2691
+  **sobre la copia**: 26 counts de la 2.0, 14 cuentas, 4 sitios de prueba, 15 alumnos,
+  20 pedidos de Training Only, 2 guardados y los 10 claims, con sus PDFs a la papelera
+  de Drive (en la de prueba esos 10 claims ya no abren). Quedaron los 8.006 counts
+  importados. Manifiesto en el scratchpad, `prod-cleanup-manifest.json`. La de prueba
+  quedó como estaba. **El lunes los imports corren contra producción**, con
+  `.env.prod.local`, y la limpieza no hace falta.
+- Servicio: `ifcares-v2-prod` en el proyecto `if-cares`, entorno production, rama
+  `main` (el dev sube v2-mock a main). Variables por referencia a `if-cares-frontend`,
+  salvo `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET` y `REMINDERS_SECRET`, propias.
+- Mails desviados (`MAIL_REDIRECT_TO`) hasta el lunes; mismas carpetas de Drive.
+- El lunes la 2.0 toma la dirección de la producción de hoy; la vieja queda apagada
+  sin borrar (es el rollback).
+- El 28-oct Railway tenía los deploys pausados ("Deploys have been paused
+  temporarily") y no se pudo crear el servicio.
+- Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
+  que no es la dirección de ningún servicio. Revisar antes del lunes.
+
 ## Falta
 
 - **Lunes 2-nov, antes de abrir**: la limpieza de STOIC-2691 y después repetir el

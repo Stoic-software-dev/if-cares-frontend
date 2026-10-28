@@ -17,7 +17,9 @@
  *     were tests there too;
  *   - the test sites, with their students, calendar and requests;
  *   - every consolidated report built so far, with its file in Drive;
- *   - every count saved for later.
+ *   - every count saved for later;
+ *   - on the real sites, the students the tests added (named "ZZ QA ...") and
+ *     every request filed on Training Only, the site the tests use.
  * The audit log is evidence and stays, pointing at rows that no longer exist.
  */
 import { writeFileSync, readFileSync } from 'node:fs';
@@ -31,6 +33,7 @@ try {
 
 const LEGACY_TEST_EMAILS = ['123@123.com', 'julio@julio.com', 'test@123.com', 'juanchosperoni@hotmail.comm'];
 const TEST_SITE_NAMES = ['Test Site', 'ZZ QA Sitio Vacio', 'ZZ QA Furioso Site'];
+const TRAINING_SITE = 'Training Only';
 
 const prisma = new PrismaClient();
 const args = process.argv.slice(2);
@@ -81,6 +84,17 @@ async function buildManifest() {
     orderBy: { createdAt: 'asc' },
   });
   const drafts = await prisma.mealCountDraft.findMany({ select: { id: true, date: true, site: { select: { name: true } } } });
+  const siteIds = sites.map((s) => s.id);
+  const students = await prisma.student.findMany({
+    where: { name: { startsWith: 'ZZ QA ' }, siteId: { notIn: siteIds } },
+    select: { id: true, name: true, site: { select: { name: true } } },
+    orderBy: { name: 'asc' },
+  });
+  const requests = await prisma.request.findMany({
+    where: { site: { name: TRAINING_SITE } },
+    select: { id: true, type: true, requestedByEmail: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  });
 
   // Deleting an account blanks it on whatever it touched. On the imported
   // history that would be worth knowing before, not after.
@@ -111,6 +125,13 @@ async function buildManifest() {
       signed: Boolean(r.signedAt),
     })),
     drafts: drafts.map((d) => ({ id: d.id, site: d.site.name, date: d.date.toISOString().slice(0, 10) })),
+    students: students.map((st) => ({ id: st.id, name: st.name, site: st.site.name })),
+    requests: requests.map((r) => ({
+      id: r.id,
+      type: r.type,
+      by: r.requestedByEmail,
+      date: r.createdAt.toISOString().slice(0, 10),
+    })),
   };
 }
 
@@ -132,6 +153,12 @@ function print(manifest) {
   for (const r of manifest.reports) console.log(`  ${r.fileName}${r.signed ? '  (signed)' : ''}`);
   console.log(`\nCounts saved for later (${manifest.drafts.length}):`);
   for (const d of manifest.drafts) console.log(`  ${d.date}  ${d.site}`);
+  console.log(`
+Test students on real sites (${manifest.students.length}):`);
+  for (const st of manifest.students) console.log(`  ${st.site}  ${st.name}`);
+  console.log(`
+Requests on ${TRAINING_SITE} (${manifest.requests.length}):`);
+  for (const r of manifest.requests) console.log(`  ${r.date}  ${r.type}  ${r.by}`);
 }
 
 async function apply(manifest) {
@@ -145,6 +172,13 @@ async function apply(manifest) {
   if (siteImported) throw new Error(`A listed site holds ${siteImported} imported counts. Nothing was deleted.`);
   const unlisted = await prisma.mealCount.count({ where: { siteId: { in: siteIds }, id: { notIn: countIds } } });
   if (unlisted) throw new Error(`A listed site has ${unlisted} counts filed after the list was made. List again.`);
+  // Manifests written before these two lists existed delete neither.
+  const studentIds = (manifest.students ?? []).map((st) => st.id);
+  const requestIds = (manifest.requests ?? []).map((r) => r.id);
+  const studentImported = await prisma.mealCountEntry.count({
+    where: { studentId: { in: studentIds }, mealCount: { source: 'GAS_IMPORT' } },
+  });
+  if (studentImported) throw new Error(`A listed student is on ${studentImported} imported count rows. Nothing was deleted.`);
 
   const before = await snapshot(prisma);
 
@@ -160,9 +194,11 @@ async function apply(manifest) {
           // before go-live, so any count saved for later is a test.
           drafts: (await tx.mealCountDraft.deleteMany({})).count,
           counts: (await tx.mealCount.deleteMany({ where: { id: { in: countIds } } })).count,
-          students: (await tx.student.deleteMany({ where: { siteId: { in: siteIds } } })).count,
+          students: (await tx.student.deleteMany({ where: { OR: [{ siteId: { in: siteIds } }, { id: { in: studentIds } }] } }))
+            .count,
           serviceDays: (await tx.serviceDay.deleteMany({ where: { siteId: { in: siteIds } } })).count,
-          requests: (await tx.request.deleteMany({ where: { siteId: { in: siteIds } } })).count,
+          requests: (await tx.request.deleteMany({ where: { OR: [{ siteId: { in: siteIds } }, { id: { in: requestIds } }] } }))
+            .count,
           sites: (await tx.site.deleteMany({ where: { id: { in: siteIds } } })).count,
           reports: (await tx.generatedReport.deleteMany({ where: { id: { in: manifest.reports.map((r) => r.id) } } }))
             .count,

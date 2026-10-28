@@ -14,8 +14,15 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import { PrismaClient } from '@prisma/client';
+import { schemaFromUrl } from '../src/lib/db-schema.mjs';
 
 const prisma = new PrismaClient();
+try {
+  process.loadEnvFile();
+} catch {
+  // .env optional
+}
+const SCHEMA = schemaFromUrl(process.env.DATABASE_URL);
 const asJson = process.argv.includes('--json');
 const findings = [];
 
@@ -42,8 +49,8 @@ add(
 // 2. The same name twice inside one site.
 const dupes = await prisma.$queryRawUnsafe(`
   SELECT s.name AS site, st.name AS student, COUNT(*)::int AS times
-  FROM regular_year."Student" st
-  JOIN regular_year."Site" s ON s.id = st."siteId"
+  FROM ${SCHEMA}."Student" st
+  JOIN ${SCHEMA}."Site" s ON s.id = st."siteId"
   GROUP BY s.name, LOWER(st.name), st.name
   HAVING COUNT(*) > 1
   ORDER BY COUNT(*) DESC, s.name

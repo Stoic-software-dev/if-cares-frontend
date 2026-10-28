@@ -1,8 +1,9 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { patternFromServed, MIN_DAYS as DEFAULT_MIN_DAYS } from '../src/lib/served-pattern.mjs';
 import { generateServiceDays } from '../src/lib/site-calendar.js';
 import { ymdToUtcDate } from '../src/lib/dates.js';
+import { schemaFromUrl } from '../src/lib/db-schema.mjs';
 
 // Can every site file a count tomorrow?
 //
@@ -35,6 +36,7 @@ import { ymdToUtcDate } from '../src/lib/dates.js';
 // running it twice adds nothing the second time.
 
 const prisma = new PrismaClient();
+const SCHEMA = Prisma.raw(schemaFromUrl(process.env.DATABASE_URL));
 
 const args = process.argv.slice(2);
 const argValue = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) || null;
@@ -163,8 +165,8 @@ async function main() {
            count(distinct case when e.lunch     then c.id end)::int     as lunch,
            count(distinct case when e.snack     then c.id end)::int     as snk,
            count(distinct case when e.supper    then c.id end)::int     as sup
-      from regular_year."MealCount" c
-      join regular_year."MealCountEntry" e on e."mealCountId" = c.id
+      from ${SCHEMA}."MealCount" c
+      join ${SCHEMA}."MealCountEntry" e on e."mealCountId" = c.id
      where c."voidedAt" is null
        and c."date" >= ${since}
      group by 1, 2

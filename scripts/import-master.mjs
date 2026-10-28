@@ -175,7 +175,13 @@ async function main() {
       };
       if (existing) {
         // never clobber a password the user already manages in v2
-        if (passwordHash && !choseInV2.has(existing.id)) data.passwordHash = passwordHash;
+        if (
+          passwordHash &&
+          !choseInV2.has(existing.id) &&
+          !(existing.passwordHash && (await bcrypt.compare(u.plainPassword, existing.passwordHash)))
+        ) {
+          data.passwordHash = passwordHash;
+        }
         // An account an administrator turned off in v2 stays off.
         await prisma.user.update({ where: { email: u.email }, data });
         updated++;
@@ -196,6 +202,9 @@ async function main() {
         warn(`state for unknown site "${s.name}" skipped`);
         continue;
       }
+      // An empty cell in the sheet is not a decision to take a site out of every
+      // claim: on 28-oct it cleared the TX/OK of 35 sites set in v2.
+      if (!s.state) continue;
       await prisma.site.update({ where: { id: site.id }, data: { state: s.state } });
       stated++;
     }
@@ -216,6 +225,8 @@ async function main() {
     for (const r of reminders) {
       const site = siteByName.get(r.name);
       if (!site) continue; // reminders list includes retired sites — silently skip
+      // A row without dates leaves the window set in v2 alone.
+      if (!r.start && !r.end) continue;
       await prisma.site.update({
         where: { id: site.id },
         data: {

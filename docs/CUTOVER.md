@@ -131,7 +131,9 @@ master que no se commitea (tiene las contraseñas en texto plano). La que había
 3-sep-2026: una cuenta creada o una contraseña cambiada en las Sheets después no
 llegaba. Se baja de nuevo la mañana del corte. Al repetirlo, la contraseña de la
 planilla pisa la de la 2.0 salvo en quien ya eligió una con un link de la 2.0, y una
-cuenta que un admin desactivó en la 2.0 sigue desactivada.
+cuenta que un admin desactivó en la 2.0 sigue desactivada. Una celda vacía de estado o
+de ventana de recordatorios no borra lo que la 2.0 ya tiene (el 28-oct borró el TX/OK de
+35 sitios y se restauró).
 
 La limpieza va **antes** del import: un count de prueba cargado desde la app en una
 fecha que también está en las Sheets le gana al de las Sheets, y el import lo saltea.

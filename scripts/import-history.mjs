@@ -27,6 +27,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { toCanonicalTime } from '../src/lib/dates.js';
 import { tabNameToYmd, monthsToFetch, datesSince } from '../src/lib/migration-window.mjs';
+import { mealsServedOn } from '../src/lib/served-pattern.mjs';
 
 try {
   process.loadEnvFile();
@@ -257,6 +258,17 @@ async function importSite(prisma, site, data) {
           data: rows.map((r) => ({ ...r, mealCountId: countId })),
         });
         entryRows += rows.length;
+      }
+
+      // The export carries no meal flags for the day, so the day is described
+      // by what its students got. Only a day still blank: one set up in the
+      // calendar keeps what it says.
+      const served = mealsServedOn(rows);
+      if (served.brk || served.lunch || served.snk || served.sup) {
+        await tx.serviceDay.updateMany({
+          where: { siteId: site.id, date, brk: false, lunch: false, snk: false, sup: false },
+          data: served,
+        });
       }
     });
   }

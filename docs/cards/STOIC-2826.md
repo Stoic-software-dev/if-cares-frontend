@@ -17,6 +17,15 @@ actividad quedan activos hasta que Kenya diga.
 - Copia previa de alumnos, sitios, días y counts de octubre: scratchpad de la sesión,
   `backup-before-2826.json` (fuera del repo).
 
+## Hecho el 28-oct
+
+- Recorrido con `qa.admin` y `qa.tester` sobre el build de producción en local. Apareció
+  que todo día importado mostraba sus comidas como "no se sirvió" (el export no trae
+  las comidas del día). El import ahora las deduce de las filas, y se completaron los
+  7.998 días ya importados. Lista de ids tocados (para revertir, volver las cuatro a
+  false): scratchpad, `backfill-day-meals-ids.json`.
+- Import desde el 27-oct corrido de prueba, igual que el lunes.
+
 ## Falta
 
 - **Lunes 2-nov, antes de abrir**: la limpieza de STOIC-2691 y después repetir el

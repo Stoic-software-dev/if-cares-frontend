@@ -43,8 +43,8 @@ npm run db:calendar
 ```
 
 Reporta qué sitios están vacíos y **propone la plantilla semanal de cada uno leída de sus
-propios counts** — no de las banderas de `ServiceDay`, que no sirven acá: el 89% de los
-días importados trae las cuatro comidas en `false`, no sobrevivieron al export. Sale
+propios counts**, no de las banderas de `ServiceDay`: el export no las traía, y las de
+los días importados salen de esos mismos counts. Sale
 limpio: BGC Cooke `Mon LS` y de martes a viernes `SP`, Churchill `Mon..Fri S`, y así. Sale
 con código 1 mientras quede un sitio sin días, así que sirve de compuerta.
 
@@ -139,6 +139,12 @@ Sheet. Salvo lo que un admin ya trabajó en la app sobre un count importado: si 
 corrigió o lo aprobó, queda como está, y si lo anuló, no vuelve. La corrida lo cuenta
 como "worked in the app skipped". Un sitio que no se pudo leer o no existe en la base
 se avisa al final y la corrida sale con código 1.
+
+El export no trae qué comidas servía cada día, así que el import las deduce de las
+filas: una comida se sirvió si al menos un alumno la recibió. Solo en un día que
+todavía no dice nada: el que está armado en el calendario queda como está. Sin eso,
+el detalle de cada día importado mostraba todas las comidas como "no se sirvió".
+Los 7.998 días importados antes de este cambio se completaron igual el 28-oct-2026.
 
 `--fill` llena solo los sitios sin un día por delante y con patrón: el que se lee de sus
 propios counts desde `--since`, o la plantilla semanal que ya tenga. Carga el ciclo del

@@ -18,10 +18,9 @@ import { ymdToUtcDate } from '../src/lib/dates.js';
 // review rather than a guess. Exits 1 when a site would be unable to file, so it
 // can gate the cutover the way db:reconcile does.
 //
-// The pattern is read from the counts, not from the ServiceDay flags: 89% of the
-// imported days carry all four meals as false, because the flags did not survive
-// the export. What each site really served is in the 369,000 student rows that
-// did.
+// The pattern is read from the counts, not from the ServiceDay flags: the export
+// carried no flags, and the imported days were given theirs from these same
+// student rows.
 //
 // --fill writes what it proposes, for the sites that have no day ahead and do
 // have a pattern:

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isRenderableSignature } from './signature';
+import { ageFromBirthdate, ymdToUtcDate } from './dates';
 
 export const REQUEST_TYPES = [
   'Sporks',
@@ -45,6 +46,13 @@ export const addStudentSchema = z
   .refine((data) => data.age !== undefined || data.birthdate, {
     message: 'Please enter either an age or a birthdate.',
     path: ['age'],
+  })
+  // A birthdate that gives no age - in the future, a day that does not exist,
+  // more than 120 years back - was stored as typed, with the age left empty,
+  // and the child went onto the claim with no age.
+  .refine((data) => !data.birthdate || (ymdToUtcDate(data.birthdate) && (data.age !== undefined || ageFromBirthdate(data.birthdate) !== null)), {
+    message: 'That birthdate is not possible.',
+    path: ['birthdate'],
   });
 
 export const editStudentSchema = z.object({

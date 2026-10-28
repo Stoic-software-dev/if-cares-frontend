@@ -6,8 +6,10 @@
 //   node scripts/import-master.mjs               # upserts into the DB
 //
 // Passwords: the sheet stores them in PLAINTEXT. They are bcrypt-hashed here so
-// every user keeps their current password at cutover. On re-runs, an existing
-// passwordHash is never overwritten (users who already changed it are safe).
+// every user keeps their current password at cutover. On re-runs the sheet's
+// password wins, except for users who already chose one in v2 through a link:
+// theirs is never overwritten. Re-run it with a fresh export right before the
+// switch, or a password changed in the Sheets since the last one stops working.
 
 import XLSX from 'xlsx';
 import bcrypt from 'bcryptjs';
@@ -63,10 +65,12 @@ function parseMaster() {
     }
     seenEmails.add(email);
 
+    // The old app checks `role === Admin` and treats everything else as a site
+    // user, so a row with the role cell empty signs in there as staff. Skipping
+    // it left eloiselundy@ and bgcc@ without an account in v2.
     const roleCode = Number(role);
     if (roleCode !== ROLES.Admin && roleCode !== ROLES.User) {
-      warn(`user "${email}": unknown role "${role}" — skipped`);
-      continue;
+      warn(`user "${email}": role "${role ?? ''}" is not Admin — imported as a site user, as the old app treats it`);
     }
 
     const assigned = String(assignedRaw ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -135,6 +139,14 @@ async function main() {
   try {
     const sites = await prisma.site.findMany({ select: { id: true, name: true } });
     const siteByName = new Map(sites.map((s) => [s.name, s]));
+    // Who already chose a password in v2, through a welcome or reset link. Only
+    // those keep the one they have: everyone else signs in with the sheet's, so
+    // a password changed in the Sheets after the last export still works.
+    const choseInV2 = new Set(
+      (await prisma.auditLog.findMany({ where: { action: 'auth.reset_password' }, select: { entityId: true } })).map(
+        (row) => row.entityId
+      )
+    );
 
     // Users
     let created = 0;
@@ -156,7 +168,6 @@ async function main() {
         lastname: u.lastname,
         role: u.role,
         allSites: u.allSites,
-        active: true,
         sites: {
           deleteMany: {},
           create: siteIds.map((siteId) => ({ siteId })),
@@ -164,12 +175,13 @@ async function main() {
       };
       if (existing) {
         // never clobber a password the user already manages in v2
-        if (!existing.passwordHash && passwordHash) data.passwordHash = passwordHash;
+        if (passwordHash && !choseInV2.has(existing.id)) data.passwordHash = passwordHash;
+        // An account an administrator turned off in v2 stays off.
         await prisma.user.update({ where: { email: u.email }, data });
         updated++;
       } else {
         await prisma.user.create({
-          data: { email: u.email, passwordHash, ...data, sites: { create: siteIds.map((siteId) => ({ siteId })) } },
+          data: { email: u.email, passwordHash, active: true, ...data, sites: { create: siteIds.map((siteId) => ({ siteId })) } },
         });
         created++;
       }

@@ -95,6 +95,10 @@ export const POST = handle(async (req) => {
       skipped.push({ line, name: row.name, reason: 'Needs an age or a birthdate.' });
       return;
     }
+    if (row.birthdate && (!ymdToUtcDate(row.birthdate) || (row.age === undefined && ageFromBirthdate(row.birthdate) === null))) {
+      skipped.push({ line, name: row.name, reason: 'That birthdate is not possible.' });
+      return;
+    }
 
     const key = row.name.toLowerCase();
     if (seenInFile.has(key)) {

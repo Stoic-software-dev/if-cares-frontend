@@ -26,11 +26,37 @@ actividad quedan activos hasta que Kenya diga.
   false): scratchpad, `backfill-day-meals-ids.json`.
 - Import desde el 27-oct corrido de prueba, igual que el lunes.
 
+## Ronda de testeo completa del 28-oct (octava, sobre 9e2ec36, local con build de producción)
+
+Sin agentes, con scripts en el scratchpad y Playwright. Verde: matriz de permisos (44 rutas x 5
+métodos x anónimo/staff/admin, cero 500), login y reset sin enumeración (los tiempos de
+"forgot" se midieron en la publicada: 917 ms los dos), ciclo del count completo con
+concurrencia, pedidos, alumnos, sitios, calendario, feriados, usuarios, auditoría, PDFs,
+claim con firma pública y revocación, menú publicado y a la papelera de Drive, recordatorios
+de verdad (27 enviados, desviados, apagados después), 225 cargas de pantalla (3 roles x
+360/768/1440 x claro/oscuro) sin desborde ni error, teclado y modo offline.
+
+Arreglado: fecha de nacimiento imposible aceptada (alumno y import de roster); el import de
+usuarios salteaba las cuentas con el rol vacío (`eloiselundy@` y `bgcc@`, Eloise Lundy quedaba
+sin nadie que cargue) y no traía una contraseña cambiada en las Sheets después del 3-sep.
+
+Rastro, todo para la limpieza del lunes: sitio `ZZ QA R8 Site` (desactivado), usuarios
+`zz.qa.r8.*` (desactivados), alumnos `ZZ QA R8 *` en Training Only, requests `ZZ QA R8`,
+counts de Training Only del 27 (uno anulado y otro activo) y del 28, dos claims TX 2026-06
+(uno firmado por "ZZ QA R8 Signer") con sus PDFs en Drive, `Consolidated Reports/2026-06`.
+
 ## Falta
 
 - **Lunes 2-nov, antes de abrir**: la limpieza de STOIC-2691 y después repetir el
   import y el calendario, como dice `docs/CUTOVER.md` (sección de noviembre). Trae lo
-  que los sitios cargaron en las Sheets desde el 27-oct.
+  que los sitios cargaron en las Sheets desde el 27-oct. **Necesita una exportación
+  nueva de la master** en `migration-data/master.xlsx` (la baja el dev: tiene contraseñas).
+- **Para Kenya, además**: cero feriados cargados (Thanksgiving y el receso); 12 cuentas
+  de staff activas sin sitio (entre ellas `julio@julio.com`, `123@123.com`,
+  `test@123.com`, `email@useremail.com`, `juanchosperoni@hotmail.comm`); `BGC Cooke`
+  tiene un día de servicio el 12-feb-2029 que lo hace parecer con días por delante.
+- Agosto y septiembre tienen 434 y 245 días de servicio con 87 y 15 counts: sin importar
+  esos meses, se ven llenos de "Missing".
 - **Para Kenya el viernes**: estos 35 sitios siguen activos sin un día por delante y
   sin counts en las Sheets en octubre. Confirmar cuáles se desactivan:
   - `2025/2026 TX BGC COOKE`: cargó en las Sheets hasta el 30-sep y paró. ¿Cerró?

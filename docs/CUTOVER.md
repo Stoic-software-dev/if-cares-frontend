@@ -118,11 +118,20 @@ la mañana del corte para traer lo que los sitios cargaron en las Sheets mientra
 
 ```
 node scripts/cleanup-test-data.mjs ...                       # primero: STOIC-2691, ver CLAUDE.md
+node scripts/import-master.mjs --dry-run                     # con master.xlsx bajado ese día
+node scripts/import-master.mjs                               # usuarios, sus sitios y contraseñas
 node scripts/import-from-gas.mjs --only=students             # rosters (~50 min)
 node scripts/import-history.mjs --since=2026-10-01           # counts desde esa fecha (~1 h)
 node scripts/calendar-audit.mjs --since=2026-08-01 --min-days=2 \
   --fill --from=<mañana> --to=2026-12-18                      # días de servicio por delante
 ```
+
+**Los usuarios salen de `migration-data/master.xlsx`**, una exportación a mano de la
+master que no se commitea (tiene las contraseñas en texto plano). La que había era del
+3-sep-2026: una cuenta creada o una contraseña cambiada en las Sheets después no
+llegaba. Se baja de nuevo la mañana del corte. Al repetirlo, la contraseña de la
+planilla pisa la de la 2.0 salvo en quien ya eligió una con un link de la 2.0, y una
+cuenta que un admin desactivó en la 2.0 sigue desactivada.
 
 La limpieza va **antes** del import: un count de prueba cargado desde la app en una
 fecha que también está en las Sheets le gana al de las Sheets, y el import lo saltea.

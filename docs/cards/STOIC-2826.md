@@ -94,7 +94,17 @@ va a un servicio nuevo con su propia base de Supabase:
   snapshot completo no tiene), 36 sitios sin días por delante (los 35 de la lista y BGC
   Cooke). Encontrado: faltaba `APP_URL` y el envío automático de recordatorios no
   arrancaba; cargada en producción. **La de prueba tampoco la tiene** (sus recordatorios
-  automáticos nunca salieron); cargarla lo decide el dev. Queda una cuenta de staff
+  automáticos nunca salieron); cargarla lo decide el dev.
+- Prueba con sesión del 28-oct, con el admin del dev en su Chrome (el dev pidió probar
+  todo y que no importaba crear cosas): 81 verificaciones en verde (pedidos, alumnos,
+  sitio y calendario con cierre y deshacer, feriados, el ciclo del count con 6 envíos y
+  3 aprobaciones simultáneas, corrección, anulación, PDFs del día y mensual, claim con
+  cancelación, link de firma, envío, firma pública y revocación, menú a Drive y a la
+  papelera, recordatorios prendidos y apagados) y 20 pantallas a 360 y 1440 px sin
+  desborde ni error. Sin probar: lo de staff (no se crean cuentas en producción), el
+  guardado para después (la llamada no respondió 5xx pero no se verificó que guardara),
+  el envío forzado de recordatorios. Limpieza corrida de nuevo sobre producción después.
+  Quedan en Drive el PDF del día y el mensual de Training Only de esa prueba. Queda una cuenta de staff
   activa sin contraseña (b***@ifcares.org), que necesita link.
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.

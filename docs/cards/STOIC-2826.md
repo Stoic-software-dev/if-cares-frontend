@@ -51,12 +51,14 @@ counts de Training Only del 27 (uno anulado y otro activo) y del 28, dos claims 
   import y el calendario, como dice `docs/CUTOVER.md` (sección de noviembre). Trae lo
   que los sitios cargaron en las Sheets desde el 27-oct. **Necesita una exportación
   nueva de la master** en `migration-data/master.xlsx` (la baja el dev: tiene contraseñas).
-- **Para Kenya, además**: cero feriados cargados (Thanksgiving y el receso); 12 cuentas
-  de staff activas sin sitio (entre ellas `julio@julio.com`, `123@123.com`,
-  `test@123.com`, `email@useremail.com`, `juanchosperoni@hotmail.comm`); `BGC Cooke`
-  tiene un día de servicio el 12-feb-2029 que lo hace parecer con días por delante.
-- Agosto y septiembre tienen 434 y 245 días de servicio con 87 y 15 counts: sin importar
-  esos meses, se ven llenos de "Missing".
+- **Para Kenya, además**: cero feriados cargados (Thanksgiving y el receso); 7 cuentas de
+  staff activas sin sitio (brenda, drexel, kipphigh, sanmiguel, christsfoundry, casahope y
+  lhteens @ifcares.org); `BGC Cooke` entra a la lista de sitios sin días por delante.
+- Hecho por decisión del dev el 28-oct: se sacaron los 622 días de agosto y septiembre
+  sin ningún count (no se importan esos meses, y se veían como "Missing") y el día suelto
+  de BGC Cooke del 12-feb-2029; copia de las filas en el scratchpad,
+  `removed-service-days-2826.json`. Se desactivaron `julio@julio.com`, `123@123.com`,
+  `test@123.com`, `email@useremail.com` y `juanchosperoni@hotmail.comm`.
 - **Para Kenya el viernes**: estos 35 sitios siguen activos sin un día por delante y
   sin counts en las Sheets en octubre. Confirmar cuáles se desactivan:
   - `2025/2026 TX BGC COOKE`: cargó en las Sheets hasta el 30-sep y paró. ¿Cerró?

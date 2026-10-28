@@ -81,7 +81,21 @@ va a un servicio nuevo con su propia base de Supabase:
 - **Lunes, después de los imports**: el dev sube v2-mock a `main` (main tiene 3 commits de
   STOIC-2470 que v2-mock no), se conecta `ifcares-v2-prod` a la rama `main` sin commit
   fijo, se le pasa el dominio `ifcares-regularyear-prod.up.railway.app` y se apaga
-  `ifcares` sin borrarlo.
+  `ifcares` sin borrarlo. Ese día también: `APP_URL` a la dirección final (hoy es
+  `https://${{RAILWAY_PUBLIC_DOMAIN}}`, que con dos dominios es ambiguo), sacar
+  `MAIL_REDIRECT_TO`, y prender en Settings los recordatorios y el aviso de pedidos
+  (en producción están apagados, como quedaron en la de prueba).
+- Prueba de producción del 28-oct, sin sesión (las cuentas de prueba no van a
+  producción): 45 rutas x 5 métodos sin un 500 y todo lo privado en 401; login y
+  "olvidé" con una cuenta inexistente responden igual que siempre, en ~0,9 s; páginas
+  públicas, encabezados de seguridad, service worker y 360 px sin desborde; base
+  solo leyendo: schema `regular_year_prod`, 17 migraciones, 0 cuentas/sitios/alumnos
+  de prueba, 8.006 counts importados, la reconciliación da igual salvo octubre (que el
+  snapshot completo no tiene), 36 sitios sin días por delante (los 35 de la lista y BGC
+  Cooke). Encontrado: faltaba `APP_URL` y el envío automático de recordatorios no
+  arrancaba; cargada en producción. **La de prueba tampoco la tiene** (sus recordatorios
+  automáticos nunca salieron); cargarla lo decide el dev. Queda una cuenta de staff
+  activa sin contraseña (b***@ifcares.org), que necesita link.
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.
 

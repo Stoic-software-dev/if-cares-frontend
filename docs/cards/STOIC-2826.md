@@ -104,7 +104,14 @@ va a un servicio nuevo con su propia base de Supabase:
   desborde ni error. Sin probar: lo de staff (no se crean cuentas en producción), el
   guardado para después (la llamada no respondió 5xx pero no se verificó que guardara),
   el envío forzado de recordatorios. Limpieza corrida de nuevo sobre producción después.
-  Quedan en Drive el PDF del día y el mensual de Training Only de esa prueba. Queda una cuenta de staff
+  Quedan en Drive el PDF del día y el mensual de Training Only de esa prueba.
+- Después, con una cuenta de staff que creó el dev (Training Only y Anita Martinez):
+  34 verificaciones en verde (no ve ni toca otros sitios ni lo de admin, pedido y
+  alumno en su sitio, guardado para después que vuelve, count con 4 envíos simultáneos,
+  PDF bloqueado hasta aprobar, no aprueba/corrige/anula) y el count cargado desde la
+  pantalla con firma. Modo sin señal: se instala y guarda pantallas, código y menús;
+  cargar sin señal no se pudo simular desde la extensión. Limpieza corrida otra vez; la
+  cuenta de staff queda a cargo del dev. Queda una cuenta de staff
   activa sin contraseña (b***@ifcares.org), que necesita link.
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.

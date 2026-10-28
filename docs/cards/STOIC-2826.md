@@ -68,8 +68,12 @@ va a un servicio nuevo con su propia base de Supabase:
 - Mails desviados (`MAIL_REDIRECT_TO`) hasta el lunes; mismas carpetas de Drive.
 - El lunes la 2.0 toma la dirección de la producción de hoy; la vieja queda apagada
   sin borrar (es el rollback).
-- El 28-oct Railway tenía los deploys pausados ("Deploys have been paused
-  temporarily") y no se pudo crear el servicio.
+- Creado el 28-oct, vacío y sin fuente: `ifcares-v2-prod`
+  (id 3a8aab2c-2b63-4be0-9ed4-43d822bc6992), con healthcheck `/api/health` y las
+  variables por referencia a `if-cares-frontend` (mails desviados incluidos). Faltan, las
+  pone el dev en el panel: `DATABASE_URL` y `DIRECT_URL` (las de `.env.prod.local`),
+  `AUTH_SECRET` y `REMINDERS_SECRET` nuevos. Después, el dev sube v2-mock a `main` y se
+  conecta la fuente a `main`.
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.
 

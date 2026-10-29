@@ -17,8 +17,24 @@
 <body>
 <main>
   <h1>This needs a connection</h1>
-  <p>Without signal you can still open your dashboard, rosters, menus and take the meal count. Try this page again when you have signal.</p>
-  <a href="/dashboard">Go to the dashboard</a>
+  <p id="message">IF Cares needs signal for this account. Try again when you have signal.</p>
+  <a id="action" href="">Try again</a>
 </main>
+<script>
+  // Only a site account works without signal, and only that one is remembered
+  // on the phone (src/lib/offline.js). An administrator is not offered pages
+  // that would bring them back here.
+  try {
+    if (localStorage.getItem('ifc.offline.user')) {
+      document.getElementById('message').textContent =
+        'Without signal you can still open your dashboard, rosters, menus and take the meal count. Try this page again when you have signal.';
+      var action = document.getElementById('action');
+      action.textContent = 'Go to the dashboard';
+      action.href = '/dashboard';
+    }
+  } catch (e) {
+    // Blocked storage: the generic message stays.
+  }
+</script>
 </body>
 </html>

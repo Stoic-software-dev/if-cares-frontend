@@ -116,6 +116,24 @@ va a un servicio nuevo con su propia base de Supabase:
 - Ojo: el cron `if-cares-reminders-cron` pega a `if-cares-frontend-production.up.railway.app`,
   que no es la dirección de ningún servicio. Revisar antes del lunes.
 
+## Plan del 29-oct (decidido por el dev)
+
+Producción queda lista primero, el equipo de Kenya la prueba del viernes al domingo
+en `ifcares-v2-prod-production.up.railway.app`, y recién el 2-nov, sin feedback
+pendiente, la usan de verdad.
+
+- Prueban **también en sitios reales**. Un count cargado en la app le gana al de la
+  planilla del mismo día, así que el lunes, antes de traer las planillas, se lista lo
+  que crearon en la app desde que se les pasó (counts con `source` distinto de
+  `GAS_IMPORT`, pedidos, alumnos) y se borra con el ok del dev.
+- Mails **reales** desde el 29-oct (`MAIL_REDIRECT_TO` vacío en `ifcares-v2-prod`);
+  recordatorios y aviso de pedidos siguen apagados en Settings.
+- Los feriados los carga Kenya como parte de su prueba.
+- `if-cares-reminders-cron` apagado el 29-oct: sin horario (`cronSchedule` vacío), no
+  borrado. Los recordatorios salen del propio servidor.
+- Antes de pasársela: master nueva y los imports contra producción (usuarios, rosters,
+  counts desde el 1-oct, calendario).
+
 ## Falta
 
 - **Lunes 2-nov, antes de abrir**: la limpieza de STOIC-2691 y después repetir el

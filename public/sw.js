@@ -13,6 +13,8 @@ const PAGES = 'ifc-pages-v1';
 const STATIC = 'ifc-static-v1';
 const MENUS = 'ifc-menus-v1';
 const KEEP = [PAGES, STATIC, MENUS];
+// Kept once, when this file is installed: a change to offline.html reaches the
+// phones only with a change here, so bump this with it. Revision 2.
 const OFFLINE_URL = '/offline.html';
 // On a weak signal a page can hang for a long time before failing. Past this,
 // the kept copy is shown instead.

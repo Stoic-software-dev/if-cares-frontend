@@ -2,7 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { BadgeCheck, PencilLine } from 'lucide-react';
+import { toast } from 'sonner';
 import { differsFromPattern, mealsFor } from '@/lib/calendar';
+import { useConnection } from '@/lib/offline';
 import { cn } from '@/lib/utils';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -50,11 +52,20 @@ const STATUS = {
 
 export default function MonthCalendar({ month, site, filter = 'all', mealPattern = null }) {
   const router = useRouter();
+  const connection = useConnection();
 
   const open = (cell) => {
     if (!cell) return;
     const siteQuery = `site=${encodeURIComponent(site ?? '')}`;
-    if (cell.status === 'submitted') router.push(`/counts/${cell.ymd}?${siteQuery}`);
+    if (cell.status === 'submitted') {
+      // A sent count's detail is not kept on the phone: without signal the
+      // page would only say it needs a connection.
+      if (connection.offline || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        toast("This count's details need signal. Open it again when you have signal.");
+        return;
+      }
+      router.push(`/counts/${cell.ymd}?${siteQuery}`);
+    }
     if (cell.status === 'missing' || cell.status === 'today') {
       router.push(`/meal-count?date=${cell.ymd}&${siteQuery}`);
     }

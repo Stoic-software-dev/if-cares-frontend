@@ -211,6 +211,34 @@
     background: transparent;
   }
 
+  /* Date and time fields take the width of their column, like every other
+     field. Safari on iPhone gives them a native width of their own that
+     width: 100% does not shrink: in a narrow sheet they ran past its edge and
+     pushed the whole sheet sideways. */
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'],
+  input[type='month'],
+  input[type='week'] {
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* Only on iOS: the native look is what carries that width there, and the
+     value is centred. Desktop browsers keep their calendar button. */
+  @supports (-webkit-touch-callout: none) {
+    input[type='date'],
+    input[type='time'],
+    input[type='datetime-local'],
+    input[type='month'],
+    input[type='week'] {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input::-webkit-date-and-time-value {
+      text-align: left;
+    }
+  }
+
   /* Native controls follow the theme (date/time pickers, scrollbars). */
   :root {
     color-scheme: light;

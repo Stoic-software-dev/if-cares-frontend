@@ -63,3 +63,11 @@ el PDF bloqueado.
   `offlineGet`/`cachedGet` y suma su lectura a `keptOffline` en
   `src/lib/data-cache.js`, y su ruta a `OFFLINE_PAGES` en
   `src/components/offline/OfflineLayer.jsx`.
+
+## Safari de iPhone
+
+- Los campos de fecha y hora tienen en iPhone un ancho nativo que `w-full` no achica:
+  en un sheet angosto se salían del borde y corrían todo el sheet de costado. Lo
+  arregla una regla global en `src/app/globals.css` para todos los `type="date"`,
+  `time` y parecidos. Un control nativo nuevo se mira en un iPhone de verdad: el
+  WebKit de Playwright no muestra esto.

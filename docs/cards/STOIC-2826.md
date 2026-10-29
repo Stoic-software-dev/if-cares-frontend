@@ -131,8 +131,12 @@ pendiente, la usan de verdad.
 - Los feriados los carga Kenya como parte de su prueba.
 - `if-cares-reminders-cron` apagado el 29-oct: sin horario (`cronSchedule` vacío), no
   borrado. Los recordatorios salen del propio servidor.
-- Antes de pasársela: master nueva y los imports contra producción (usuarios, rosters,
-  counts desde el 1-oct, calendario).
+- Antes de pasársela: los imports contra producción con la master del 28-oct 12:15
+  (usuarios, rosters, counts desde el 1-oct, calendario). Corridos el 29-oct; el import
+  de usuarios volvió a crear activas `test@123.com`, `julio@julio.com`,
+  `juanchosperoni@hotmail.comm` y `123@123.com`, desactivadas otra vez.
+- La cuenta de staff de prueba del dev (dominio `.arr`) y la de b***@ifcares.org sin
+  contraseña quedan como están; se revisan el lunes. El mensaje a Kenya lo manda Julio.
 
 ## Falta
 
